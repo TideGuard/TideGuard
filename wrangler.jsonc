@@ -1,0 +1,53 @@
+/**
+ * TideGuard Worker configuration.
+ *
+ * Resource IDs are left empty so `wrangler deploy` and Deploy to Cloudflare
+ * can provision KV / Durable Objects automatically.
+ */
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Must match the Worker name in Cloudflare Workers Builds / dashboard.
+  // Connected builds override a mismatch (e.g. tideguard-website vs tideguardwebsite).
+  "name": "tideguardwebsite",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-28",
+  "compatibility_flags": ["nodejs_compat"],
+  // Custom domain is the public route; disable workers.dev + preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "DEFAULT_QUEUE": "default",
+    "MAX_CONCURRENT_USERS": "20",
+    "ADMIT_PER_SECOND": "2",
+    "TOKEN_TTL_SECONDS": "600",
+    "HEARTBEAT_TIMEOUT_SECONDS": "60",
+    "QUEUE_TIMEOUT_SECONDS": "1800",
+    "ADMISSION_MODE": "queue",
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG_KV",
+      "id": "00000000000000000000000000000000",
+      "preview_id": "00000000000000000000000000000001",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "QUEUE_ROOM",
+        "class_name": "QueueRoom",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["QueueRoom"],
+    },
+  ],
+}

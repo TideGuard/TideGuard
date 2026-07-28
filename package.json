@@ -1,0 +1,53 @@
+{
+  "name": "tideguard",
+  "version": "0.1.0",
+  "description": "Lightweight open-source waiting room for Cloudflare Workers",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "check": "wrangler check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:load": "vitest run --config vitest.load.config.ts",
+    "test:load:do": "RUN_DO_LOAD=1 vitest run --config vitest.do-load.config.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
+    "ci": "npm run types && npm run format:check && npm run lint && npm run typecheck && npm run test"
+  },
+  "cloudflare": {
+    "bindings": {
+      "TOKEN_SECRET": {
+        "description": "HMAC secret used to sign admission tokens. Generate with `openssl rand -hex 32`."
+      }
+    }
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
+    "@eslint/js": "^9.32.0",
+    "@types/node": "^26.1.2",
+    "@vitest/runner": "^4.1.10",
+    "@vitest/snapshot": "^4.1.10",
+    "eslint": "^9.32.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.114.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260722.1": true,
+    "fsevents@2.3.3": true
+  }
+}
