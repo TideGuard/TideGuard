@@ -42,6 +42,8 @@ const RESERVED_EXACT = new Set([
   "/cost",
   "/demo",
   "/api/cost-estimate",
+  "/openapi.yaml",
+  "/openapi.json",
 ]);
 
 const RESERVED_PREFIXES = ["/api/admin"];

@@ -50,11 +50,15 @@ Dark teal single-page UI (Source Sans). Two columns on desktop:
 | Live preview           | Updates as you edit; no KV write                                                               |
 | Save branding          | One KV put for `branding:<queue>` (+ syncs click-to-enter hold + `showWaitingCount` to the DO) |
 | Apply mode             | `queue` or `lottery` on the Durable Object                                                     |
+| Load queue / default   | Switch named queues; remembered list + optional default                                        |
+| Capacity / admit rate  | Live DO overrides (no redeploy)                                                                |
+| Force-admit            | Admit up to N waiters into open slots now                                                      |
+| Change password        | Requires current password; refreshes session cookie                                            |
 | Show depth             | Persisted with branding as `showWaitingCount` (no `?showWaiting=` override on `/wait`)         |
 | Default redirect path  | Same-origin path after admission (`redirectUrl`); overridable by `?return=`                    |
 | Require click to enter | Continue button instead of auto-redirect; token issued on `POST /enter`                        |
 | Admit hold (seconds)   | Time to click before the admitted spot is released (15–900)                                    |
-| Metrics                | Waiting / admitted / capacity / mode from the DO (also via operator `GET /metrics`)            |
+| Metrics                | Waiting / admitted / capacity / rate / mode — auto-refresh every 5s                            |
 
 ### Traffic controls
 
@@ -95,22 +99,30 @@ Saved via `PUT /api/admin/origin` to KV. Full guide: [protecting-origin.md](prot
 
 ## API (admin)
 
-| Method | Path                   | Auth                                        |
-| ------ | ---------------------- | ------------------------------------------- |
-| `GET`  | `/api/admin/bootstrap` | Public (`setupComplete`)                    |
-| `POST` | `/api/admin/setup`     | `Authorization: Bearer <TOKEN_SECRET>` once |
-| `POST` | `/api/admin/login`     | Public (rate-limited)                       |
-| `POST` | `/api/admin/logout`    | Session                                     |
-| `GET`  | `/api/admin/state`     | Session                                     |
-| `PUT`  | `/api/admin/branding`  | Session                                     |
-| `PUT`  | `/api/admin/origin`    | Session (origin proxy settings)             |
-| `POST` | `/api/admin/mode`      | Session                                     |
-| `PUT`  | `/api/admin/schedule`  | Session (opening time)                      |
-| `POST` | `/api/admin/pause`     | Session (silent pause)                      |
-| `PUT`  | `/api/admin/health`    | Session (origin health / override)          |
-| `POST` | `/api/admin/reset`     | `Authorization: Bearer <TOKEN_SECRET>` only |
+| Method | Path                       | Auth                                        |
+| ------ | -------------------------- | ------------------------------------------- |
+| `GET`  | `/api/admin/bootstrap`     | Public (`setupComplete`)                    |
+| `POST` | `/api/admin/setup`         | `Authorization: Bearer <TOKEN_SECRET>` once |
+| `POST` | `/api/admin/login`         | Public (rate-limited)                       |
+| `POST` | `/api/admin/logout`        | Session                                     |
+| `GET`  | `/api/admin/state`         | Session                                     |
+| `PUT`  | `/api/admin/branding`      | Session                                     |
+| `PUT`  | `/api/admin/origin`        | Session (origin proxy settings)             |
+| `POST` | `/api/admin/mode`          | Session                                     |
+| `PUT`  | `/api/admin/schedule`      | Session (opening time)                      |
+| `POST` | `/api/admin/pause`         | Session (silent pause)                      |
+| `PUT`  | `/api/admin/capacity`      | Session (live capacity / admit rate)        |
+| `POST` | `/api/admin/admit`         | Session (force-admit)                       |
+| `POST` | `/api/admin/password`      | Session (change password)                   |
+| `PUT`  | `/api/admin/default-queue` | Session                                     |
+| `PUT`  | `/api/admin/health`        | Session (origin health / override)          |
+| `POST` | `/api/admin/reset`         | `Authorization: Bearer <TOKEN_SECRET>` only |
 
 Operator routes `/admit`, `/mode`, `/pause`, and `/metrics` accept either the admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
+
+## Change password
+
+While signed in, use **Change password** on `/admin` (`POST /api/admin/password`) with the current password plus a new one. This keeps setup intact and refreshes the session cookie.
 
 ## Emergency reset
 

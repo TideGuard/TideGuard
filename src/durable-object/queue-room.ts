@@ -89,8 +89,9 @@ export class QueueRoom extends DurableObject<Env> {
       return this.toView(existing, request.config, now);
     }
 
+    const cfg = this.effectiveConfig(request.config);
     const admitted = this.countByStatus("admitted");
-    const slots = openSlots(request.config.maxConcurrentUsers, admitted);
+    const slots = openSlots(cfg.maxConcurrentUsers, admitted);
 
     if (this.canAdmit(now) && slots > 0) {
       this.insertVisitor({
@@ -213,9 +214,10 @@ export class QueueRoom extends DurableObject<Env> {
     this.rememberConfig(request.config);
     this.sweep(request.config, now, false);
 
+    const cfg = this.effectiveConfig(request.config);
     return buildMetrics({
       queue: this.queueName(),
-      config: request.config,
+      config: cfg,
       waiting: this.countByStatus("waiting"),
       admitted: this.countByStatus("admitted"),
       paused: this.isManualPaused(),
@@ -238,9 +240,10 @@ export class QueueRoom extends DurableObject<Env> {
     this.rememberConfig(request.config);
     this.sweep(request.config, now, true);
 
+    const cfg = this.effectiveConfig(request.config);
     const admittedIds: string[] = [];
     if (this.canAdmit(now)) {
-      const slots = openSlots(request.config.maxConcurrentUsers, this.countByStatus("admitted"));
+      const slots = openSlots(cfg.maxConcurrentUsers, this.countByStatus("admitted"));
       const toAdmit = Math.min(slots, count);
       if (toAdmit > 0) {
         const entered = this.admitEntered(request.config);
@@ -263,7 +266,39 @@ export class QueueRoom extends DurableObject<Env> {
     return {
       admitted: admittedIds,
       waiting: this.countByStatus("waiting"),
-      openSlots: openSlots(request.config.maxConcurrentUsers, this.countByStatus("admitted")),
+      openSlots: openSlots(cfg.maxConcurrentUsers, this.countByStatus("admitted")),
+    };
+  }
+
+  /**
+   * Live capacity / admit-rate overrides for launch control.
+   * Env vars remain the deploy defaults; meta overrides win until cleared.
+   */
+  async setCapacity(request: {
+    queue: string;
+    config: QueueConfig;
+    maxConcurrentUsers?: number;
+    admitPerSecond?: number;
+  }): Promise<{ maxConcurrentUsers: number; admitPerSecond: number }> {
+    this.ensureQueueName(request.queue);
+    if (request.maxConcurrentUsers !== undefined) {
+      this.setMeta("max_concurrent_users", String(request.maxConcurrentUsers));
+    }
+    if (request.admitPerSecond !== undefined) {
+      this.setMeta("admit_per_second", String(request.admitPerSecond));
+    }
+    const effective = this.effectiveConfig(request.config);
+    this.setMeta(
+      "config",
+      JSON.stringify({
+        ...effective,
+        admissionMode: this.admissionMode(request.config),
+      } satisfies QueueConfig),
+    );
+    await this.ensureAlarm();
+    return {
+      maxConcurrentUsers: effective.maxConcurrentUsers,
+      admitPerSecond: effective.admitPerSecond,
     };
   }
 
@@ -469,7 +504,8 @@ export class QueueRoom extends DurableObject<Env> {
       return;
     }
 
-    const slots = openSlots(config.maxConcurrentUsers, this.countByStatus("admitted"));
+    const effective = this.effectiveConfig(config);
+    const slots = openSlots(effective.maxConcurrentUsers, this.countByStatus("admitted"));
     if (slots <= 0) {
       return;
     }
@@ -492,6 +528,7 @@ export class QueueRoom extends DurableObject<Env> {
       return;
     }
 
+    const effective = this.effectiveConfig(config);
     const rate = this.effectiveAdmitPerSecond(config, now);
     if (rate <= 0) {
       return;
@@ -509,7 +546,7 @@ export class QueueRoom extends DurableObject<Env> {
       return;
     }
 
-    const slots = openSlots(config.maxConcurrentUsers, this.countByStatus("admitted"));
+    const slots = openSlots(effective.maxConcurrentUsers, this.countByStatus("admitted"));
     const toAdmit = Math.min(slots, admitCount);
     if (toAdmit <= 0) {
       return;
@@ -577,8 +614,15 @@ export class QueueRoom extends DurableObject<Env> {
     const click = this.getMeta("require_click");
     const holdRaw = this.getMeta("admit_hold_seconds");
     const hold = holdRaw !== null ? Number(holdRaw) : config.admitHoldSeconds;
+    const capacityRaw = this.getMeta("max_concurrent_users");
+    const capacity = capacityRaw !== null ? Number(capacityRaw) : config.maxConcurrentUsers;
+    const rateRaw = this.getMeta("admit_per_second");
+    const rate = rateRaw !== null ? Number(rateRaw) : config.admitPerSecond;
     return {
       ...config,
+      maxConcurrentUsers:
+        Number.isInteger(capacity) && capacity >= 1 ? capacity : config.maxConcurrentUsers,
+      admitPerSecond: Number.isFinite(rate) && rate > 0 ? rate : config.admitPerSecond,
       requireClickToEnter: click === null ? config.requireClickToEnter : click === "1",
       admitHoldSeconds:
         Number.isFinite(hold) && hold >= 15 && hold <= 900 ? hold : config.admitHoldSeconds,
@@ -697,7 +741,10 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   private rememberConfig(config: QueueConfig): void {
-    const encoded = JSON.stringify(config);
+    const encoded = JSON.stringify({
+      ...this.effectiveConfig(config),
+      admissionMode: this.admissionMode(config),
+    } satisfies QueueConfig);
     if (this.getMeta("config") === encoded) {
       return;
     }
@@ -753,7 +800,7 @@ export class QueueRoom extends DurableObject<Env> {
       return 0;
     }
     const mult = healthRateMultiplier(this.readHealthConfig(), this.readHealthState(), now);
-    return config.admitPerSecond * mult;
+    return this.effectiveConfig(config).admitPerSecond * mult;
   }
 
   private readHealthConfig(): OriginHealthConfig {

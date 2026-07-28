@@ -299,4 +299,33 @@ describe("QueueRoom Lottery Mode", () => {
     expect(winners).toContain("early");
     expect(winners).toContain("late");
   });
+
+  it("applies live capacity overrides for join and force-admit", async () => {
+    const stub = room("capacity-live");
+    const cfg = config({ maxConcurrentUsers: 10, admitPerSecond: 5 });
+
+    await stub.setPaused(true);
+    await stub.join({ queue: "capacity-live", config: cfg, visitorId: "w1" });
+    await stub.join({ queue: "capacity-live", config: cfg, visitorId: "w2" });
+    await stub.setPaused(false);
+
+    await stub.setCapacity({
+      queue: "capacity-live",
+      config: cfg,
+      maxConcurrentUsers: 1,
+      admitPerSecond: 0.25,
+    });
+
+    const forced = await stub.forceAdmit({
+      queue: "capacity-live",
+      config: cfg,
+      count: 5,
+    });
+    expect(forced.admitted).toHaveLength(1);
+    expect(forced.openSlots).toBe(0);
+
+    const metrics = await stub.metrics({ queue: "capacity-live", config: cfg });
+    expect(metrics.capacity).toBe(1);
+    expect(metrics.admitPerSecond).toBe(0.25);
+  });
 });

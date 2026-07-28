@@ -432,11 +432,19 @@ export function renderAdminApp(options: AdminAppOptions): string {
               <div class="metric"><span class="label">Waiting</span><span class="value" id="m-waiting">—</span></div>
               <div class="metric"><span class="label">Admitted</span><span class="value" id="m-admitted">—</span></div>
               <div class="metric"><span class="label">Capacity</span><span class="value" id="m-capacity">—</span></div>
+              <div class="metric"><span class="label">Admit/s</span><span class="value" id="m-rate">—</span></div>
               <div class="metric"><span class="label">Mode</span><span class="value" id="m-mode">—</span></div>
             </div>
+            <p class="muted" id="metrics-refresh-note" style="font-size:0.85rem;margin:0 0 0.75rem">Metrics refresh every 5s while this panel is open.</p>
             <label>Queue
-              <input id="dash-queue" type="text" />
+              <input id="dash-queue" type="text" list="known-queues" />
             </label>
+            <datalist id="known-queues"></datalist>
+            <div class="actions">
+              <button type="button" class="ghost" id="load-queue">Load queue</button>
+              <button type="button" class="ghost" id="set-default-queue">Set as default</button>
+            </div>
+            <p class="muted" id="queue-list-note" style="font-size:0.85rem;margin:0 0 0.75rem"></p>
             <div class="mode" role="group" aria-label="Admission mode">
               <button type="button" id="dash-mode-queue" aria-pressed="true"><strong>Queue Mode</strong><span>FIFO</span></button>
               <button type="button" id="dash-mode-lottery" aria-pressed="false"><strong>Lottery Mode</strong><span>Random</span></button>
@@ -516,7 +524,35 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <div class="actions">
               <button type="button" class="primary" id="save-pause">Apply pause</button>
             </div>
+            <div class="color-grid">
+              <label>Capacity <input id="traffic-capacity" type="number" min="1" max="100000" /></label>
+              <label>Admit / second <input id="traffic-admit-rate" type="number" min="0.01" max="1000" step="0.1" /></label>
+            </div>
+            <div class="actions">
+              <button type="button" class="primary" id="save-capacity">Apply capacity</button>
+            </div>
+            <label>Force-admit count
+              <input id="traffic-admit-count" type="number" min="1" max="100" value="1" />
+            </label>
+            <div class="actions">
+              <button type="button" class="primary" id="force-admit">Admit now</button>
+            </div>
             <p class="status" id="traffic-status" data-tone="ok"></p>
+            <hr style="border:0;border-top:1px solid color-mix(in oklab, var(--muted) 35%, transparent);margin:1rem 0" />
+            <p class="muted" style="margin-top:0"><strong style="color:var(--text)">Account</strong></p>
+            <label>Current password
+              <input id="pw-current" type="password" autocomplete="current-password" />
+            </label>
+            <label>New password
+              <input id="pw-new" type="password" autocomplete="new-password" minlength="8" />
+            </label>
+            <label>Confirm new password
+              <input id="pw-confirm" type="password" autocomplete="new-password" minlength="8" />
+            </label>
+            <div class="actions">
+              <button type="button" class="primary" id="save-password">Change password</button>
+            </div>
+            <p class="status" id="password-status" data-tone="ok"></p>
             <hr style="border:0;border-top:1px solid color-mix(in oklab, var(--muted) 35%, transparent);margin:1rem 0" />
             <label class="check">
               <input id="health-enabled" type="checkbox" />
@@ -577,6 +613,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
           step: 1,
           admissionMode: "queue",
           setupComplete: initialSetupComplete,
+          metricsTimer: null,
         };
 
         const views = {
@@ -597,6 +634,76 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("logout-btn").hidden = name !== "dashboard";
           document.getElementById("page-title").textContent =
             name === "wizard" ? "Setup" : name === "login" ? "Sign in" : "Control room";
+          if (name === "dashboard") startMetricsRefresh();
+          else stopMetricsRefresh();
+        }
+
+        function startMetricsRefresh() {
+          stopMetricsRefresh();
+          state.metricsTimer = setInterval(() => {
+            refreshMetrics().catch(() => {});
+          }, 5000);
+        }
+
+        function stopMetricsRefresh() {
+          if (state.metricsTimer) {
+            clearInterval(state.metricsTimer);
+            state.metricsTimer = null;
+          }
+        }
+
+        function fillKnownQueues(queues, defaultName) {
+          const list = document.getElementById("known-queues");
+          list.innerHTML = "";
+          (queues || []).forEach((name) => {
+            const option = document.createElement("option");
+            option.value = name;
+            list.appendChild(option);
+          });
+          const note = document.getElementById("queue-list-note");
+          if (note) {
+            const names = (queues || []).join(", ") || defaultName;
+            note.textContent = "Known queues: " + names + (defaultName ? " · default " + defaultName : "");
+          }
+        }
+
+        function paintMetrics(data) {
+          document.getElementById("m-waiting").textContent = String(data.metrics.waiting);
+          document.getElementById("m-admitted").textContent = String(data.metrics.admitted);
+          document.getElementById("m-capacity").textContent = String(data.metrics.capacity);
+          document.getElementById("m-rate").textContent =
+            typeof data.metrics.admitPerSecond === "number"
+              ? String(data.metrics.admitPerSecond)
+              : "—";
+          document.getElementById("m-mode").textContent = data.admissionMode;
+          if (!document.activeElement || document.activeElement.id !== "traffic-capacity") {
+            document.getElementById("traffic-capacity").value = String(data.metrics.capacity);
+          }
+          if (!document.activeElement || document.activeElement.id !== "traffic-admit-rate") {
+            document.getElementById("traffic-admit-rate").value = String(data.metrics.admitPerSecond);
+          }
+          if (data.traffic) {
+            const h = data.traffic.health || {};
+            document.getElementById("health-live").textContent =
+              "Health: " + (h.enabled ? (h.level || "ok") : "off") +
+              (h.lastLatencyMs != null ? (" · " + h.lastLatencyMs + "ms") : "") +
+              (h.autoPaused ? " · auto-paused" : "") +
+              (h.overrideUntil && h.overrideUntil > Date.now() ? " · override active" : "") +
+              (typeof data.traffic.effectiveAdmitPerSecond === "number"
+                ? (" · effective rate " + data.traffic.effectiveAdmitPerSecond + "/s")
+                : "");
+          }
+        }
+
+        async function refreshMetrics() {
+          if (views.dashboard.hidden) return;
+          const queue = document.getElementById("dash-queue").value || defaultQueue;
+          const data = await api("/api/admin/state?queue=" + encodeURIComponent(queue));
+          paintMetrics(data);
+          if (data.queues) fillKnownQueues(data.queues, data.defaultQueue || defaultQueue);
+          if (data.traffic) {
+            document.getElementById("traffic-paused").checked = !!data.traffic.paused;
+          }
         }
 
         function wizardBranding() {
@@ -735,8 +842,12 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("m-waiting").textContent = String(data.metrics.waiting);
           document.getElementById("m-admitted").textContent = String(data.metrics.admitted);
           document.getElementById("m-capacity").textContent = String(data.metrics.capacity);
+          document.getElementById("m-rate").textContent = String(data.metrics.admitPerSecond);
           document.getElementById("m-mode").textContent = data.admissionMode;
           paintPreview("dash-preview", dashBranding(), state.admissionMode);
+          if (data.queues) fillKnownQueues(data.queues, data.defaultQueue || defaultQueue);
+          document.getElementById("traffic-capacity").value = String(data.metrics.capacity);
+          document.getElementById("traffic-admit-rate").value = String(data.metrics.admitPerSecond);
           if (data.origin) {
             document.getElementById("origin-enabled").checked = !!data.origin.enabled;
             document.getElementById("origin-url").value = data.origin.originUrl || "";
@@ -882,8 +993,104 @@ export function renderAdminApp(options: AdminAppOptions): string {
         });
 
         document.getElementById("logout-btn").addEventListener("click", async () => {
+          stopMetricsRefresh();
           await api("/api/admin/logout", { method: "POST", body: "{}" });
           showView("login");
+        });
+
+        document.getElementById("load-queue").addEventListener("click", async () => {
+          const status = document.getElementById("dash-status");
+          try {
+            await loadDashboard();
+            setStatus(status, "Queue loaded.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("set-default-queue").addEventListener("click", async () => {
+          const status = document.getElementById("dash-status");
+          try {
+            const data = await api("/api/admin/default-queue", {
+              method: "PUT",
+              body: JSON.stringify({ queue: document.getElementById("dash-queue").value }),
+            });
+            fillKnownQueues(data.queues, data.defaultQueue);
+            setStatus(status, "Default queue updated.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("dash-queue").addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            document.getElementById("load-queue").click();
+          }
+        });
+
+        document.getElementById("save-capacity").addEventListener("click", async () => {
+          const status = document.getElementById("traffic-status");
+          try {
+            const data = await api("/api/admin/capacity", {
+              method: "PUT",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                maxConcurrentUsers: Number(document.getElementById("traffic-capacity").value),
+                admitPerSecond: Number(document.getElementById("traffic-admit-rate").value),
+              }),
+            });
+            document.getElementById("m-capacity").textContent = String(data.maxConcurrentUsers);
+            document.getElementById("m-rate").textContent = String(data.admitPerSecond);
+            setStatus(status, "Capacity updated.", "ok");
+            await refreshMetrics();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("force-admit").addEventListener("click", async () => {
+          const status = document.getElementById("traffic-status");
+          try {
+            const data = await api("/api/admin/admit", {
+              method: "POST",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                count: Number(document.getElementById("traffic-admit-count").value) || 1,
+              }),
+            });
+            const count = (data.admitted || []).length;
+            setStatus(
+              status,
+              count > 0
+                ? "Admitted " + count + " visitor(s). Open slots: " + data.openSlots + "."
+                : "No visitors admitted (paused, closed, or no open slots/waiters).",
+              count > 0 ? "ok" : "err",
+            );
+            await refreshMetrics();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("save-password").addEventListener("click", async () => {
+          const status = document.getElementById("password-status");
+          try {
+            await api("/api/admin/password", {
+              method: "POST",
+              body: JSON.stringify({
+                currentPassword: document.getElementById("pw-current").value,
+                newPassword: document.getElementById("pw-new").value,
+                confirmPassword: document.getElementById("pw-confirm").value,
+              }),
+            });
+            document.getElementById("pw-current").value = "";
+            document.getElementById("pw-new").value = "";
+            document.getElementById("pw-confirm").value = "";
+            setStatus(status, "Password changed.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
         });
 
         document.getElementById("save-branding").addEventListener("click", async () => {

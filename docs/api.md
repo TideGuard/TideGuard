@@ -150,20 +150,24 @@ First visit runs a **setup wizard** (`TOKEN_SECRET` → password → queue/mode 
 
 ### Admin API
 
-| Method | Path                   | Auth                         | Notes                                                 |
-| ------ | ---------------------- | ---------------------------- | ----------------------------------------------------- |
-| `GET`  | `/api/admin/bootstrap` | public                       | `{ setupComplete, defaultQueue }`                     |
-| `POST` | `/api/admin/setup`     | `TOKEN_SECRET` bearer (once) | Creates password hash + branding; sets session cookie |
-| `POST` | `/api/admin/login`     | public (rate-limited)        | Session cookie on success                             |
-| `POST` | `/api/admin/logout`    | session                      | Clears cookie                                         |
-| `GET`  | `/api/admin/state`     | session                      | Branding + metrics + origin                           |
-| `PUT`  | `/api/admin/branding`  | session                      | KV write                                              |
-| `PUT`  | `/api/admin/origin`    | session                      | Origin proxy override in KV                           |
-| `POST` | `/api/admin/mode`      | session                      | Queue ↔ Lottery                                       |
-| `PUT`  | `/api/admin/schedule`  | session                      | Opening time (`opensAt` ms UTC, or `null` = open now) |
-| `POST` | `/api/admin/pause`     | session                      | Silent pause / resume                                 |
-| `PUT`  | `/api/admin/health`    | session                      | Origin health config / override / clear override      |
-| `POST` | `/api/admin/reset`     | `TOKEN_SECRET` bearer only   | Clears admin setup + origin override                  |
+| Method | Path                       | Auth                         | Notes                                                 |
+| ------ | -------------------------- | ---------------------------- | ----------------------------------------------------- |
+| `GET`  | `/api/admin/bootstrap`     | public                       | `{ setupComplete, defaultQueue, queues }`             |
+| `POST` | `/api/admin/setup`         | `TOKEN_SECRET` bearer (once) | Creates password hash + branding; sets session cookie |
+| `POST` | `/api/admin/login`         | public (rate-limited)        | Session cookie on success                             |
+| `POST` | `/api/admin/logout`        | session                      | Clears cookie                                         |
+| `GET`  | `/api/admin/state`         | session                      | Branding + metrics + origin + known queues            |
+| `PUT`  | `/api/admin/branding`      | session                      | KV write                                              |
+| `PUT`  | `/api/admin/origin`        | session                      | Origin proxy override in KV                           |
+| `POST` | `/api/admin/mode`          | session                      | Queue ↔ Lottery                                       |
+| `PUT`  | `/api/admin/schedule`      | session                      | Opening time (`opensAt` ms UTC, or `null` = open now) |
+| `POST` | `/api/admin/pause`         | session                      | Silent pause / resume                                 |
+| `PUT`  | `/api/admin/capacity`      | session                      | Live `maxConcurrentUsers` / `admitPerSecond`          |
+| `POST` | `/api/admin/admit`         | session                      | Force-admit up to N waiters                           |
+| `POST` | `/api/admin/password`      | session                      | Change password (requires current password)           |
+| `PUT`  | `/api/admin/default-queue` | session                      | Remember queue + set default                          |
+| `PUT`  | `/api/admin/health`        | session                      | Origin health config / override / clear override      |
+| `POST` | `/api/admin/reset`         | `TOKEN_SECRET` bearer only   | Clears admin setup + origin override                  |
 
 `/admit`, `/mode`, `/pause`, and `/metrics` accept either an admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
 

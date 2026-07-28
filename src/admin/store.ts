@@ -5,7 +5,7 @@ import {
   type WaitingRoomBranding,
 } from "../core/branding";
 import type { AdminConfig } from "./types";
-import { ADMIN_CONFIG_KEY, brandingKey } from "./types";
+import { ADMIN_CONFIG_KEY, ADMIN_QUEUES_KEY, brandingKey } from "./types";
 
 export async function readAdminConfig(env: Env): Promise<AdminConfig | null> {
   try {
@@ -40,10 +40,48 @@ export async function writeAdminConfig(env: Env, config: AdminConfig): Promise<v
 
 export async function clearAdminConfig(env: Env): Promise<void> {
   await env.CONFIG_KV.delete(ADMIN_CONFIG_KEY);
+  await env.CONFIG_KV.delete(ADMIN_QUEUES_KEY);
 }
 
 export async function isAdminSetupComplete(env: Env): Promise<boolean> {
   return (await readAdminConfig(env)) !== null;
+}
+
+export async function readKnownQueues(env: Env, fallback: string): Promise<string[]> {
+  try {
+    const raw = await env.CONFIG_KV.get(ADMIN_QUEUES_KEY, "json");
+    if (Array.isArray(raw)) {
+      const names = raw
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (names.length > 0) {
+        return uniqueQueues(names);
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return [fallback];
+}
+
+export async function rememberQueue(env: Env, queue: string): Promise<string[]> {
+  const existing = await readKnownQueues(env, queue);
+  const next = uniqueQueues([...existing, queue]);
+  await env.CONFIG_KV.put(ADMIN_QUEUES_KEY, JSON.stringify(next));
+  return next;
+}
+
+function uniqueQueues(names: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of names) {
+    if (!seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
 }
 
 export async function readBranding(env: Env, queue: string): Promise<WaitingRoomBranding> {

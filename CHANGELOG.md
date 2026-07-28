@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Admin force-admit, live capacity / admit-rate overrides, password change, and multi-queue UX
+- OpenAPI document at `/openapi.yaml` and `/openapi.json` (also `docs/openapi.yaml`)
+- Auto-refreshing admin metrics (5s) and richer Worker landing page
+- HEAD support for TideGuard GET routes
+
+### Added (prior)
+
 - FIFO `QueueRoom` Durable Object with join, leave, status, heartbeat, metrics, and pause
 - **Lottery Mode** — uniform random admission among waiters (`ADMISSION_MODE` / `POST /mode`)
 - Rate-limited admission via a single per-queue alarm (cleared when idle)

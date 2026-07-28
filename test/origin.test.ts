@@ -40,6 +40,8 @@ describe("origin proxy config", () => {
     expect(isTideGuardPath("/wait", true)).toBe(true);
     expect(isTideGuardPath("/admin", true)).toBe(true);
     expect(isTideGuardPath("/api/admin/state", true)).toBe(true);
+    expect(isTideGuardPath("/openapi.yaml", true)).toBe(true);
+    expect(isTideGuardPath("/openapi.json", true)).toBe(true);
     expect(isTideGuardPath("/", true)).toBe(false);
     expect(isTideGuardPath("/checkout", true)).toBe(false);
     expect(isTideGuardPath("/", false)).toBe(true);

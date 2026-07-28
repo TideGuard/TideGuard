@@ -4,11 +4,15 @@ import { resolveOriginConfig } from "../admin/origin-store";
 import { requireAdmission, withSecurityHeaders } from "../auth";
 import { proxyToOrigin } from "../proxy/origin-proxy";
 import {
+  handleAdminAdmit,
   handleAdminBootstrap,
+  handleAdminCapacity,
+  handleAdminDefaultQueue,
   handleAdminHealth,
   handleAdminLogin,
   handleAdminLogout,
   handleAdminPage,
+  handleAdminPassword,
   handleAdminPause,
   handleAdminReset,
   handleAdminSaveBranding,
@@ -20,6 +24,7 @@ import {
 } from "./admin";
 import { handleCostEstimateApi, handleCostPage } from "./cost";
 import { handleHealth } from "./health";
+import { OPENAPI_DOCUMENT, OPENAPI_YAML } from "./openapi";
 import { handleDemo, handleWaitingRoom } from "./pages";
 import {
   handleAdmit,
@@ -53,6 +58,8 @@ const STATIC_TIDEGUARD = new Set([
   "/cost",
   "/demo",
   "/api/cost-estimate",
+  "/openapi.yaml",
+  "/openapi.json",
 ]);
 
 /**
@@ -117,8 +124,28 @@ function isStaticTideGuardPath(pathname: string): boolean {
 }
 
 async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method === "HEAD") {
+    const getRequest = new Request(request.url, {
+      method: "GET",
+      headers: request.headers,
+    });
+    const response = await handleTideGuardRoute(getRequest, env, url);
+    return new Response(null, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+
   if (request.method === "GET" && url.pathname === "/health") {
     return handleHealth(env);
+  }
+
+  if (
+    request.method === "GET" &&
+    (url.pathname === "/openapi.yaml" || url.pathname === "/openapi.json")
+  ) {
+    return handleOpenApi(url.pathname);
   }
 
   if (request.method === "GET" && url.pathname === "/") {
@@ -190,6 +217,22 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminReset(request, env);
   }
 
+  if (request.method === "POST" && url.pathname === "/api/admin/admit") {
+    return await handleAdminAdmit(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/capacity") {
+    return await handleAdminCapacity(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/password") {
+    return await handleAdminPassword(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/default-queue") {
+    return await handleAdminDefaultQueue(request, env);
+  }
+
   if (request.method === "GET" && url.pathname === "/wait") {
     return await handleWaitingRoom(request, env);
   }
@@ -253,7 +296,9 @@ function landingPage(): string {
         --fg: #e8f1f5;
         --accent: #2bb0a6;
         --muted: #8aa4b0;
+        --surface: #0b1f2a;
       }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
         min-height: 100vh;
@@ -262,11 +307,9 @@ function landingPage(): string {
           radial-gradient(circle at top left, #16384a 0%, transparent 45%),
           linear-gradient(160deg, #07151c, #0b1f2a 55%, #123041);
         color: var(--fg);
-        display: grid;
-        place-items: center;
-        padding: 2rem;
+        padding: 2rem 1.25rem 3rem;
       }
-      main { max-width: 36rem; }
+      main { max-width: 40rem; margin: 0 auto; }
       h1 {
         font-family: "Fraunces", Georgia, serif;
         font-weight: 650;
@@ -275,38 +318,117 @@ function landingPage(): string {
         letter-spacing: -0.02em;
         text-wrap: balance;
       }
-      p {
+      h2 {
+        font-family: "Fraunces", Georgia, serif;
+        font-weight: 650;
+        font-size: 1.25rem;
+        margin: 2rem 0 0.6rem;
+      }
+      p, li {
         margin: 0;
         line-height: 1.6;
         color: var(--muted);
         text-wrap: pretty;
       }
       a { color: var(--accent); }
+      .lead { margin-bottom: 1.25rem; }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin: 1.25rem 0 0.25rem;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.65rem 1.1rem;
+        border-radius: 0.55rem;
+        text-decoration: none;
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #042028;
+      }
+      .btn-ghost {
+        border-color: color-mix(in oklab, var(--muted) 45%, transparent);
+        color: var(--fg);
+      }
+      ol {
+        margin: 0.5rem 0 0;
+        padding-left: 1.2rem;
+        display: grid;
+        gap: 0.55rem;
+      }
+      li strong { color: var(--fg); font-weight: 600; }
       .meta {
-        margin-top: 1.5rem;
+        margin-top: 2rem;
         font-size: 0.95rem;
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem 1.1rem;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        h1 { animation: rise 700ms ease both; }
+        .lead { animation: rise 700ms ease 80ms both; }
+        .actions { animation: rise 700ms ease 140ms both; }
+      }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(0.4rem); }
+        to { opacity: 1; transform: none; }
       }
     </style>
   </head>
   <body>
     <main>
       <h1>TideGuard</h1>
+      <p class="lead">
+        Open-source waiting room for Cloudflare Workers. Hold the flood at the edge,
+        then admit people at a rate your origin can survive.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/demo">Try the demo</a>
+        <a class="btn btn-ghost" href="/admin">Open admin</a>
+        <a class="btn btn-ghost" href="https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard">Deploy</a>
+      </div>
+      <h2>How it works</h2>
+      <ol>
+        <li><strong>Join</strong> — visitors enter a FIFO line or lottery pool.</li>
+        <li><strong>Wait</strong> — heartbeats keep abandoned tabs from holding seats.</li>
+        <li><strong>Admit</strong> — signed tokens unlock the protected page or origin.</li>
+      </ol>
+      <h2>Operator path</h2>
       <p>
-        Open-source waiting room for Cloudflare Workers. Protect traffic spikes
-        with Queue Mode (FIFO) or Lottery Mode at the edge.
+        Finish <a href="/admin">/admin</a> setup, tune capacity live, then send traffic through
+        <a href="/wait?queue=default&amp;return=/demo">/wait</a>. Estimate spend on
+        <a href="/cost">/cost</a>.
       </p>
       <p class="meta">
         <a href="https://tideguard.dev">Website</a>
-        <a href="/demo">Try the demo</a>
-        <a href="/wait?queue=default&return=/demo">Waiting room</a>
-        <a href="/admin">Admin</a>
-        <a href="/cost">Calculate cost</a>
+        <a href="/openapi.yaml">OpenAPI</a>
         <a href="/health">Health</a>
+        <a href="https://github.com/TideGuard/TideGuard">GitHub</a>
       </p>
     </main>
   </body>
 </html>`;
+}
+
+function handleOpenApi(pathname: string): Response {
+  if (pathname === "/openapi.json") {
+    return new Response(JSON.stringify(OPENAPI_DOCUMENT, null, 2), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "public, max-age=300",
+      },
+    });
+  }
+  return new Response(OPENAPI_YAML, {
+    headers: {
+      "content-type": "application/yaml; charset=utf-8",
+      "cache-control": "public, max-age=300",
+    },
+  });
 }

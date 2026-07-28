@@ -61,7 +61,7 @@ Docs: [Custom domains](https://developers.cloudflare.com/workers/configuration/r
 
 **Always TideGuard (not proxied):**
 
-`/health`, `/wait`, `/join`, `/status`, `/leave`, `/heartbeat`, `/enter`, `/admit`, `/mode`, `/pause`, `/metrics`, `/admin`, `/api/admin/*`, `/cost`, `/api/cost-estimate`, `/demo`
+`/health`, `/wait`, `/join`, `/status`, `/leave`, `/heartbeat`, `/enter`, `/admit`, `/mode`, `/pause`, `/metrics`, `/admin`, `/api/admin/*`, `/cost`, `/api/cost-estimate`, `/demo`, `/openapi.yaml`, `/openapi.json`
 
 **When proxy is enabled:** everything else (including `/`) is forwarded to `ORIGIN_URL` + path + query.
 

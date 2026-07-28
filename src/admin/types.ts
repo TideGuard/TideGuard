@@ -2,6 +2,7 @@ import type { AdmissionMode } from "../core/types";
 import type { WaitingRoomBranding } from "../core/branding";
 
 export const ADMIN_CONFIG_KEY = "admin:config";
+export const ADMIN_QUEUES_KEY = "admin:queues";
 export const BRANDING_KEY_PREFIX = "branding:";
 
 export interface AdminConfig {

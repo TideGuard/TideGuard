@@ -103,6 +103,7 @@ Deep dive: [docs/architecture.md](docs/architecture.md)
 | [Verifying admission](docs/verifying-admission.md) | Redirect URL, click-to-enter, how origins trust tokens   |
 | [Architecture](docs/architecture.md)               | Understand Workers / DO / KV choices and cost rules      |
 | [API](docs/api.md)                                 | Integrate `/join`, `/status`, tokens, operator routes    |
+| [OpenAPI](docs/openapi.yaml)                       | Machine-readable HTTP surface (`/openapi.yaml`)          |
 | [Admin](docs/admin.md)                             | Wizard, login, branding preview, mode switch, reset      |
 | [Load testing](docs/load-testing.md)               | Prove FIFO / lottery behavior at 1k–100k simulated users |
 | [Security](SECURITY.md)                            | Secrets, tokens, and what not to put in git              |
@@ -183,8 +184,9 @@ test/               Vitest + Workers pool tests
 - [x] Docs hub (getting started, architecture, API, admin, load testing)
 - [x] Configurable origin proxy (gate + forward to upstream)
 - [x] Opening schedule, silent pause, origin health throttle
-- [ ] OpenAPI spec
-- [ ] Richer operator controls in UI (pause / force-admit)
+- [x] Admin force-admit, live capacity/rate, password change, multi-queue UX
+- [x] OpenAPI spec (`/openapi.yaml`)
+- [ ] Richer origin identity / bot controls
 
 ## Contributing
 

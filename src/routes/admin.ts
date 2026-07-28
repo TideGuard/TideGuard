@@ -16,6 +16,7 @@ import {
   isAdminSetupComplete,
   readAdminConfig,
   readBranding,
+  rememberQueue,
   sanitizeBrandingInput,
   writeAdminConfig,
   writeBranding,
@@ -28,7 +29,7 @@ import {
 import { normalizeOriginUrl, parsePathPrefixes } from "../core/origin";
 import { renderAdminApp } from "../html/admin";
 import { configFromEnv, getQueueRoom } from "../queue/client";
-import { parseQueueName, readJsonBody } from "./validation";
+import { parseOptionalCount, parseQueueName, readJsonBody } from "./validation";
 
 export async function handleAdminPage(_request: Request, env: Env): Promise<Response> {
   const setupComplete = await isAdminSetupComplete(env);
@@ -48,9 +49,14 @@ export async function handleAdminPage(_request: Request, env: Env): Promise<Resp
 }
 
 export async function handleAdminBootstrap(_request: Request, env: Env): Promise<Response> {
+  const setupComplete = await isAdminSetupComplete(env);
+  const admin = setupComplete ? await readAdminConfig(env) : null;
+  const defaultQueue = admin?.defaultQueue || env.DEFAULT_QUEUE || "default";
+  const queues = setupComplete ? await rememberQueue(env, defaultQueue) : [defaultQueue];
   return jsonOk({
-    setupComplete: await isAdminSetupComplete(env),
-    defaultQueue: env.DEFAULT_QUEUE || "default",
+    setupComplete,
+    defaultQueue,
+    queues,
   });
 }
 
@@ -91,6 +97,7 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
     createdAt: Date.now(),
     defaultQueue: queue,
   });
+  await rememberQueue(env, queue);
   await writeBranding(env, queue, branding);
 
   const config = configFromEnv(env);
@@ -148,6 +155,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     new URL(request.url).searchParams.get("queue") ?? admin.defaultQueue,
     admin.defaultQueue,
   );
+  const queues = await rememberQueue(env, queue);
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
   const [branding, metrics, origin, health] = await Promise.all([
@@ -159,6 +167,8 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
 
   return jsonOk({
     queue,
+    queues,
+    defaultQueue: admin.defaultQueue,
     branding,
     metrics,
     admissionMode: metrics.admissionMode as AdmissionMode,
@@ -188,6 +198,7 @@ export async function handleAdminSaveBranding(request: Request, env: Env): Promi
       : body,
   );
   await writeBranding(env, queue, branding);
+  await rememberQueue(env, queue);
 
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
@@ -257,6 +268,7 @@ export async function handleAdminSetMode(request: Request, env: Env): Promise<Re
     throw new ApiError("bad_request", 'mode must be "queue" or "lottery"', 400);
   }
 
+  await rememberQueue(env, queue);
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
   return jsonOk(await room.setMode({ queue, config, mode }));
@@ -360,6 +372,133 @@ export async function handleAdminReset(request: Request, env: Env): Promise<Resp
   await clearAdminConfig(env);
   await clearOriginOverride(env);
   return jsonOk({ ok: true, setupComplete: false });
+}
+
+export async function handleAdminAdmit(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  const count = parseOptionalCount(body.count, 1);
+  await rememberQueue(env, queue);
+
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+  const result = await room.forceAdmit({ queue, config, count });
+  return jsonOk(result);
+}
+
+export async function handleAdminCapacity(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  await rememberQueue(env, queue);
+
+  const maxConcurrentUsers =
+    body.maxConcurrentUsers === undefined || body.maxConcurrentUsers === null
+      ? undefined
+      : parseCapacity(body.maxConcurrentUsers);
+  const admitPerSecond =
+    body.admitPerSecond === undefined || body.admitPerSecond === null
+      ? undefined
+      : parseAdmitRate(body.admitPerSecond);
+
+  if (maxConcurrentUsers === undefined && admitPerSecond === undefined) {
+    throw new ApiError("bad_request", "Provide maxConcurrentUsers and/or admitPerSecond", 400);
+  }
+
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+  return jsonOk(
+    await room.setCapacity({
+      queue,
+      config,
+      ...(maxConcurrentUsers !== undefined ? { maxConcurrentUsers } : {}),
+      ...(admitPerSecond !== undefined ? { admitPerSecond } : {}),
+    }),
+  );
+}
+
+export async function handleAdminPassword(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "password"), { limit: 10, windowMs: 60_000 });
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const currentPassword = parsePassword(body.currentPassword);
+  const newPassword = parsePassword(body.newPassword);
+  const confirm = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+  if (newPassword !== confirm) {
+    throw new ApiError("bad_request", "Passwords do not match", 400);
+  }
+  if (currentPassword === newPassword) {
+    throw new ApiError("bad_request", "New password must differ from the current password", 400);
+  }
+
+  const ok = await verifyPassword(currentPassword, admin.passwordHash, admin.passwordSalt);
+  if (!ok) {
+    throw new ApiError("unauthorized", "Current password is incorrect", 401);
+  }
+
+  const { hash, salt } = await hashPassword(newPassword);
+  await writeAdminConfig(env, {
+    ...admin,
+    passwordHash: hash,
+    passwordSalt: salt,
+  });
+
+  const session = await signAdminSession(requireTokenSecret(env));
+  return withCookie(jsonOk({ ok: true }), buildAdminSessionCookie(session, request));
+}
+
+export async function handleAdminDefaultQueue(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  const queues = await rememberQueue(env, queue);
+  await writeAdminConfig(env, { ...admin, defaultQueue: queue });
+  return jsonOk({ ok: true, defaultQueue: queue, queues });
+}
+
+function parseCapacity(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 100_000) {
+    throw new ApiError(
+      "bad_request",
+      "maxConcurrentUsers must be an integer between 1 and 100000",
+      400,
+    );
+  }
+  return n;
+}
+
+function parseAdmitRate(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!(n > 0) || !Number.isFinite(n) || n > 1_000) {
+    throw new ApiError(
+      "bad_request",
+      "admitPerSecond must be a number between 0 and 1000 (exclusive of 0)",
+      400,
+    );
+  }
+  return n;
 }
 
 function requireSetupBearer(request: Request, env: Env): void {
