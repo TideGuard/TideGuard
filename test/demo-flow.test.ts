@@ -14,15 +14,14 @@ describe("waiting room and demo flow", () => {
     expect(html).not.toContain("In queue");
   });
 
-  it("can show waiting count when showWaiting=1", async () => {
+  it("does not expose showWaiting query override", async () => {
     const response = await exports.default.fetch(
       new Request("https://example.com/wait?queue=flow-demo&showWaiting=1"),
     );
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain("In pool");
-    expect(html).toContain("Behind");
-    expect(html).toContain("showWaitingCount = true");
+    // Depth UI follows branding only; query override removed.
+    expect(html).not.toContain("showWaitingCount = true");
   });
 
   it("redirects unauthenticated demo visitors to the waiting room", async () => {

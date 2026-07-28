@@ -1,11 +1,12 @@
 # TideGuard
 
-[Website](https://tideguard.dev)
-
 <p>
   <a href="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml"><img src="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml/badge.svg" alt="CI" height="20" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" height="20" /></a>
-  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="20" /></a>
+</p>
+
+<p>
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36" /></a>
 </p>
 
 **An open-source waiting room for Cloudflare Workers.**  
@@ -46,8 +47,35 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 - **Lottery Mode:** odds in the pool, optional pool size
 - Heartbeats so abandoned tabs leave the line
 - Soft branding (colors, title, message) without rewriting the waiting-room layout
+- Configurable **redirect path** after admission (or `?return=` on `/wait`)
+- Optional **click-to-enter**: a Continue button plus a hold timer before the spot is released
 
-Depth stats are off by default. Turn them on in admin (`showWaitingCount`) or with `?showWaiting=1` on `/wait`.
+Depth stats are off by default. Turn them on in admin (`showWaitingCount`).
+
+## Traffic controls
+
+Operators pace launches from `/admin` (Traffic panel) and the operator API:
+
+| Control           | Visitors see                              | Operators see              |
+| ----------------- | ----------------------------------------- | -------------------------- |
+| **Opening time**  | Countdown on `/wait` only                 | Schedule panel             |
+| **Silent pause**  | Normal waiting UI; admissions stop        | Pause toggle + metrics     |
+| **Origin health** | Normal waiting UI; rate cut or auto-pause | Health status + last probe |
+
+Admission rule (shared by join, alarm, and force-admit):
+
+```text
+canAdmit = !manualPause && !autoPause && now >= opensAt
+admitRate = baseAdmitPerSecond × healthMultiplier   // 1.0 | slowFactor | 0
+```
+
+**Same browser, multiple tabs:** one seat — `POST /join` resumes the existing `tg_ticket` visitor and ignores a conflicting body `visitorId`.
+
+**Different browsers / devices:** each profile can take its own seat. TideGuard paces capacity; it is not a bot or identity system. Operators who need stronger limits can lower capacity, use Lottery Mode, put Cloudflare Bot Fight/WAF in front, or require login before `/wait`.
+
+Details: [docs/admin.md](docs/admin.md), [docs/verifying-admission.md](docs/verifying-admission.md).
+
+How your origin trusts admitted visitors: [docs/verifying-admission.md](docs/verifying-admission.md).
 
 ## Architecture (short version)
 
@@ -67,14 +95,17 @@ Deep dive: [docs/architecture.md](docs/architecture.md)
 
 ## Documentation
 
-| Guide                                      | Start here if you want to…                               |
-| ------------------------------------------ | -------------------------------------------------------- |
-| [Getting started](docs/getting-started.md) | Clone, run locally, deploy, first `/admin` setup         |
-| [Architecture](docs/architecture.md)       | Understand Workers / DO / KV choices and cost rules      |
-| [API](docs/api.md)                         | Integrate `/join`, `/status`, tokens, operator routes    |
-| [Admin](docs/admin.md)                     | Wizard, login, branding preview, mode switch, reset      |
-| [Load testing](docs/load-testing.md)       | Prove FIFO / lottery behavior at 1k–100k simulated users |
-| [Security](SECURITY.md)                    | Secrets, tokens, and what not to put in git              |
+| Guide                                              | Start here if you want to…                               |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| [Getting started](docs/getting-started.md)         | Clone, run locally, deploy, first `/admin` setup         |
+| [Launch checklist](docs/launch-checklist.md)       | Pre-production go-live review                            |
+| [Protecting a domain](docs/protecting-origin.md)   | Custom domains, routes, Cloudflare in front of origin    |
+| [Verifying admission](docs/verifying-admission.md) | Redirect URL, click-to-enter, how origins trust tokens   |
+| [Architecture](docs/architecture.md)               | Understand Workers / DO / KV choices and cost rules      |
+| [API](docs/api.md)                                 | Integrate `/join`, `/status`, tokens, operator routes    |
+| [Admin](docs/admin.md)                             | Wizard, login, branding preview, mode switch, reset      |
+| [Load testing](docs/load-testing.md)               | Prove FIFO / lottery behavior at 1k–100k simulated users |
+| [Security](SECURITY.md)                            | Secrets, tokens, and what not to put in git              |
 
 ## Quick start (local)
 
@@ -114,6 +145,9 @@ Defaults live in `wrangler.jsonc` under `vars`:
 | `QUEUE_TIMEOUT_SECONDS`     | `1800`       | Max time in queue              |
 | `DEFAULT_QUEUE`             | `default`    | Queue when none is specified   |
 | `ADMISSION_MODE`            | `queue`      | `queue` (FIFO) or `lottery`    |
+| `ORIGIN_URL`                | _(empty)_    | Upstream origin for proxy      |
+| `ORIGIN_PROTECT_ALL`        | `true`       | Gate all non-TideGuard paths   |
+| `ORIGIN_PATH_PREFIXES`      | _(empty)_    | Prefixes if protect-all is off |
 | `ENVIRONMENT`               | `production` | Reported by `/health`          |
 
 | Secret         | Purpose                                        |
@@ -128,9 +162,11 @@ Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)
 src/
   core/             Types, config, ETA, cost model
   auth/             Admission tokens, admin password + session
-  admin/            KV helpers for branding and setup
+  admin/            KV helpers for branding, setup, origin proxy
+  proxy/            Upstream origin forwarding
   queue/            Pure queue engine + in-memory load simulator
   durable-object/   QueueRoom (SQLite + alarms)
+  health/           Origin probe + graduated throttle
   routes/           HTTP adapters
   html/             Waiting room, admin, cost calculator
   demo/             Protected demo page
@@ -145,8 +181,10 @@ test/               Vitest + Workers pool tests
 - [x] Waiting room, demo, embed mode, cost calculator
 - [x] Admin wizard with live branding preview
 - [x] Docs hub (getting started, architecture, API, admin, load testing)
+- [x] Configurable origin proxy (gate + forward to upstream)
+- [x] Opening schedule, silent pause, origin health throttle
 - [ ] OpenAPI spec
-- [ ] Deploy-button polish and richer operator controls in UI
+- [ ] Richer operator controls in UI (pause / force-admit)
 
 ## Contributing
 

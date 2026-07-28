@@ -215,11 +215,11 @@ export function renderCostCalculatorPage(): string {
           </label>
           <label>
             <span>Status poll interval (seconds)</span>
-            <input id="pollSeconds" type="number" min="0.5" step="0.5" value="2.5" />
+            <input id="pollSeconds" type="number" min="0.5" step="0.5" value="15" />
           </label>
           <label>
             <span>Heartbeat interval (seconds)</span>
-            <input id="heartbeatSeconds" type="number" min="1" step="1" value="10" />
+            <input id="heartbeatSeconds" type="number" min="1" step="1" value="30" />
           </label>
         </section>
 
@@ -345,8 +345,8 @@ export function renderCostCalculatorPage(): string {
           const result = estimate({
             visitors: Number(visitorsInput.value || 0),
             averageWaitSeconds: Number(waitInput.value || 0) * 60,
-            pollIntervalSeconds: Number(pollInput.value || 2.5),
-            heartbeatIntervalSeconds: Number(heartbeatInput.value || 10),
+            pollIntervalSeconds: Number(pollInput.value || 15),
+            heartbeatIntervalSeconds: Number(heartbeatInput.value || 30),
           });
 
           totalEl.textContent = formatUsd(result.totalUsd);
@@ -380,10 +380,10 @@ export function renderCostCalculatorPage(): string {
         }
 
         const presetValues = {
-          short: { visitors: 5000000, wait: 2, poll: 2.5, heartbeat: 10 },
-          medium: { visitors: 5000000, wait: 15, poll: 2.5, heartbeat: 10 },
-          long: { visitors: 5000000, wait: 60, poll: 2.5, heartbeat: 10 },
-          small: { visitors: 100000, wait: 5, poll: 2.5, heartbeat: 10 },
+          short: { visitors: 5000000, wait: 2, poll: 15, heartbeat: 30 },
+          medium: { visitors: 5000000, wait: 15, poll: 15, heartbeat: 30 },
+          long: { visitors: 5000000, wait: 60, poll: 15, heartbeat: 30 },
+          small: { visitors: 100000, wait: 5, poll: 15, heartbeat: 30 },
         };
 
         presets.forEach((btn) => {

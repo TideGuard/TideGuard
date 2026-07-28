@@ -210,6 +210,13 @@ describe("QueueRoom Lottery Mode", () => {
   it("hides FIFO position and reports equal lottery odds", async () => {
     const stub = room("lottery-odds");
     const cfg = config({ maxConcurrentUsers: 1, admissionMode: "lottery" });
+    await stub.setAdmitUx({
+      queue: "lottery-odds",
+      config: cfg,
+      requireClickToEnter: false,
+      admitHoldSeconds: 0,
+      showWaitingCount: true,
+    });
 
     await stub.join({ queue: "lottery-odds", config: cfg, visitorId: "seat" });
     const first = await stub.join({ queue: "lottery-odds", config: cfg, visitorId: "w1" });

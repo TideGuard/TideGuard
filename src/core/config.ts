@@ -70,6 +70,8 @@ export function parseQueueConfig(env: {
     heartbeatTimeoutSeconds,
     queueTimeoutSeconds,
     admissionMode: admissionMode!,
+    requireClickToEnter: false,
+    admitHoldSeconds: 120,
   };
 }
 
@@ -87,4 +89,6 @@ export const DEFAULT_QUEUE_CONFIG: QueueConfig = {
   heartbeatTimeoutSeconds: 60,
   queueTimeoutSeconds: 1800,
   admissionMode: "queue",
+  requireClickToEnter: false,
+  admitHoldSeconds: 120,
 };

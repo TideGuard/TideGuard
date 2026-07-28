@@ -1,5 +1,19 @@
 export { signAccessToken, verifyAccessToken, buildAdmissionClaims, TokenError } from "./token";
 export type { AccessTokenClaims } from "./token";
+export { signVisitorTicket, verifyVisitorTicket, readTicketCookie } from "./visitor-ticket";
+export type { VisitorTicketClaims } from "./visitor-ticket";
+export {
+  ACCESS_COOKIE,
+  TICKET_COOKIE,
+  buildAccessCookie,
+  buildTicketCookie,
+  appendSetCookies,
+  withSecurityHeaders,
+  securityHeaders,
+  extractAccessToken,
+} from "./cookies";
+export { rateLimitOrThrow } from "./rate-limit";
+export { requireAdmission } from "./admission";
 export { hashPassword, verifyPassword } from "./password";
 export {
   signAdminSession,

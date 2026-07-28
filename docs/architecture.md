@@ -77,6 +77,7 @@ Unsuitable for queue membership or ordering.
 | ----------------------- | ------------------------------------------------------------ |
 | `src/core`              | Types, config parsing, ETA, API errors — package-extractable |
 | `src/queue`             | Pure queue engine logic                                      |
+| `src/health`            | Origin probe helpers + graduated throttle state machine      |
 | `src/durable-object`    | Persistence and RPC surface for `QueueRoom`                  |
 | `src/auth`              | Token sign / verify                                          |
 | `src/routes`            | HTTP mapping only — thin adapters                            |
@@ -113,7 +114,7 @@ Cloudflare bills for Worker requests, Durable Object requests/duration, KV opera
 | Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side        |
 | Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `TOKEN_SECRET` |
 | Metrics                         | Computed from DO SQL counts — not mirrored to KV on every change              |
-| Status polling                  | Necessary for consistency; keep intervals at 2–3s in the waiting UI           |
+| Status polling                  | Necessary for consistency; keep intervals at **~15s** in the waiting UI       |
 
 Avoid:
 
@@ -122,13 +123,33 @@ Avoid:
 - Storing queue order in KV
 - Refreshing branding from KV on every `/status` call (cache on the waiting page)
 
+## Admission gates
+
+Join, alarm ticks, and force-admit share one rule in `QueueRoom`:
+
+```text
+canAdmit = !manualPause && !autoPause && now >= opensAt
+admitRate = baseAdmitPerSecond × healthRateMultiplier   // 1.0 | slowFactor | 0
+```
+
+| Control       | Persistence                                           | Visitor surface                           |
+| ------------- | ----------------------------------------------------- | ----------------------------------------- |
+| `opensAt`     | DO meta                                               | Countdown injected into `/wait` HTML only |
+| Manual pause  | DO meta                                               | Silent — no join/status fields            |
+| Origin health | DO meta + alarm probes (`src/health/origin-probe.ts`) | Silent; ops via admin / `/metrics`        |
+
+Public `/join` / `/status` omit depth unless `showWaitingCount` is synced to the DO. `GET /metrics` is operator-auth only.
+
+Same-browser multi-tab: `POST /join` resumes a valid `tg_ticket` and ignores a conflicting body `visitorId`.
+
 ## QueueRoom responsibilities
 
 - Monotonic `sequence` for Queue Mode FIFO ordering
 - Lottery Mode random selection among current waiters
-- Immediate admit when capacity is free (and not paused)
-- Rate-limited admit ticks via alarm (`admitPerSecond`)
+- Immediate admit when capacity is free (and gates allow)
+- Rate-limited admit ticks via alarm (`admitPerSecond` × health multiplier)
 - Immediate promote on `leave` when a slot opens
 - Heartbeat + queue-stay expiry for waiters
 - Admission TTL expiry to free capacity slots
-- Pause / resume and live Queue ↔ Lottery mode switch
+- Opening schedule, silent pause / resume, origin health throttle
+- Live Queue ↔ Lottery mode switch

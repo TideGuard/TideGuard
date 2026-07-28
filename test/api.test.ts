@@ -1,11 +1,35 @@
-import { exports } from "cloudflare:workers";
+import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { verifyAccessToken } from "../src/auth";
+import { DEFAULT_QUEUE_CONFIG } from "../src/core/config";
 
 const SECRET = "test-token-secret-do-not-use-in-production";
 
+async function enableDepth(queue: string): Promise<void> {
+  await env.QUEUE_ROOM.getByName(queue).setAdmitUx({
+    queue,
+    config: DEFAULT_QUEUE_CONFIG,
+    requireClickToEnter: false,
+    admitHoldSeconds: 0,
+    showWaitingCount: true,
+  });
+}
+
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
+}
+
+function cookiesFrom(response: Response): string {
+  const raw = response.headers.getSetCookie?.() ?? [];
+  if (raw.length > 0) {
+    return raw.map((c) => c.split(";")[0]!).join("; ");
+  }
+  const single = response.headers.get("set-cookie");
+  return single ? single.split(";")[0]! : "";
+}
+
+function mergeCookies(...parts: string[]): string {
+  return parts.filter(Boolean).join("; ");
 }
 
 describe("queue REST API", () => {
@@ -27,6 +51,8 @@ describe("queue REST API", () => {
 
     expect(body).toMatchObject({ visitorId: "u1", status: "admitted" });
     expect(body.accessToken).toBeTypeOf("string");
+    expect(cookiesFrom(response)).toContain("tg_ticket=");
+    expect(cookiesFrom(response)).toContain("tg_access=");
 
     const claims = await verifyAccessToken(body.accessToken!, SECRET, {
       expectedQueue: "api-join",
@@ -34,7 +60,7 @@ describe("queue REST API", () => {
     expect(claims.sub).toBe("u1");
   });
 
-  it("returns status with an access token for admitted visitors", async () => {
+  it("returns status with an access token only when the visitor ticket is present", async () => {
     const join = await exports.default.fetch(
       new Request("https://example.com/join", {
         method: "POST",
@@ -43,9 +69,17 @@ describe("queue REST API", () => {
       }),
     );
     expect(join.status).toBe(200);
+    const ticket = cookiesFrom(join);
+
+    const denied = await exports.default.fetch(
+      new Request("https://example.com/status?queue=api-status&id=a"),
+    );
+    expect(denied.status).toBe(401);
 
     const status = await exports.default.fetch(
-      new Request("https://example.com/status?queue=api-status&id=a"),
+      new Request("https://example.com/status?queue=api-status&id=a", {
+        headers: { cookie: ticket },
+      }),
     );
     expect(status.status).toBe(200);
     const body = await json<{ status: string; accessToken?: string }>(status);
@@ -55,6 +89,8 @@ describe("queue REST API", () => {
 
   it("heartbeats, leaves, and reports metrics", async () => {
     const queue = "api-lifecycle";
+    const seatCookies: string[] = [];
+    await enableDepth(queue);
 
     // Fill the queue to capacity so the next visitor waits.
     for (let i = 0; i < 20; i += 1) {
@@ -66,6 +102,7 @@ describe("queue REST API", () => {
         }),
       );
       expect(fill.status).toBe(200);
+      seatCookies[i] = cookiesFrom(fill);
     }
 
     const waiting = await exports.default.fetch(
@@ -76,6 +113,7 @@ describe("queue REST API", () => {
       }),
     );
     expect(waiting.status).toBe(202);
+    const waiterCookie = cookiesFrom(waiting);
     const waitingBody = await json<{
       status: string;
       position: number | null;
@@ -96,14 +134,24 @@ describe("queue REST API", () => {
     const beat = await exports.default.fetch(
       new Request("https://example.com/heartbeat", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          cookie: waiterCookie,
+        },
         body: JSON.stringify({ queue, visitorId: "waiter" }),
       }),
     );
     expect(beat.status).toBe(200);
 
-    const metrics = await exports.default.fetch(
+    const metricsDenied = await exports.default.fetch(
       new Request(`https://example.com/metrics?queue=${queue}`),
+    );
+    expect(metricsDenied.status).toBe(401);
+
+    const metrics = await exports.default.fetch(
+      new Request(`https://example.com/metrics?queue=${queue}`, {
+        headers: { authorization: `Bearer ${SECRET}` },
+      }),
     );
     expect(metrics.status).toBe(200);
     const metricsBody = await json<{
@@ -122,14 +170,19 @@ describe("queue REST API", () => {
     const leave = await exports.default.fetch(
       new Request("https://example.com/leave", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          cookie: seatCookies[0]!,
+        },
         body: JSON.stringify({ queue, visitorId: "seat-0" }),
       }),
     );
     expect(leave.status).toBe(200);
 
     const promoted = await exports.default.fetch(
-      new Request(`https://example.com/status?queue=${queue}&id=waiter`),
+      new Request(`https://example.com/status?queue=${queue}&id=waiter`, {
+        headers: { cookie: waiterCookie },
+      }),
     );
     const promotedBody = await json<{ status: string; accessToken?: string }>(promoted);
     expect(promotedBody.status).toBe("admitted");
@@ -159,63 +212,120 @@ describe("queue REST API", () => {
     expect(allowed.status).toBe(200);
   });
 
-  it("switches admission mode via /mode", async () => {
-    const queue = "api-mode";
-
+  it("switches admission mode with operator auth", async () => {
+    await enableDepth("api-mode");
     for (let i = 0; i < 20; i += 1) {
       await exports.default.fetch(
         new Request("https://example.com/join", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ queue, visitorId: `seat-${i}` }),
+          body: JSON.stringify({ queue: "api-mode", visitorId: `fill-${i}` }),
         }),
       );
     }
 
-    const denied = await exports.default.fetch(
-      new Request("https://example.com/mode", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ queue, mode: "lottery" }),
-      }),
-    );
-    expect(denied.status).toBe(401);
-
-    const switched = await exports.default.fetch(
+    const mode = await exports.default.fetch(
       new Request("https://example.com/mode", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${SECRET}`,
         },
-        body: JSON.stringify({ queue, mode: "lottery" }),
+        body: JSON.stringify({ queue: "api-mode", mode: "lottery" }),
       }),
     );
-    expect(switched.status).toBe(200);
-    expect(await json(switched)).toEqual({ admissionMode: "lottery" });
+    expect(mode.status).toBe(200);
+    expect(await json(mode)).toMatchObject({ admissionMode: "lottery" });
 
+    const waiter = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queue: "api-mode", visitorId: "lotto" }),
+      }),
+    );
+    expect(waiter.status).toBe(202);
+    const body = await json<{
+      admissionMode: string;
+      lotteryOdds?: number;
+      position?: number | null;
+    }>(waiter);
+    expect(body.admissionMode).toBe("lottery");
+    expect(body.position).toBeNull();
+    expect(body.lotteryOdds).toBe(1);
+  });
+
+  it("omits depth fields unless showWaitingCount is enabled", async () => {
+    const queue = "api-depth-off";
+    for (let i = 0; i < 20; i += 1) {
+      await exports.default.fetch(
+        new Request("https://example.com/join", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ queue, visitorId: `fill-${i}` }),
+        }),
+      );
+    }
     const waiting = await exports.default.fetch(
       new Request("https://example.com/join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ queue, visitorId: "lottery-waiter" }),
+        body: JSON.stringify({ queue, visitorId: "depth-waiter" }),
       }),
     );
     expect(waiting.status).toBe(202);
-    const body = await json<{
-      admissionMode: string;
-      position: number | null;
-      lotteryOdds?: number;
-    }>(waiting);
-    expect(body.admissionMode).toBe("lottery");
-    expect(body.position).toBeNull();
-    expect(body.lotteryOdds).toBe(1);
+    const body = await json<Record<string, unknown>>(waiting);
+    expect(body.waiting).toBeUndefined();
+    expect(body.ahead).toBeUndefined();
+    expect(body.behind).toBeUndefined();
+  });
 
-    const metrics = await exports.default.fetch(
-      new Request(`https://example.com/metrics?queue=${queue}`),
+  it("resumes the ticket-bound visitor across tabs", async () => {
+    const queue = "api-multitab";
+    const first = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queue, visitorId: "tab-a" }),
+      }),
     );
-    const metricsBody = await json<{ admissionMode: string }>(metrics);
-    expect(metricsBody.admissionMode).toBe("lottery");
+    expect(first.status).toBe(200);
+    const ticket = cookiesFrom(first);
+    const firstBody = await json<{ visitorId: string }>(first);
+    expect(firstBody.visitorId).toBe("tab-a");
+
+    const second = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: ticket,
+        },
+        body: JSON.stringify({ queue, visitorId: "tab-b-conflicting" }),
+      }),
+    );
+    expect(second.status).toBe(200);
+    const secondBody = await json<{ visitorId: string }>(second);
+    expect(secondBody.visitorId).toBe("tab-a");
+  });
+
+  it("rejects status for unknown visitors", async () => {
+    const join = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queue: "api-missing", visitorId: "known" }),
+      }),
+    );
+    const cookie = cookiesFrom(join);
+
+    const missing = await exports.default.fetch(
+      new Request("https://example.com/status?queue=api-missing&id=unknown", {
+        headers: { cookie: mergeCookies(cookie) },
+      }),
+    );
+    // Ticket is for "known", so visitor mismatch → 401
+    expect(missing.status).toBe(401);
   });
 
   it("rejects invalid join payloads", async () => {

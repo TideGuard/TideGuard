@@ -7,10 +7,12 @@ export interface WaitingRoomRenderOptions {
   returnTo?: string;
   visitorId?: string;
   branding?: Partial<WaitingRoomBranding>;
-  /** Override branding.showWaitingCount for this render (e.g. ?showWaiting=1). */
-  showWaitingCount?: boolean;
-  /** Status poll interval in ms. Keep >= 2000 to limit DO request volume. */
+  /** Status poll interval in ms. Default 15s; keep >= 2000 to limit DO request volume. */
   pollIntervalMs?: number;
+  /** Heartbeat interval in ms. Default 30s. */
+  heartbeatIntervalMs?: number;
+  /** Unix ms when admissions begin; null/undefined = already open. */
+  opensAt?: number | null;
 }
 
 /**
@@ -20,11 +22,13 @@ export interface WaitingRoomRenderOptions {
 export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   const branding = mergeBranding(options.branding);
   const embed = options.embed === true;
-  const pollIntervalMs = Math.max(2000, options.pollIntervalMs ?? 2500);
+  const pollIntervalMs = Math.max(2000, options.pollIntervalMs ?? 15_000);
+  const heartbeatIntervalMs = Math.max(5000, options.heartbeatIntervalMs ?? 30_000);
   const returnTo = options.returnTo ?? "/demo";
   const queue = options.queue;
   const initialVisitorId = options.visitorId ?? "";
-  const showWaitingCount = options.showWaitingCount ?? branding.showWaitingCount;
+  const showWaitingCount = branding.showWaitingCount;
+  const opensAt = options.opensAt ?? null;
 
   return `<!DOCTYPE html>
 <html lang="en" class="${embed ? "is-embed" : ""}">
@@ -180,6 +184,33 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         .tide::after { animation: none; }
         .progress > span { transition: none; }
       }
+      .enter-panel[hidden] { display: none; }
+      .enter-panel {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid color-mix(in oklab, var(--tg-text) 14%, transparent);
+      }
+      .enter-panel .hold {
+        font-size: 0.9rem;
+        color: var(--tg-muted);
+        margin: 0 0 1rem;
+      }
+      .enter-panel button {
+        appearance: none;
+        border: 0;
+        border-radius: 0.55rem;
+        padding: 0.85rem 1.4rem;
+        font: inherit;
+        font-weight: 600;
+        color: #041015;
+        background: linear-gradient(135deg, var(--tg-primary), var(--tg-accent));
+        cursor: pointer;
+        min-width: 12rem;
+      }
+      .enter-panel button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
     </style>
   </head>
   <body>
@@ -214,17 +245,28 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         }
       </div>
       <p class="status" id="status" data-tone="ok">Connecting to queue…</p>
+      <p class="status" id="open-status" data-tone="ok" hidden></p>
+      <div class="enter-panel" id="enter-panel" hidden>
+        <p class="hold" id="hold-text">Your spot is ready. Continue before the timer ends.</p>
+        <button type="button" id="enter-btn">${escapeHtml(branding.enterButtonLabel)}</button>
+      </div>
     </main>
     <script>
       (() => {
         const queue = ${JSON.stringify(queue)};
         const returnTo = ${JSON.stringify(returnTo)};
         const pollMs = ${JSON.stringify(pollIntervalMs)};
+        const heartbeatMs = ${JSON.stringify(heartbeatIntervalMs)};
         const showWaitingCount = ${JSON.stringify(showWaitingCount)};
+        const requireClickToEnter = ${JSON.stringify(branding.requireClickToEnter)};
+        const opensAt = ${JSON.stringify(opensAt)};
         const storageKey = "tg_visitor:" + queue;
         let visitorId = ${JSON.stringify(initialVisitorId)} || localStorage.getItem(storageKey) || "";
         let timer = null;
         let heartbeatTimer = null;
+        let holdTimer = null;
+        let openTimer = null;
+        let entering = false;
 
         const el = {
           stats: document.getElementById("stats"),
@@ -238,8 +280,34 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           depthBLabel: document.getElementById("depth-b-label"),
           depthB: document.getElementById("depth-b"),
           status: document.getElementById("status"),
+          openStatus: document.getElementById("open-status"),
           progress: document.getElementById("progress"),
+          enterPanel: document.getElementById("enter-panel"),
+          holdText: document.getElementById("hold-text"),
+          enterBtn: document.getElementById("enter-btn"),
         };
+
+        function paintOpenCountdown() {
+          if (!opensAt || !el.openStatus) return;
+          const remaining = Math.max(0, Math.ceil((opensAt - Date.now()) / 1000));
+          if (remaining <= 0) {
+            el.openStatus.hidden = true;
+            if (openTimer) { clearInterval(openTimer); openTimer = null; }
+            return;
+          }
+          el.openStatus.hidden = false;
+          const mins = Math.floor(remaining / 60);
+          const secs = remaining % 60;
+          const when = new Date(opensAt).toLocaleString();
+          el.openStatus.textContent = mins > 0
+            ? ("Opens in " + mins + "m " + String(secs).padStart(2, "0") + "s · " + when)
+            : ("Opens in " + secs + "s · " + when);
+        }
+
+        if (opensAt && opensAt > Date.now()) {
+          paintOpenCountdown();
+          openTimer = setInterval(paintOpenCountdown, 1000);
+        }
 
         function setStatus(text, tone) {
           el.status.textContent = text;
@@ -258,6 +326,11 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           if (!Number.isFinite(odds) || odds <= 0) return "—";
           const n = Math.max(1, Math.round(1 / odds));
           return "1 in " + n;
+        }
+
+        function redirectNow() {
+          setStatus("You’re in. Redirecting…", "ok");
+          window.location.replace(returnTo + (returnTo.includes("?") ? "&" : "?") + "queue=" + encodeURIComponent(queue));
         }
 
         function updateProgress(data) {
@@ -280,6 +353,8 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         }
 
         function renderWaiting(data) {
+          el.enterPanel.hidden = true;
+          if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
           if (data.admissionMode === "lottery") {
             el.primaryLabel.textContent = "Lottery odds";
             el.position.textContent = formatOdds(data.lotteryOdds);
@@ -313,11 +388,79 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           updateProgress(data);
         }
 
-        function admit(token) {
-          const maxAge = 60 * 60;
-          document.cookie = "tg_access=" + encodeURIComponent(token) + "; Path=/; Max-Age=" + maxAge + "; SameSite=Lax";
-          setStatus("You’re in. Redirecting…", "ok");
-          window.location.replace(returnTo + (returnTo.includes("?") ? "&" : "?") + "queue=" + encodeURIComponent(queue));
+        function showEnterPanel(data) {
+          el.enterPanel.hidden = false;
+          el.progress.style.setProperty("--progress", "100%");
+          setStatus("You’re next — confirm to enter", "ok");
+          let remaining = Number.isFinite(data.holdSecondsRemaining)
+            ? data.holdSecondsRemaining
+            : 0;
+          const paint = () => {
+            el.holdText.textContent = remaining > 0
+              ? ("Your spot is held for " + remaining + "s. Click to continue.")
+              : "Your hold is ending…";
+          };
+          paint();
+          if (holdTimer) clearInterval(holdTimer);
+          holdTimer = setInterval(async () => {
+            remaining -= 1;
+            paint();
+            if (remaining <= 0) {
+              clearInterval(holdTimer);
+              holdTimer = null;
+              await forfeitHold();
+            }
+          }, 1000);
+        }
+
+        async function forfeitHold() {
+          el.enterPanel.hidden = true;
+          setStatus("Hold expired. Rejoining the line…", "err");
+          try {
+            await fetch("/leave", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ queue, visitorId }),
+            });
+          } catch (_) {}
+          localStorage.removeItem(storageKey);
+          visitorId = "";
+          await join();
+        }
+
+        async function confirmEnter() {
+          if (entering || !visitorId) return;
+          entering = true;
+          el.enterBtn.disabled = true;
+          try {
+            const res = await fetch("/enter", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ queue, visitorId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error?.message || "Could not enter");
+            if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+            redirectNow();
+          } catch (err) {
+            entering = false;
+            el.enterBtn.disabled = false;
+            setStatus(err.message || "Could not enter", "err");
+          }
+        }
+
+        async function handleAdmitted(data) {
+          if (data.entered && data.accessToken) {
+            redirectNow();
+            return;
+          }
+          if (requireClickToEnter || data.entered === false) {
+            showEnterPanel(data);
+            return;
+          }
+          redirectNow();
         }
 
         async function join() {
@@ -325,6 +468,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           if (visitorId) body.visitorId = visitorId;
           const res = await fetch("/join", {
             method: "POST",
+            credentials: "same-origin",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           });
@@ -332,19 +476,27 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           if (!res.ok) throw new Error(data.error?.message || "Join failed");
           visitorId = data.visitorId;
           localStorage.setItem(storageKey, visitorId);
-          if (data.status === "admitted" && data.accessToken) {
-            admit(data.accessToken);
+          if (data.status === "admitted") {
+            await handleAdmitted(data);
             return;
           }
           renderWaiting(data);
         }
 
         async function poll() {
-          if (!visitorId) return;
-          const res = await fetch("/status?queue=" + encodeURIComponent(queue) + "&id=" + encodeURIComponent(visitorId));
+          if (!visitorId || entering) return;
+          if (!el.enterPanel.hidden) {
+            // Still poll so an expired hold becomes 404 / rejoin.
+          }
+          const res = await fetch(
+            "/status?queue=" + encodeURIComponent(queue) + "&id=" + encodeURIComponent(visitorId),
+            { credentials: "same-origin" },
+          );
           const data = await res.json();
           if (!res.ok) {
             if (res.status === 404) {
+              el.enterPanel.hidden = true;
+              if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
               localStorage.removeItem(storageKey);
               visitorId = "";
               await join();
@@ -352,17 +504,18 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
             }
             throw new Error(data.error?.message || "Status failed");
           }
-          if (data.status === "admitted" && data.accessToken) {
-            admit(data.accessToken);
+          if (data.status === "admitted") {
+            await handleAdmitted(data);
             return;
           }
           renderWaiting(data);
         }
 
         async function heartbeat() {
-          if (!visitorId) return;
+          if (!visitorId || !el.enterPanel.hidden) return;
           await fetch("/heartbeat", {
             method: "POST",
+            credentials: "same-origin",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ queue, visitorId }),
           });
@@ -376,13 +529,15 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           }
         }
 
+        el.enterBtn.addEventListener("click", () => { confirmEnter(); });
+
         (async () => {
           try {
             await join();
             timer = setInterval(tick, pollMs);
             heartbeatTimer = setInterval(() => {
               heartbeat().catch(() => {});
-            }, Math.max(pollMs * 4, 10000));
+            }, heartbeatMs);
           } catch (err) {
             setStatus(err.message || "Could not join queue", "err");
           }
@@ -391,6 +546,8 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         window.addEventListener("pagehide", () => {
           if (timer) clearInterval(timer);
           if (heartbeatTimer) clearInterval(heartbeatTimer);
+          if (holdTimer) clearInterval(holdTimer);
+          if (openTimer) clearInterval(openTimer);
         });
       })();
     </script>

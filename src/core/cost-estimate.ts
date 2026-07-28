@@ -42,9 +42,9 @@ export interface CostEstimateInput {
   visitors: number;
   /** Typical time each visitor spends waiting before admission (seconds). */
   averageWaitSeconds: number;
-  /** Status poll interval used by the waiting room (seconds). Default 2.5. */
+  /** Status poll interval used by the waiting room (seconds). Default 15. */
   pollIntervalSeconds?: number;
-  /** Heartbeat interval while waiting (seconds). Default 10. */
+  /** Heartbeat interval while waiting (seconds). Default 30. */
   heartbeatIntervalSeconds?: number;
   /** How long the queue Durable Object stays busy (hours). Default derived from wait. */
   activeHours?: number;
@@ -92,8 +92,8 @@ export function estimateWaitingRoomCost(input: CostEstimateInput): CostEstimateB
   const rates = input.rates ?? DEFAULT_CLOUDFLARE_PAID_RATES;
   const visitors = Math.max(0, input.visitors);
   const averageWaitSeconds = Math.max(0, input.averageWaitSeconds);
-  const pollIntervalSeconds = Math.max(0.5, input.pollIntervalSeconds ?? 2.5);
-  const heartbeatIntervalSeconds = Math.max(1, input.heartbeatIntervalSeconds ?? 10);
+  const pollIntervalSeconds = Math.max(0.5, input.pollIntervalSeconds ?? 15);
+  const heartbeatIntervalSeconds = Math.max(1, input.heartbeatIntervalSeconds ?? 30);
   const avgCpuMsPerRequest = Math.max(0, input.avgCpuMsPerRequest ?? 3);
   const includeBaseFee = input.includeBaseFee !== false;
 

@@ -1,7 +1,19 @@
-export { parseQueueConfig, ConfigError, DEFAULT_QUEUE_CONFIG } from "./config";
+export { parseQueueConfig, ConfigError, DEFAULT_QUEUE_CONFIG, parseAdmissionMode } from "./config";
+export {
+  parseOriginConfigFromEnv,
+  mergeOriginConfig,
+  normalizeOriginUrl,
+  isBlockedOriginHost,
+  isTideGuardPath,
+  shouldRequireAdmission,
+  shouldProxyToOrigin,
+  buildUpstreamUrl,
+  DEFAULT_ORIGIN_CONFIG,
+} from "./origin";
+export type { OriginProxyConfig } from "./origin";
 export { ApiError, jsonError, jsonOk } from "./errors";
 export { SimpleEtaCalculator, defaultEtaCalculator } from "./eta";
-export { DEFAULT_BRANDING, mergeBranding } from "./branding";
+export { DEFAULT_BRANDING, mergeBranding, sanitizeRedirectUrl } from "./branding";
 export {
   estimateWaitingRoomCost,
   DEFAULT_CLOUDFLARE_PAID_RATES,

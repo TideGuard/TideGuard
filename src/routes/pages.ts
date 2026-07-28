@@ -1,34 +1,47 @@
 import { ApiError } from "../core/errors";
+import { sanitizeRedirectUrl } from "../core/branding";
+import { requireAdmission, withSecurityHeaders } from "../auth";
 import { renderProtectedDemo } from "../demo/protected";
 import { renderWaitingRoom } from "../html/waiting-room";
 import { readBranding } from "../admin/store";
-import { requireAdmission } from "./queue";
+import { resolveOriginConfig } from "../admin/origin-store";
+import { getQueueRoom } from "../queue/client";
 import { parseQueueName } from "./validation";
 
 export async function handleWaitingRoom(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE);
   const embed = url.searchParams.get("embed") === "1";
-  const returnTo = sanitizeReturnTo(url.searchParams.get("return") ?? "/demo");
+  const origin = await resolveOriginConfig(env);
   const branding = await readBranding(env, queue);
-  const showWaitingParam = url.searchParams.get("showWaiting");
-  const showWaitingCount =
-    showWaitingParam === "1" ? true : showWaitingParam === "0" ? false : undefined;
+  const fallbackReturn = branding.redirectUrl || (origin.enabled ? "/" : "/demo");
+  const returnTo = resolveReturnTo(url.searchParams.get("return"), fallbackReturn);
+
+  let opensAt: number | null;
+  try {
+    const room = getQueueRoom(env, queue);
+    const schedule = await room.getSchedule();
+    opensAt = schedule.opensAt;
+  } catch {
+    opensAt = null;
+  }
 
   const html = renderWaitingRoom({
     queue,
     embed,
     returnTo,
     branding,
-    ...(showWaitingCount !== undefined ? { showWaitingCount } : {}),
+    opensAt,
   });
 
-  return new Response(html, {
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
+  return withSecurityHeaders(
+    new Response(html, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    }),
+  );
 }
 
 export async function handleDemo(request: Request, env: Env): Promise<Response> {
@@ -41,31 +54,30 @@ export async function handleDemo(request: Request, env: Env): Promise<Response> 
       queueName: admission.queue,
       visitorId: admission.visitorId,
     });
-    return new Response(html, {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-      },
-    });
+    return withSecurityHeaders(
+      new Response(html, {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+        },
+      }),
+    );
   } catch (error) {
     if (error instanceof ApiError && error.code === "unauthorized") {
       const wait = new URL("/wait", url.origin);
       wait.searchParams.set("queue", queue);
       wait.searchParams.set("return", "/demo");
-      return Response.redirect(wait.toString(), 302);
+      return withSecurityHeaders(Response.redirect(wait.toString(), 302));
     }
     throw error;
   }
 }
 
-export function renderEmbedSnippet(origin: string, queue: string): string {
-  const src = `${origin}/wait?queue=${encodeURIComponent(queue)}&embed=1&return=${encodeURIComponent("/demo")}`;
-  return `<iframe src="${src}" title="TideGuard waiting room" style="width:100%;min-height:420px;border:0;border-radius:12px;" loading="lazy"></iframe>`;
-}
-
-function sanitizeReturnTo(value: string): string {
-  if (!value.startsWith("/") || value.startsWith("//")) {
-    return "/demo";
+/** Prefer ?return=, else branding / proxy default. Same-origin paths only. */
+export function resolveReturnTo(queryReturn: string | null, fallback: string): string {
+  const fromQuery = sanitizeRedirectUrl(queryReturn ?? "", "");
+  if (fromQuery) {
+    return fromQuery;
   }
-  return value;
+  return sanitizeRedirectUrl(fallback, "/demo") || "/demo";
 }

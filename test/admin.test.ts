@@ -52,7 +52,10 @@ describe("admin setup wizard and dashboard", () => {
     const setup = await exports.default.fetch(
       new Request("https://example.com/api/admin/setup", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${SECRET}`,
+        },
         body: JSON.stringify({
           password: "correct-horse",
           confirmPassword: "correct-horse",
@@ -95,7 +98,10 @@ describe("admin setup wizard and dashboard", () => {
     const conflict = await exports.default.fetch(
       new Request("https://example.com/api/admin/setup", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${SECRET}`,
+        },
         body: JSON.stringify({
           password: "another-password",
           confirmPassword: "another-password",
@@ -156,6 +162,28 @@ describe("admin setup wizard and dashboard", () => {
     const html = await wait.text();
     expect(html).toContain("Updated title");
     expect(html).toContain("Updated message");
+  });
+
+  it("rejects admin setup without TOKEN_SECRET bearer", async () => {
+    await exports.default.fetch(
+      new Request("https://example.com/api/admin/reset", {
+        method: "POST",
+        headers: { authorization: `Bearer ${SECRET}` },
+      }),
+    );
+
+    const denied = await exports.default.fetch(
+      new Request("https://example.com/api/admin/setup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          password: "correct-horse",
+          confirmPassword: "correct-horse",
+          queue: "admin-q",
+        }),
+      }),
+    );
+    expect(denied.status).toBe(401);
   });
 
   it("rejects admin reset without TOKEN_SECRET", async () => {

@@ -1,11 +1,19 @@
 import { ApiError, jsonError } from "../core/errors";
+import { isTideGuardPath, shouldProxyToOrigin, shouldRequireAdmission } from "../core/origin";
+import { resolveOriginConfig } from "../admin/origin-store";
+import { requireAdmission, withSecurityHeaders } from "../auth";
+import { proxyToOrigin } from "../proxy/origin-proxy";
 import {
   handleAdminBootstrap,
+  handleAdminHealth,
   handleAdminLogin,
   handleAdminLogout,
   handleAdminPage,
+  handleAdminPause,
   handleAdminReset,
   handleAdminSaveBranding,
+  handleAdminSaveOrigin,
+  handleAdminSchedule,
   handleAdminSetMode,
   handleAdminSetup,
   handleAdminState,
@@ -15,13 +23,37 @@ import { handleHealth } from "./health";
 import { handleDemo, handleWaitingRoom } from "./pages";
 import {
   handleAdmit,
+  handleEnter,
   handleHeartbeat,
   handleJoin,
   handleLeave,
   handleMetrics,
   handleMode,
+  handlePause,
   handleStatus,
 } from "./queue";
+
+/**
+ * Paths that never need origin proxy config (skip KV / cache lookup).
+ * `/` is excluded because origin-enabled Workers proxy the homepage.
+ */
+const STATIC_TIDEGUARD = new Set([
+  "/health",
+  "/wait",
+  "/join",
+  "/status",
+  "/leave",
+  "/heartbeat",
+  "/enter",
+  "/admit",
+  "/mode",
+  "/pause",
+  "/metrics",
+  "/admin",
+  "/cost",
+  "/demo",
+  "/api/cost-estimate",
+]);
 
 /**
  * HTTP router for the TideGuard Worker.
@@ -30,108 +62,179 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   const url = new URL(request.url);
 
   try {
-    if (request.method === "GET" && url.pathname === "/health") {
-      return handleHealth(env);
+    if (isStaticTideGuardPath(url.pathname)) {
+      return withSecurityHeaders(await handleTideGuardRoute(request, env, url));
     }
 
-    if (request.method === "GET" && url.pathname === "/") {
-      return new Response(landingPage(), {
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "cache-control": "no-store",
-        },
-      });
+    const originConfig = await resolveOriginConfig(env);
+    const tideguardPath = isTideGuardPath(url.pathname, originConfig.enabled);
+
+    if (tideguardPath) {
+      return withSecurityHeaders(await handleTideGuardRoute(request, env, url));
     }
 
-    if (request.method === "GET" && url.pathname === "/cost") {
-      return handleCostPage();
-    }
+    if (shouldProxyToOrigin(url.pathname, originConfig)) {
+      if (shouldRequireAdmission(url.pathname, originConfig)) {
+        try {
+          const admission = await requireAdmission(request, env, originConfig.queue);
+          return withSecurityHeaders(
+            await proxyToOrigin(request, originConfig, {
+              visitorId: admission.visitorId,
+            }),
+          );
+        } catch (error) {
+          if (error instanceof ApiError && error.code === "unauthorized") {
+            const wait = new URL("/wait", url.origin);
+            wait.searchParams.set("queue", originConfig.queue);
+            wait.searchParams.set("return", `${url.pathname}${url.search}`);
+            return withSecurityHeaders(Response.redirect(wait.toString(), 302));
+          }
+          throw error;
+        }
+      }
 
-    if (request.method === "GET" && url.pathname === "/api/cost-estimate") {
-      return handleCostEstimateApi(request);
-    }
-
-    if (request.method === "GET" && url.pathname === "/admin") {
-      return await handleAdminPage(request, env);
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/admin/bootstrap") {
-      return await handleAdminBootstrap(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/admin/setup") {
-      return await handleAdminSetup(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/admin/login") {
-      return await handleAdminLogin(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/admin/logout") {
-      return await handleAdminLogout(request, env);
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/admin/state") {
-      return await handleAdminState(request, env);
-    }
-
-    if (request.method === "PUT" && url.pathname === "/api/admin/branding") {
-      return await handleAdminSaveBranding(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/admin/mode") {
-      return await handleAdminSetMode(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/admin/reset") {
-      return await handleAdminReset(request, env);
-    }
-
-    if (request.method === "GET" && url.pathname === "/wait") {
-      return await handleWaitingRoom(request, env);
-    }
-
-    if (request.method === "GET" && url.pathname === "/demo") {
-      return await handleDemo(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/join") {
-      return await handleJoin(request, env);
-    }
-
-    if (request.method === "GET" && url.pathname === "/status") {
-      return await handleStatus(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/leave") {
-      return await handleLeave(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/heartbeat") {
-      return await handleHeartbeat(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/admit") {
-      return await handleAdmit(request, env);
-    }
-
-    if (request.method === "POST" && url.pathname === "/mode") {
-      return await handleMode(request, env);
-    }
-
-    if (request.method === "GET" && url.pathname === "/metrics") {
-      return await handleMetrics(request, env);
+      return withSecurityHeaders(await proxyToOrigin(request, originConfig));
     }
 
     throw new ApiError("not_found", `No route for ${request.method} ${url.pathname}`, 404);
   } catch (error) {
     if (error instanceof ApiError) {
-      return jsonError(error);
+      return withSecurityHeaders(jsonError(error));
     }
 
     console.error("Unhandled error", error);
-    return jsonError(new ApiError("internal_error", "Unexpected server error", 500));
+    return withSecurityHeaders(
+      jsonError(new ApiError("internal_error", "Unexpected server error", 500)),
+    );
   }
+}
+
+function isStaticTideGuardPath(pathname: string): boolean {
+  if (STATIC_TIDEGUARD.has(pathname)) {
+    return true;
+  }
+  return pathname === "/api/admin" || pathname.startsWith("/api/admin/");
+}
+
+async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method === "GET" && url.pathname === "/health") {
+    return handleHealth(env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/") {
+    return new Response(landingPage(), {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    });
+  }
+
+  if (request.method === "GET" && url.pathname === "/cost") {
+    return handleCostPage();
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/cost-estimate") {
+    return handleCostEstimateApi(request);
+  }
+
+  if (request.method === "GET" && url.pathname === "/admin") {
+    return await handleAdminPage(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/bootstrap") {
+    return await handleAdminBootstrap(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup") {
+    return await handleAdminSetup(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/login") {
+    return await handleAdminLogin(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/logout") {
+    return await handleAdminLogout(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/state") {
+    return await handleAdminState(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/branding") {
+    return await handleAdminSaveBranding(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/origin") {
+    return await handleAdminSaveOrigin(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/mode") {
+    return await handleAdminSetMode(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/pause") {
+    return await handleAdminPause(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/schedule") {
+    return await handleAdminSchedule(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/health") {
+    return await handleAdminHealth(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/reset") {
+    return await handleAdminReset(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/wait") {
+    return await handleWaitingRoom(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/demo") {
+    return await handleDemo(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/join") {
+    return await handleJoin(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/status") {
+    return await handleStatus(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/leave") {
+    return await handleLeave(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/heartbeat") {
+    return await handleHeartbeat(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/enter") {
+    return await handleEnter(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/admit") {
+    return await handleAdmit(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/mode") {
+    return await handleMode(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/pause") {
+    return await handlePause(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/metrics") {
+    return await handleMetrics(request, env);
+  }
+
+  throw new ApiError("not_found", `No route for ${request.method} ${url.pathname}`, 404);
 }
 
 function landingPage(): string {
@@ -202,7 +305,6 @@ function landingPage(): string {
         <a href="/admin">Admin</a>
         <a href="/cost">Calculate cost</a>
         <a href="/health">Health</a>
-        <a href="/metrics">Metrics</a>
       </p>
     </main>
   </body>

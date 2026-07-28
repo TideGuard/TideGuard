@@ -1,11 +1,21 @@
 import { requireOperator } from "../auth/operator";
-import { buildAdmissionClaims, signAccessToken, verifyAccessToken, TokenError } from "../auth";
+import {
+  appendSetCookies,
+  buildAccessCookie,
+  buildAdmissionClaims,
+  buildTicketCookie,
+  readTicketCookie,
+  requireAdmission,
+  signAccessToken,
+  signVisitorTicket,
+  TokenError,
+  verifyVisitorTicket,
+} from "../auth";
 import { ConfigError, parseAdmissionMode } from "../core/config";
 import { ApiError, jsonOk } from "../core/errors";
 import type { JoinResult, StatusResult } from "../core/types";
 import { configFromEnv, getQueueRoom } from "../queue/client";
 import {
-  extractAccessToken,
   parseOptionalCount,
   parseOptionalVisitorId,
   parseQueueName,
@@ -14,7 +24,10 @@ import {
   requireTokenSecret,
 } from "./validation";
 
-function visitorPayload(visitor: {
+/** Ticket TTL covers max queue stay + buffer so waiters can poll until admission. */
+const TICKET_TTL_SECONDS = 60 * 60 * 6;
+
+type VisitorView = {
   id: string;
   status: JoinResult["status"];
   position: number | null;
@@ -24,13 +37,30 @@ function visitorPayload(visitor: {
   ahead: number | null;
   behind: number | null;
   lotteryOdds: number | null;
-}) {
-  return {
+  admittedAt?: number | null;
+  entered: boolean;
+  holdSecondsRemaining: number | null;
+  showWaitingCount?: boolean;
+};
+
+function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean }) {
+  const includeDepth = options?.includeDepth ?? Boolean(visitor.showWaitingCount);
+  const base = {
     visitorId: visitor.id,
     status: visitor.status,
     position: visitor.position,
     estimatedWaitSeconds: visitor.estimatedWaitSeconds,
     admissionMode: visitor.admissionMode,
+    entered: visitor.entered,
+    ...(visitor.holdSecondsRemaining !== null
+      ? { holdSecondsRemaining: visitor.holdSecondsRemaining }
+      : {}),
+  };
+  if (!includeDepth) {
+    return base;
+  }
+  return {
+    ...base,
     waiting: visitor.waiting,
     ...(visitor.ahead !== null ? { ahead: visitor.ahead } : {}),
     ...(visitor.behind !== null ? { behind: visitor.behind } : {}),
@@ -38,12 +68,27 @@ function visitorPayload(visitor: {
   };
 }
 
+function canIssueAccessToken(visitor: VisitorView): boolean {
+  return visitor.status === "admitted" && visitor.entered;
+}
+
 export async function handleJoin(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const config = loadConfig(env);
   const secret = requireTokenSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
-  const visitorId = parseOptionalVisitorId(body.visitorId);
+  let visitorId = parseOptionalVisitorId(body.visitorId);
+
+  // Same-browser multi-tab: resume the ticket-bound visitor and ignore conflicting ids.
+  const existingTicket = readTicketCookie(request);
+  if (existingTicket) {
+    try {
+      const claims = await verifyVisitorTicket(existingTicket, secret, { expectedQueue: queue });
+      visitorId = claims.sub;
+    } catch {
+      // Invalid/expired ticket — fall through to body / new id.
+    }
+  }
 
   const room = getQueueRoom(env, queue);
   const joined = await room.join({
@@ -52,8 +97,15 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
     ...(visitorId ? { visitorId } : {}),
   });
 
+  const cookies: string[] = [];
+  const ticket = await signVisitorTicket(
+    { visitorId: joined.id, queue, ttlSeconds: TICKET_TTL_SECONDS },
+    secret,
+  );
+  cookies.push(buildTicketCookie(ticket, request, TICKET_TTL_SECONDS));
+
   let accessToken: string | undefined;
-  if (joined.status === "admitted") {
+  if (canIssueAccessToken(joined)) {
     accessToken = await signAccessToken(
       buildAdmissionClaims({
         visitorId: joined.id,
@@ -62,6 +114,7 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
       }),
       secret,
     );
+    cookies.push(buildAccessCookie(accessToken, request, config.tokenTTLSeconds));
   }
 
   const result: JoinResult = {
@@ -69,7 +122,7 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
     ...(accessToken ? { accessToken } : {}),
   };
 
-  return jsonOk(result, joined.status === "admitted" ? 200 : 202);
+  return appendSetCookies(jsonOk(result, joined.status === "admitted" ? 200 : 202), cookies);
 }
 
 export async function handleStatus(request: Request, env: Env): Promise<Response> {
@@ -79,14 +132,17 @@ export async function handleStatus(request: Request, env: Env): Promise<Response
   const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE);
   const visitorId = parseRequiredVisitorId(url.searchParams.get("id"));
 
+  await requireVisitorTicket(request, secret, visitorId, queue);
+
   const room = getQueueRoom(env, queue);
   const status = await room.status({ queue, config, visitorId });
   if (!status.ok) {
     throw new ApiError("not_found", "Visitor not found in this queue", 404);
   }
 
+  const cookies: string[] = [];
   let accessToken: string | undefined;
-  if (status.visitor.status === "admitted") {
+  if (canIssueAccessToken(status.visitor)) {
     accessToken = await signAccessToken(
       buildAdmissionClaims({
         visitorId: status.visitor.id,
@@ -96,6 +152,7 @@ export async function handleStatus(request: Request, env: Env): Promise<Response
       }),
       secret,
     );
+    cookies.push(buildAccessCookie(accessToken, request, config.tokenTTLSeconds));
   }
 
   const result: StatusResult = {
@@ -103,14 +160,55 @@ export async function handleStatus(request: Request, env: Env): Promise<Response
     ...(accessToken ? { accessToken } : {}),
   };
 
-  return jsonOk(result);
+  return appendSetCookies(jsonOk(result), cookies);
+}
+
+export async function handleEnter(request: Request, env: Env): Promise<Response> {
+  const body = await readJsonBody(request);
+  const config = loadConfig(env);
+  const secret = requireTokenSecret(env);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
+
+  await requireVisitorTicket(request, secret, visitorId, queue);
+
+  const room = getQueueRoom(env, queue);
+  const entered = await room.enter({ queue, config, visitorId });
+  if (!entered.ok) {
+    if (entered.code === "not_admitted") {
+      throw new ApiError("conflict", "Visitor is not admitted yet", 409);
+    }
+    throw new ApiError("not_found", "Visitor not found in this queue", 404);
+  }
+
+  const accessToken = await signAccessToken(
+    buildAdmissionClaims({
+      visitorId: entered.visitor.id,
+      queue,
+      tokenTTLSeconds: config.tokenTTLSeconds,
+      ...(entered.visitor.admittedAt ? { nowMs: entered.visitor.admittedAt } : {}),
+    }),
+    secret,
+  );
+
+  const result: StatusResult = {
+    ...visitorPayload(entered.visitor),
+    accessToken,
+  };
+
+  return appendSetCookies(jsonOk(result), [
+    buildAccessCookie(accessToken, request, config.tokenTTLSeconds),
+  ]);
 }
 
 export async function handleLeave(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const config = loadConfig(env);
+  const secret = requireTokenSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
+
+  await requireVisitorTicket(request, secret, visitorId, queue);
 
   const room = getQueueRoom(env, queue);
   const left = await room.leave({ queue, config, visitorId });
@@ -120,8 +218,11 @@ export async function handleLeave(request: Request, env: Env): Promise<Response>
 export async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const config = loadConfig(env);
+  const secret = requireTokenSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
+
+  await requireVisitorTicket(request, secret, visitorId, queue);
 
   const room = getQueueRoom(env, queue);
   const beat = await room.heartbeat({ queue, config, visitorId });
@@ -130,15 +231,7 @@ export async function handleHeartbeat(request: Request, env: Env): Promise<Respo
   }
 
   return jsonOk({
-    visitorId: beat.visitor.id,
-    status: beat.visitor.status,
-    position: beat.visitor.position,
-    estimatedWaitSeconds: beat.visitor.estimatedWaitSeconds,
-    admissionMode: beat.visitor.admissionMode,
-    waiting: beat.visitor.waiting,
-    ...(beat.visitor.ahead !== null ? { ahead: beat.visitor.ahead } : {}),
-    ...(beat.visitor.behind !== null ? { behind: beat.visitor.behind } : {}),
-    ...(beat.visitor.lotteryOdds !== null ? { lotteryOdds: beat.visitor.lotteryOdds } : {}),
+    ...visitorPayload(beat.visitor),
     lastHeartbeatAt: beat.visitor.lastHeartbeatAt,
   });
 }
@@ -172,7 +265,20 @@ export async function handleMode(request: Request, env: Env): Promise<Response> 
   return jsonOk(result);
 }
 
+export async function handlePause(request: Request, env: Env): Promise<Response> {
+  await requireOperator(request, env);
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const paused = body.paused === true || body.paused === "true";
+
+  const room = getQueueRoom(env, queue);
+  return jsonOk(await room.setPaused(paused));
+}
+
 export async function handleMetrics(request: Request, env: Env): Promise<Response> {
+  await requireOperator(request, env);
+
   const url = new URL(request.url);
   const config = loadConfig(env);
   const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE);
@@ -182,26 +288,23 @@ export async function handleMetrics(request: Request, env: Env): Promise<Respons
   return jsonOk(metrics);
 }
 
-/**
- * Validate an admission token from Authorization / query / cookie.
- * Used by protected demo routes.
- */
-export async function requireAdmission(
-  request: Request,
-  env: Env,
-  expectedQueue?: string,
-): Promise<{ visitorId: string; queue: string; token: string }> {
-  const url = new URL(request.url);
-  const token = extractAccessToken(request, url);
-  if (!token) {
-    throw new ApiError("unauthorized", "Missing access token", 401);
-  }
+export { requireAdmission };
 
+async function requireVisitorTicket(
+  request: Request,
+  secret: string,
+  visitorId: string,
+  queue: string,
+): Promise<void> {
+  const ticket = readTicketCookie(request);
+  if (!ticket) {
+    throw new ApiError("unauthorized", "Missing visitor ticket cookie", 401);
+  }
   try {
-    const claims = await verifyAccessToken(token, requireTokenSecret(env), {
-      ...(expectedQueue ? { expectedQueue } : {}),
+    await verifyVisitorTicket(ticket, secret, {
+      expectedVisitorId: visitorId,
+      expectedQueue: queue,
     });
-    return { visitorId: claims.sub, queue: claims.queue, token };
   } catch (error) {
     if (error instanceof TokenError) {
       throw new ApiError("unauthorized", error.message, 401, { reason: error.code });

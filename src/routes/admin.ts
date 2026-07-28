@@ -10,6 +10,7 @@ import {
   requireAdminSession,
   requireTokenSecret,
 } from "../auth/operator";
+import { rateLimitOrThrow, withSecurityHeaders } from "../auth";
 import {
   clearAdminConfig,
   isAdminSetupComplete,
@@ -19,6 +20,12 @@ import {
   writeAdminConfig,
   writeBranding,
 } from "../admin/store";
+import {
+  clearOriginOverride,
+  resolveOriginConfig,
+  writeOriginOverride,
+} from "../admin/origin-store";
+import { normalizeOriginUrl, parsePathPrefixes } from "../core/origin";
 import { renderAdminApp } from "../html/admin";
 import { configFromEnv, getQueueRoom } from "../queue/client";
 import { parseQueueName, readJsonBody } from "./validation";
@@ -30,12 +37,14 @@ export async function handleAdminPage(_request: Request, env: Env): Promise<Resp
     defaultQueue: env.DEFAULT_QUEUE || "default",
     defaultBranding: DEFAULT_BRANDING,
   });
-  return new Response(html, {
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
+  return withSecurityHeaders(
+    new Response(html, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    }),
+  );
 }
 
 export async function handleAdminBootstrap(_request: Request, env: Env): Promise<Response> {
@@ -46,9 +55,14 @@ export async function handleAdminBootstrap(_request: Request, env: Env): Promise
 }
 
 export async function handleAdminSetup(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup"), { limit: 10, windowMs: 60_000 });
+
   if (await isAdminSetupComplete(env)) {
     throw new ApiError("conflict", "Admin setup is already complete", 409);
   }
+
+  // First-time setup requires TOKEN_SECRET so a stranger cannot claim the Worker.
+  requireSetupBearer(request, env);
 
   const body = await readJsonBody(request);
   const password = parsePassword(body.password);
@@ -82,6 +96,13 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
   await room.setMode({ queue, config, mode });
+  await room.setAdmitUx({
+    queue,
+    config,
+    requireClickToEnter: branding.requireClickToEnter,
+    admitHoldSeconds: branding.admitHoldSeconds,
+    showWaitingCount: branding.showWaitingCount,
+  });
 
   const session = await signAdminSession(requireTokenSecret(env));
   return withCookie(
@@ -91,6 +112,8 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
 }
 
 export async function handleAdminLogin(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "login"), { limit: 20, windowMs: 60_000 });
+
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -127,9 +150,11 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
   );
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
-  const [branding, metrics] = await Promise.all([
+  const [branding, metrics, origin, health] = await Promise.all([
     readBranding(env, queue),
     room.metrics({ queue, config }),
+    resolveOriginConfig(env),
+    room.getHealth(),
   ]);
 
   return jsonOk({
@@ -137,6 +162,14 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     branding,
     metrics,
     admissionMode: metrics.admissionMode as AdmissionMode,
+    origin,
+    traffic: {
+      opensAt: metrics.opensAt,
+      paused: metrics.paused,
+      health: metrics.health,
+      effectiveAdmitPerSecond: metrics.effectiveAdmitPerSecond,
+      healthConfig: health.config,
+    },
   });
 }
 
@@ -155,7 +188,59 @@ export async function handleAdminSaveBranding(request: Request, env: Env): Promi
       : body,
   );
   await writeBranding(env, queue, branding);
+
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+  await room.setAdmitUx({
+    queue,
+    config,
+    requireClickToEnter: branding.requireClickToEnter,
+    admitHoldSeconds: branding.admitHoldSeconds,
+    showWaitingCount: branding.showWaitingCount,
+  });
+
   return jsonOk({ ok: true, queue, branding });
+}
+
+export async function handleAdminSaveOrigin(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const enabled = body.enabled === true || body.enabled === "true";
+  const originUrlRaw = typeof body.originUrl === "string" ? body.originUrl.trim() : "";
+  const originUrl = originUrlRaw ? normalizeOriginUrl(originUrlRaw) : null;
+
+  if (enabled && !originUrl) {
+    throw new ApiError(
+      "bad_request",
+      "originUrl must be a public absolute http(s) URL (private/loopback hosts are blocked)",
+      400,
+    );
+  }
+
+  const protectAll =
+    body.protectAll === undefined ? true : body.protectAll === true || body.protectAll === "true";
+  const pathPrefixes =
+    typeof body.pathPrefixes === "string"
+      ? parsePathPrefixes(body.pathPrefixes)
+      : Array.isArray(body.pathPrefixes)
+        ? parsePathPrefixes(body.pathPrefixes.filter((p) => typeof p === "string").join(","))
+        : [];
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+
+  const origin = await writeOriginOverride(env, {
+    enabled,
+    originUrl,
+    protectAll,
+    pathPrefixes,
+    queue,
+  });
+
+  return jsonOk({ ok: true, origin });
 }
 
 export async function handleAdminSetMode(request: Request, env: Env): Promise<Response> {
@@ -177,17 +262,125 @@ export async function handleAdminSetMode(request: Request, env: Env): Promise<Re
   return jsonOk(await room.setMode({ queue, config, mode }));
 }
 
-/** Emergency reset: TOKEN_SECRET bearer only (not session). Clears admin password. */
+export async function handleAdminPause(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  const paused = body.paused === true || body.paused === "true";
+  const room = getQueueRoom(env, queue);
+  return jsonOk(await room.setPaused(paused));
+}
+
+export async function handleAdminSchedule(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  let opensAt: number | null = null;
+  if (body.opensAt !== null && body.opensAt !== undefined && body.opensAt !== "") {
+    if (typeof body.opensAt === "number" && Number.isFinite(body.opensAt)) {
+      opensAt = body.opensAt;
+    } else if (typeof body.opensAt === "string") {
+      const parsed = Date.parse(body.opensAt);
+      if (!Number.isFinite(parsed)) {
+        throw new ApiError("bad_request", "opensAt must be an ISO datetime or unix ms", 400);
+      }
+      opensAt = parsed;
+    } else {
+      throw new ApiError("bad_request", "opensAt must be an ISO datetime, unix ms, or null", 400);
+    }
+  }
+
+  const room = getQueueRoom(env, queue);
+  return jsonOk(await room.setOpensAt(opensAt));
+}
+
+export async function handleAdminHealth(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+
+  if (body.overrideMinutes !== undefined) {
+    const minutes = Number(body.overrideMinutes);
+    if (!Number.isFinite(minutes) || minutes < 1) {
+      throw new ApiError("bad_request", "overrideMinutes must be >= 1", 400);
+    }
+    return jsonOk(await room.overrideHealth(minutes));
+  }
+
+  if (body.clearOverride === true) {
+    return jsonOk(await room.clearHealthOverride());
+  }
+
+  const healthInput =
+    body.health && typeof body.health === "object"
+      ? (body.health as Record<string, unknown>)
+      : body;
+
+  return jsonOk(
+    await room.setHealthConfig({
+      queue,
+      config,
+      health: {
+        enabled: healthInput.enabled === true || healthInput.enabled === "true",
+        url: typeof healthInput.url === "string" ? healthInput.url : null,
+        intervalSeconds: Number(healthInput.intervalSeconds),
+        timeoutMs: Number(healthInput.timeoutMs),
+        maxLatencyMs: Number(healthInput.maxLatencyMs),
+        expectStatus: Number(healthInput.expectStatus),
+        failThreshold: Number(healthInput.failThreshold),
+        recoverThreshold: Number(healthInput.recoverThreshold),
+        slowRateMultiplier: Number(healthInput.slowRateMultiplier),
+      },
+    }),
+  );
+}
+
+/** Emergency reset: TOKEN_SECRET bearer only (not session). Clears admin + origin override. */
 export async function handleAdminReset(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "reset"), { limit: 10, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+
+  await clearAdminConfig(env);
+  await clearOriginOverride(env);
+  return jsonOk({ ok: true, setupComplete: false });
+}
+
+function requireSetupBearer(request: Request, env: Env): void {
   const secret = requireTokenSecret(env);
   const header = request.headers.get("authorization");
   const bearer = header?.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : null;
-  if (!bearer || !(await timingSafeStringEqual(bearer, secret))) {
-    throw new ApiError("unauthorized", "TOKEN_SECRET bearer required to reset admin", 401);
+  if (!bearer || !timingSafeStringEqualSync(bearer, secret)) {
+    throw new ApiError(
+      "unauthorized",
+      "Authorization: Bearer TOKEN_SECRET is required for this action",
+      401,
+    );
   }
+}
 
-  await clearAdminConfig(env);
-  return jsonOk({ ok: true, setupComplete: false });
+function clientKey(request: Request, action: string): string {
+  const ip =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown";
+  return `${action}:${ip}`;
 }
 
 function parsePassword(value: unknown): string {
@@ -207,7 +400,7 @@ function withCookie(response: Response, cookie: string): Response {
   });
 }
 
-async function timingSafeStringEqual(a: string, b: string): Promise<boolean> {
+function timingSafeStringEqualSync(a: string, b: string): boolean {
   const encoder = new TextEncoder();
   const aBytes = encoder.encode(a);
   const bBytes = encoder.encode(b);

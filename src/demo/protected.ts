@@ -74,7 +74,7 @@ export function renderProtectedDemo(options: { queueName: string; visitorId: str
       <p>This page is only reachable with a valid TideGuard admission token.</p>
       <div class="actions">
         <a href="/">Home</a>
-        <a href="/metrics?queue=${encodeURIComponent(options.queueName)}">Queue metrics</a>
+        <a href="/wait?queue=${encodeURIComponent(options.queueName)}&return=/demo">Waiting room</a>
       </div>
     </main>
   </body>

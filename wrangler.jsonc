@@ -25,6 +25,10 @@
     "HEARTBEAT_TIMEOUT_SECONDS": "60",
     "QUEUE_TIMEOUT_SECONDS": "1800",
     "ADMISSION_MODE": "queue",
+    // Origin proxy (empty ORIGIN_URL = disabled). See docs/protecting-origin.md
+    "ORIGIN_URL": "",
+    "ORIGIN_PROTECT_ALL": "true",
+    "ORIGIN_PATH_PREFIXES": "",
   },
   "kv_namespaces": [
     {

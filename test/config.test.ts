@@ -20,6 +20,8 @@ describe("parseQueueConfig", () => {
       heartbeatTimeoutSeconds: 60,
       queueTimeoutSeconds: 1800,
       admissionMode: "queue",
+      requireClickToEnter: false,
+      admitHoldSeconds: 120,
     });
   });
 

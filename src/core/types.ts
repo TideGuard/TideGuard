@@ -31,6 +31,13 @@ export interface QueueConfig {
   queueTimeoutSeconds: number;
   /** Admission strategy for the waiting pool. */
   admissionMode: AdmissionMode;
+  /**
+   * When true, newly admitted visitors must confirm (POST /enter) before
+   * receiving an access token. Unconfirmed admits expire after admitHoldSeconds.
+   */
+  requireClickToEnter: boolean;
+  /** Hold window for unconfirmed admits, in seconds. */
+  admitHoldSeconds: number;
 }
 
 export interface QueueVisitor {
@@ -52,6 +59,20 @@ export interface QueueMetrics {
   estimatedWaitSeconds: number;
   paused: boolean;
   admissionMode: AdmissionMode;
+  /** Unix ms; null when the room is open immediately. */
+  opensAt: number | null;
+  /** Effective admit rate after health multiplier. */
+  effectiveAdmitPerSecond: number;
+  health: {
+    enabled: boolean;
+    level: "ok" | "slow" | "pause";
+    lastCheckedAt: number | null;
+    lastLatencyMs: number | null;
+    lastStatus: number | null;
+    lastError: string | null;
+    overrideUntil: number | null;
+    autoPaused: boolean;
+  };
 }
 
 export interface JoinResult {
@@ -61,13 +82,17 @@ export interface JoinResult {
   estimatedWaitSeconds: number;
   admissionMode: AdmissionMode;
   /** Current waiting-room depth (everyone still waiting, including this visitor). */
-  waiting: number;
+  waiting?: number;
   /** Queue Mode while waiting: people ahead of you (`position - 1`). */
   ahead?: number;
   /** Queue Mode while waiting: people behind you (`waiting - position`). */
   behind?: number;
   /** Present in lottery mode while waiting: chance of being next (1 / waiting). */
   lotteryOdds?: number;
+  /** False until POST /enter when requireClickToEnter is enabled. */
+  entered?: boolean;
+  /** Seconds left to confirm entry (click-to-enter mode). */
+  holdSecondsRemaining?: number;
   accessToken?: string;
 }
 
@@ -77,10 +102,13 @@ export interface StatusResult {
   position: number | null;
   estimatedWaitSeconds: number;
   admissionMode: AdmissionMode;
-  waiting: number;
+  /** Present only when branding `showWaitingCount` is enabled. */
+  waiting?: number;
   ahead?: number;
   behind?: number;
   lotteryOdds?: number;
+  entered?: boolean;
+  holdSecondsRemaining?: number;
   accessToken?: string;
 }
 

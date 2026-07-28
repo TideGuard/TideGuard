@@ -1,4 +1,9 @@
-import { DEFAULT_BRANDING, mergeBranding, type WaitingRoomBranding } from "../core/branding";
+import {
+  DEFAULT_BRANDING,
+  mergeBranding,
+  sanitizeRedirectUrl,
+  type WaitingRoomBranding,
+} from "../core/branding";
 import type { AdminConfig } from "./types";
 import { ADMIN_CONFIG_KEY, brandingKey } from "./types";
 
@@ -65,6 +70,10 @@ export function sanitizeBrandingInput(
   input: Partial<WaitingRoomBranding> | null | undefined,
 ): WaitingRoomBranding {
   const merged = mergeBranding(input ?? undefined);
+  const holdRaw =
+    typeof input?.admitHoldSeconds === "number" ? input.admitHoldSeconds : merged.admitHoldSeconds;
+  const admitHoldSeconds = clampInt(holdRaw, 15, 900, DEFAULT_BRANDING.admitHoldSeconds);
+
   return {
     ...merged,
     primaryColor: sanitizeColor(merged.primaryColor, DEFAULT_BRANDING.primaryColor),
@@ -77,6 +86,10 @@ export function sanitizeBrandingInput(
     message: clampText(merged.message, 280) || DEFAULT_BRANDING.message,
     fontFamily: clampText(merged.fontFamily, 120) || DEFAULT_BRANDING.fontFamily,
     showWaitingCount: Boolean(merged.showWaitingCount),
+    redirectUrl: sanitizeRedirectUrl(merged.redirectUrl, ""),
+    requireClickToEnter: Boolean(merged.requireClickToEnter),
+    admitHoldSeconds,
+    enterButtonLabel: clampText(merged.enterButtonLabel, 40) || DEFAULT_BRANDING.enterButtonLabel,
   };
 }
 
@@ -90,4 +103,15 @@ function sanitizeColor(value: string, fallback: string): string {
 
 function clampText(value: string, max: number): string {
   return value.trim().slice(0, max);
+}
+
+function clampInt(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  const n = Math.floor(value);
+  if (n < min || n > max) {
+    return fallback;
+  }
+  return n;
 }

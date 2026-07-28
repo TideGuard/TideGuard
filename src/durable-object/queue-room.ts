@@ -2,24 +2,35 @@ import { DurableObject } from "cloudflare:workers";
 import { defaultEtaCalculator } from "../core/eta";
 import type { AdmissionMode, QueueConfig } from "../core/types";
 import {
+  advanceHealthState,
+  DEFAULT_HEALTH_CONFIG,
+  DEFAULT_HEALTH_STATE,
+  healthRateMultiplier,
+  isAutoPaused,
+  parseHealthConfig,
+  probeOriginHealth,
+  type OriginHealthConfig,
+  type OriginHealthState,
+} from "../health/origin-probe";
+import {
   QUEUE_ALARM_INTERVAL_MS,
   admissionsForTick,
-  isAdmissionExpired,
-  isHeartbeatExpired,
-  isQueueStayExpired,
   openSlots,
   waitingPosition,
 } from "../queue/engine";
 import { buildMetrics } from "../queue/types";
 import type {
+  QueueEnterResponse,
   QueueForceAdmitRequest,
   QueueForceAdmitResponse,
+  QueueHealthConfigResponse,
   QueueHeartbeatResponse,
   QueueJoinRequest,
   QueueJoinResponse,
   QueueLeaveResponse,
   QueueMetricsRequest,
   QueueMetricsResponse,
+  QueueScheduleResponse,
   QueueSetModeRequest,
   QueueSetModeResponse,
   QueueStatusResponse,
@@ -36,6 +47,7 @@ interface VisitorRow {
   last_heartbeat_at: number;
   admitted_at: number | null;
   sequence: number;
+  entered: 0 | 1;
 }
 
 /**
@@ -67,30 +79,30 @@ export class QueueRoom extends DurableObject<Env> {
     const now = request.now ?? Date.now();
     this.ensureQueueName(request.queue);
     this.rememberConfig(request.config);
-    this.sweep(request.config, now);
+    this.sweep(request.config, now, true);
 
     const visitorId = request.visitorId ?? crypto.randomUUID();
     const existing = this.getVisitor(visitorId);
 
     if (existing && (existing.status === "waiting" || existing.status === "admitted")) {
       await this.ensureAlarm();
-      return this.toView(existing, request.config);
+      return this.toView(existing, request.config, now);
     }
 
-    const paused = this.isPaused();
     const admitted = this.countByStatus("admitted");
     const slots = openSlots(request.config.maxConcurrentUsers, admitted);
 
-    if (!paused && slots > 0) {
+    if (this.canAdmit(now) && slots > 0) {
       this.insertVisitor({
         id: visitorId,
         status: "admitted",
         joinedAt: now,
         lastHeartbeatAt: now,
         admittedAt: now,
+        entered: !this.effectiveConfig(request.config).requireClickToEnter,
       });
       await this.ensureAlarm();
-      return this.toView(this.getVisitor(visitorId)!, request.config);
+      return this.toView(this.getVisitor(visitorId)!, request.config, now);
     }
 
     this.insertVisitor({
@@ -99,30 +111,57 @@ export class QueueRoom extends DurableObject<Env> {
       joinedAt: now,
       lastHeartbeatAt: now,
       admittedAt: null,
+      entered: false,
     });
     await this.ensureAlarm();
-    return this.toView(this.getVisitor(visitorId)!, request.config);
+    return this.toView(this.getVisitor(visitorId)!, request.config, now);
   }
 
   async status(request: QueueVisitorRequest): Promise<QueueStatusResponse> {
     const now = request.now ?? Date.now();
     this.ensureQueueName(request.queue);
     this.rememberConfig(request.config);
-    this.sweep(request.config, now);
+    this.sweep(request.config, now, false);
 
     const visitor = this.getVisitor(request.visitorId);
     if (!visitor || visitor.status === "left" || visitor.status === "expired") {
       return { ok: false, code: "not_found" };
     }
 
-    return { ok: true, visitor: this.toView(visitor, request.config) };
+    return { ok: true, visitor: this.toView(visitor, request.config, now) };
+  }
+
+  async enter(request: QueueVisitorRequest): Promise<QueueEnterResponse> {
+    const now = request.now ?? Date.now();
+    this.ensureQueueName(request.queue);
+    this.rememberConfig(request.config);
+    this.sweep(request.config, now, true);
+
+    const visitor = this.getVisitor(request.visitorId);
+    if (!visitor || visitor.status === "left" || visitor.status === "expired") {
+      return { ok: false, code: "not_found" };
+    }
+    if (visitor.status !== "admitted") {
+      return { ok: false, code: "not_admitted" };
+    }
+
+    this.ctx.storage.sql.exec(
+      `UPDATE visitors SET entered = 1 WHERE id = ? AND status = 'admitted'`,
+      request.visitorId,
+    );
+
+    await this.ensureAlarm();
+    return {
+      ok: true,
+      visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
+    };
   }
 
   async leave(request: QueueVisitorRequest): Promise<QueueLeaveResponse> {
     const now = request.now ?? Date.now();
     this.ensureQueueName(request.queue);
     this.rememberConfig(request.config);
-    this.sweep(request.config, now);
+    this.sweep(request.config, now, true);
 
     const visitor = this.getVisitor(request.visitorId);
     if (!visitor) {
@@ -149,7 +188,7 @@ export class QueueRoom extends DurableObject<Env> {
     const now = request.now ?? Date.now();
     this.ensureQueueName(request.queue);
     this.rememberConfig(request.config);
-    this.sweep(request.config, now);
+    this.sweep(request.config, now, false);
 
     const visitor = this.getVisitor(request.visitorId);
     if (!visitor || visitor.status !== "waiting") {
@@ -162,22 +201,28 @@ export class QueueRoom extends DurableObject<Env> {
       request.visitorId,
     );
 
-    return { ok: true, visitor: this.toView(this.getVisitor(request.visitorId)!, request.config) };
+    return {
+      ok: true,
+      visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
+    };
   }
 
   async metrics(request: QueueMetricsRequest): Promise<QueueMetricsResponse> {
     const now = request.now ?? Date.now();
     this.ensureQueueName(request.queue);
     this.rememberConfig(request.config);
-    this.sweep(request.config, now);
+    this.sweep(request.config, now, false);
 
     return buildMetrics({
       queue: this.queueName(),
       config: request.config,
       waiting: this.countByStatus("waiting"),
       admitted: this.countByStatus("admitted"),
-      paused: this.isPaused(),
+      paused: this.isManualPaused(),
       admissionMode: this.admissionMode(request.config),
+      opensAt: this.getOpensAt(),
+      effectiveAdmitPerSecond: this.effectiveAdmitPerSecond(request.config, now),
+      health: this.healthSnapshot(now),
     });
   }
 
@@ -191,20 +236,22 @@ export class QueueRoom extends DurableObject<Env> {
     const count = request.count ?? 1;
     this.ensureQueueName(request.queue);
     this.rememberConfig(request.config);
-    this.sweep(request.config, now);
+    this.sweep(request.config, now, true);
 
     const admittedIds: string[] = [];
-    if (!this.isPaused()) {
+    if (this.canAdmit(now)) {
       const slots = openSlots(request.config.maxConcurrentUsers, this.countByStatus("admitted"));
       const toAdmit = Math.min(slots, count);
       if (toAdmit > 0) {
+        const entered = this.admitEntered(request.config);
         for (const row of this.selectWaiting(toAdmit, request.config)) {
           this.ctx.storage.sql.exec(
             `UPDATE visitors
-             SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?
+             SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?
              WHERE id = ? AND status = 'waiting'`,
             now,
             now,
+            entered,
             row.id,
           );
           admittedIds.push(row.id);
@@ -227,10 +274,44 @@ export class QueueRoom extends DurableObject<Env> {
     // Keep alarm config in sync so ticks use the new mode.
     this.setMeta(
       "config",
-      JSON.stringify({ ...request.config, admissionMode: request.mode } satisfies QueueConfig),
+      JSON.stringify({
+        ...this.effectiveConfig(request.config),
+        admissionMode: request.mode,
+      } satisfies QueueConfig),
     );
     await this.ensureAlarm();
     return { admissionMode: request.mode };
+  }
+
+  /** Persist click-to-enter / hold / depth settings from admin branding (KV → DO). */
+  async setAdmitUx(request: {
+    queue: string;
+    config: QueueConfig;
+    requireClickToEnter: boolean;
+    admitHoldSeconds: number;
+    showWaitingCount?: boolean;
+  }): Promise<{
+    requireClickToEnter: boolean;
+    admitHoldSeconds: number;
+    showWaitingCount: boolean;
+  }> {
+    this.ensureQueueName(request.queue);
+    this.setMeta("require_click", request.requireClickToEnter ? "1" : "0");
+    this.setMeta("admit_hold_seconds", String(request.admitHoldSeconds));
+    if (request.showWaitingCount !== undefined) {
+      this.setMeta("show_waiting_count", request.showWaitingCount ? "1" : "0");
+    }
+    this.rememberConfig({
+      ...request.config,
+      requireClickToEnter: request.requireClickToEnter,
+      admitHoldSeconds: request.admitHoldSeconds,
+    });
+    await this.ensureAlarm();
+    return {
+      requireClickToEnter: request.requireClickToEnter,
+      admitHoldSeconds: request.admitHoldSeconds,
+      showWaitingCount: this.showWaitingCount(),
+    };
   }
 
   async setPaused(paused: boolean): Promise<{ paused: boolean }> {
@@ -241,6 +322,55 @@ export class QueueRoom extends DurableObject<Env> {
     return { paused };
   }
 
+  async setOpensAt(opensAt: number | null): Promise<QueueScheduleResponse> {
+    if (opensAt === null) {
+      this.setMeta("opens_at", "");
+    } else {
+      this.setMeta("opens_at", String(opensAt));
+    }
+    await this.ensureAlarm();
+    return { opensAt: this.getOpensAt() };
+  }
+
+  async getSchedule(): Promise<QueueScheduleResponse> {
+    return { opensAt: this.getOpensAt() };
+  }
+
+  async getHealth(): Promise<QueueHealthConfigResponse> {
+    return { config: this.readHealthConfig(), state: this.readHealthState() };
+  }
+
+  async setHealthConfig(input: {
+    queue: string;
+    config: QueueConfig;
+    health: Partial<OriginHealthConfig>;
+  }): Promise<QueueHealthConfigResponse> {
+    this.ensureQueueName(input.queue);
+    this.rememberConfig(input.config);
+    const parsed = parseHealthConfig({ ...this.readHealthConfig(), ...input.health });
+    this.setMeta("health_config", JSON.stringify(parsed));
+    if (!parsed.enabled) {
+      this.setMeta("health_state", JSON.stringify(DEFAULT_HEALTH_STATE));
+    }
+    await this.ensureAlarm();
+    return { config: parsed, state: this.readHealthState() };
+  }
+
+  async overrideHealth(minutes: number): Promise<QueueHealthConfigResponse> {
+    const config = this.readHealthConfig();
+    const until = Date.now() + Math.max(1, Math.min(minutes, 24 * 60)) * 60_000;
+    const next = { ...config, overrideUntil: until };
+    this.setMeta("health_config", JSON.stringify(next));
+    await this.ensureAlarm();
+    return { config: next, state: this.readHealthState() };
+  }
+
+  async clearHealthOverride(): Promise<QueueHealthConfigResponse> {
+    const config = { ...this.readHealthConfig(), overrideUntil: null };
+    this.setMeta("health_config", JSON.stringify(config));
+    return { config, state: this.readHealthState() };
+  }
+
   async alarm(): Promise<void> {
     const config = this.alarmConfig();
     if (!config) {
@@ -248,17 +378,9 @@ export class QueueRoom extends DurableObject<Env> {
     }
 
     const now = Date.now();
-    this.sweep(config, now);
+    this.sweep(config, now, true);
+    await this.maybeProbeHealth(now);
     this.admitFromBudget(config, now);
-    await this.ensureAlarm();
-  }
-
-  /**
-   * Persist the config used by alarms.
-   * Avoids reading Worker env inside the DO alarm path.
-   */
-  async configure(config: QueueConfig): Promise<void> {
-    this.setMeta("config", JSON.stringify(config));
     await this.ensureAlarm();
   }
 
@@ -279,51 +401,71 @@ export class QueueRoom extends DurableObject<Env> {
           joined_at INTEGER NOT NULL,
           last_heartbeat_at INTEGER NOT NULL,
           admitted_at INTEGER,
-          sequence INTEGER NOT NULL
+          sequence INTEGER NOT NULL,
+          entered INTEGER NOT NULL DEFAULT 1
         )
       `);
       this.ctx.storage.sql.exec(`
         CREATE INDEX IF NOT EXISTS idx_visitors_status_sequence
           ON visitors (status, sequence)
       `);
-      this.setMeta("schema_version", "1");
+      this.setMeta("schema_version", "2");
+    } else if (version < 2) {
+      this.ctx.storage.sql.exec(`
+        ALTER TABLE visitors ADD COLUMN entered INTEGER NOT NULL DEFAULT 1
+      `);
+      this.setMeta("schema_version", "2");
     }
   }
 
-  private sweep(config: QueueConfig, now: number): void {
-    const active = this.ctx.storage.sql
-      .exec<VisitorRow>(
-        `SELECT id, status, joined_at, last_heartbeat_at, admitted_at, sequence
-         FROM visitors
-         WHERE status IN ('waiting', 'admitted')`,
-      )
-      .toArray();
-
-    for (const visitor of active) {
-      if (visitor.status === "waiting") {
-        if (
-          isHeartbeatExpired(visitor.last_heartbeat_at, now, config) ||
-          isQueueStayExpired(visitor.joined_at, now, config)
-        ) {
-          this.ctx.storage.sql.exec(
-            `UPDATE visitors SET status = 'expired' WHERE id = ? AND status = 'waiting'`,
-            visitor.id,
-          );
-        }
-      } else if (
-        visitor.admitted_at !== null &&
-        isAdmissionExpired(visitor.admitted_at, now, config)
-      ) {
-        this.ctx.storage.sql.exec(
-          `UPDATE visitors SET status = 'expired' WHERE id = ? AND status = 'admitted'`,
-          visitor.id,
-        );
-      }
+  private sweep(config: QueueConfig, now: number, force: boolean): void {
+    const last = Number(this.getMeta("last_sweep") ?? "0");
+    if (!force && Number.isFinite(last) && now - last < 1_000) {
+      return;
     }
+    this.setMeta("last_sweep", String(now));
+
+    const effective = this.effectiveConfig(config);
+    const heartbeatCutoff = now - effective.heartbeatTimeoutSeconds * 1000;
+    const stayCutoff = now - effective.queueTimeoutSeconds * 1000;
+    const holdCutoff = now - effective.admitHoldSeconds * 1000;
+    const tokenCutoff = now - effective.tokenTTLSeconds * 1000;
+
+    this.ctx.storage.sql.exec(
+      `UPDATE visitors SET status = 'expired'
+       WHERE status = 'waiting'
+         AND (last_heartbeat_at <= ? OR joined_at <= ?)`,
+      heartbeatCutoff,
+      stayCutoff,
+    );
+    this.ctx.storage.sql.exec(
+      `UPDATE visitors SET status = 'expired'
+       WHERE status = 'admitted'
+         AND entered = 0
+         AND admitted_at IS NOT NULL
+         AND admitted_at <= ?`,
+      holdCutoff,
+    );
+    this.ctx.storage.sql.exec(
+      `UPDATE visitors SET status = 'expired'
+       WHERE status = 'admitted'
+         AND (entered = 1 OR entered IS NULL)
+         AND admitted_at IS NOT NULL
+         AND admitted_at <= ?`,
+      tokenCutoff,
+    );
+
+    // Keep SQLite lean: drop terminal rows older than 1 hour.
+    const purgeBefore = now - 60 * 60 * 1000;
+    this.ctx.storage.sql.exec(
+      `DELETE FROM visitors
+       WHERE status IN ('left', 'expired') AND joined_at < ?`,
+      purgeBefore,
+    );
   }
 
   private admitAvailable(config: QueueConfig, now: number): void {
-    if (this.isPaused()) {
+    if (!this.canAdmit(now)) {
       return;
     }
 
@@ -335,23 +477,29 @@ export class QueueRoom extends DurableObject<Env> {
     for (const row of this.selectWaiting(slots, config)) {
       this.ctx.storage.sql.exec(
         `UPDATE visitors
-         SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?
+         SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?
          WHERE id = ? AND status = 'waiting'`,
         now,
         now,
+        this.admitEntered(config),
         row.id,
       );
     }
   }
 
   private admitFromBudget(config: QueueConfig, now: number): void {
-    if (this.isPaused()) {
+    if (!this.canAdmit(now)) {
+      return;
+    }
+
+    const rate = this.effectiveAdmitPerSecond(config, now);
+    if (rate <= 0) {
       return;
     }
 
     const remainder = Number(this.getMeta("admit_remainder") ?? "0");
     const { admitCount, nextRemainder } = admissionsForTick(
-      config.admitPerSecond,
+      rate,
       QUEUE_ALARM_INTERVAL_MS,
       Number.isFinite(remainder) ? remainder : 0,
     );
@@ -370,10 +518,11 @@ export class QueueRoom extends DurableObject<Env> {
     for (const row of this.selectWaiting(toAdmit, config)) {
       this.ctx.storage.sql.exec(
         `UPDATE visitors
-         SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?
+         SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?
          WHERE id = ? AND status = 'waiting'`,
         now,
         now,
+        this.admitEntered(config),
         row.id,
       );
     }
@@ -420,23 +569,41 @@ export class QueueRoom extends DurableObject<Env> {
     return config.admissionMode;
   }
 
+  private admitEntered(config: QueueConfig): 0 | 1 {
+    return this.effectiveConfig(config).requireClickToEnter ? 0 : 1;
+  }
+
+  private effectiveConfig(config: QueueConfig): QueueConfig {
+    const click = this.getMeta("require_click");
+    const holdRaw = this.getMeta("admit_hold_seconds");
+    const hold = holdRaw !== null ? Number(holdRaw) : config.admitHoldSeconds;
+    return {
+      ...config,
+      requireClickToEnter: click === null ? config.requireClickToEnter : click === "1",
+      admitHoldSeconds:
+        Number.isFinite(hold) && hold >= 15 && hold <= 900 ? hold : config.admitHoldSeconds,
+    };
+  }
+
   private insertVisitor(input: {
     id: string;
     status: "waiting" | "admitted";
     joinedAt: number;
     lastHeartbeatAt: number;
     admittedAt: number | null;
+    entered: boolean;
   }): void {
     const sequence = this.nextSequence();
     this.ctx.storage.sql.exec(
-      `INSERT INTO visitors (id, status, joined_at, last_heartbeat_at, admitted_at, sequence)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO visitors (id, status, joined_at, last_heartbeat_at, admitted_at, sequence, entered)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       input.id,
       input.status,
       input.joinedAt,
       input.lastHeartbeatAt,
       input.admittedAt,
       sequence,
+      input.entered ? 1 : 0,
     );
   }
 
@@ -450,7 +617,7 @@ export class QueueRoom extends DurableObject<Env> {
   private getVisitor(id: string): VisitorRow | null {
     const row = this.ctx.storage.sql
       .exec<VisitorRow>(
-        `SELECT id, status, joined_at, last_heartbeat_at, admitted_at, sequence
+        `SELECT id, status, joined_at, last_heartbeat_at, admitted_at, sequence, entered
          FROM visitors WHERE id = ?`,
         id,
       )
@@ -474,7 +641,7 @@ export class QueueRoom extends DurableObject<Env> {
       .one().count;
   }
 
-  private toView(visitor: VisitorRow, config: QueueConfig) {
+  private toView(visitor: VisitorRow, config: QueueConfig, now: number) {
     const status = visitor.status as "waiting" | "admitted" | "expired" | "left";
     const mode = this.admissionMode(config);
     const waiting = this.countByStatus("waiting");
@@ -483,20 +650,33 @@ export class QueueRoom extends DurableObject<Env> {
     let lotteryOdds: number | null = null;
     let ahead: number | null = null;
     let behind: number | null = null;
+    const entered = visitor.entered !== 0 && visitor.entered !== null;
+    let holdSecondsRemaining: number | null = null;
 
     if (status === "waiting") {
       if (mode === "lottery") {
-        // No FIFO place in line — show equal odds among current waiters.
         lotteryOdds = waiting > 0 ? 1 / waiting : null;
-        estimatedWaitSeconds = defaultEtaCalculator.estimateWaitSeconds(waiting, config);
+        estimatedWaitSeconds = defaultEtaCalculator.estimateWaitSeconds(waiting, {
+          ...config,
+          admitPerSecond: Math.max(this.effectiveAdmitPerSecond(config, now), 0.0001),
+        });
       } else {
         position = waitingPosition(this.waitingAhead(visitor.sequence));
         ahead = position - 1;
         behind = Math.max(0, waiting - position);
-        estimatedWaitSeconds = defaultEtaCalculator.estimateWaitSeconds(position, config);
+        estimatedWaitSeconds = defaultEtaCalculator.estimateWaitSeconds(position, {
+          ...config,
+          admitPerSecond: Math.max(this.effectiveAdmitPerSecond(config, now), 0.0001),
+        });
       }
     }
 
+    if (status === "admitted" && !entered && visitor.admitted_at !== null) {
+      const holdMs = this.effectiveConfig(config).admitHoldSeconds * 1000;
+      holdSecondsRemaining = Math.max(0, Math.ceil((visitor.admitted_at + holdMs - now) / 1000));
+    }
+
+    const showDepth = this.showWaitingCount();
     return {
       id: visitor.id,
       status,
@@ -510,11 +690,18 @@ export class QueueRoom extends DurableObject<Env> {
       ahead,
       behind,
       lotteryOdds,
+      entered,
+      holdSecondsRemaining,
+      showWaitingCount: showDepth,
     };
   }
 
   private rememberConfig(config: QueueConfig): void {
-    this.setMeta("config", JSON.stringify(config));
+    const encoded = JSON.stringify(config);
+    if (this.getMeta("config") === encoded) {
+      return;
+    }
+    this.setMeta("config", encoded);
   }
 
   private ensureQueueName(queue: string): void {
@@ -528,8 +715,98 @@ export class QueueRoom extends DurableObject<Env> {
     return this.getMeta("queue_name") ?? this.ctx.id.toString();
   }
 
-  private isPaused(): boolean {
+  private isManualPaused(): boolean {
     return this.getMeta("paused") === "1";
+  }
+
+  private getOpensAt(): number | null {
+    const raw = this.getMeta("opens_at");
+    if (!raw) {
+      return null;
+    }
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  private showWaitingCount(): boolean {
+    return this.getMeta("show_waiting_count") === "1";
+  }
+
+  private canAdmit(now: number): boolean {
+    if (this.isManualPaused()) {
+      return false;
+    }
+    const opensAt = this.getOpensAt();
+    if (opensAt !== null && now < opensAt) {
+      return false;
+    }
+    const health = this.readHealthConfig();
+    const state = this.readHealthState();
+    if (isAutoPaused(health, state, now)) {
+      return false;
+    }
+    return true;
+  }
+
+  private effectiveAdmitPerSecond(config: QueueConfig, now: number): number {
+    if (!this.canAdmit(now)) {
+      return 0;
+    }
+    const mult = healthRateMultiplier(this.readHealthConfig(), this.readHealthState(), now);
+    return config.admitPerSecond * mult;
+  }
+
+  private readHealthConfig(): OriginHealthConfig {
+    const raw = this.getMeta("health_config");
+    if (!raw) {
+      return { ...DEFAULT_HEALTH_CONFIG };
+    }
+    try {
+      return parseHealthConfig(JSON.parse(raw) as Partial<OriginHealthConfig>);
+    } catch {
+      return { ...DEFAULT_HEALTH_CONFIG };
+    }
+  }
+
+  private readHealthState(): OriginHealthState {
+    const raw = this.getMeta("health_state");
+    if (!raw) {
+      return { ...DEFAULT_HEALTH_STATE };
+    }
+    try {
+      return { ...DEFAULT_HEALTH_STATE, ...(JSON.parse(raw) as Partial<OriginHealthState>) };
+    } catch {
+      return { ...DEFAULT_HEALTH_STATE };
+    }
+  }
+
+  private healthSnapshot(now: number): QueueMetricsResponse["health"] {
+    const config = this.readHealthConfig();
+    const state = this.readHealthState();
+    return {
+      enabled: config.enabled,
+      level: state.level,
+      lastCheckedAt: state.lastCheckedAt,
+      lastLatencyMs: state.lastLatencyMs,
+      lastStatus: state.lastStatus,
+      lastError: state.lastError,
+      overrideUntil: config.overrideUntil,
+      autoPaused: isAutoPaused(config, state, now),
+    };
+  }
+
+  private async maybeProbeHealth(now: number): Promise<void> {
+    const config = this.readHealthConfig();
+    if (!config.enabled || !config.url) {
+      return;
+    }
+    const state = this.readHealthState();
+    if (state.lastCheckedAt && now - state.lastCheckedAt < config.intervalSeconds * 1000) {
+      return;
+    }
+    const probe = await probeOriginHealth(config);
+    const next = advanceHealthState(config, state, probe, now);
+    this.setMeta("health_state", JSON.stringify(next));
   }
 
   private alarmConfig(): QueueConfig | null {
@@ -561,24 +838,34 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   /**
-   * Schedule the next sweep only while the room has active work.
-   * Idle rooms clear their alarm to avoid waking (and billing) for no reason.
+   * Schedule the next sweep while the room has work, or health probes are enabled.
    */
   private async ensureAlarm(): Promise<void> {
-    const active = this.ctx.storage.sql
-      .exec<{ count: number }>(
-        `SELECT COUNT(*) AS count FROM visitors WHERE status IN ('waiting', 'admitted')`,
-      )
-      .one().count;
+    const waiting = this.countByStatus("waiting");
+    const admitted = this.countByStatus("admitted");
+    const health = this.readHealthConfig();
+    const opensAt = this.getOpensAt();
+    const waitingForOpen = opensAt !== null && Date.now() < opensAt && waiting > 0;
 
-    if (active === 0) {
+    if (waiting === 0 && admitted === 0 && !health.enabled && !waitingForOpen) {
       await this.ctx.storage.deleteAlarm();
       return;
     }
 
     const existing = await this.ctx.storage.getAlarm();
-    if (existing === null) {
-      await this.ctx.storage.setAlarm(Date.now() + QUEUE_ALARM_INTERVAL_MS);
+    let interval = Math.max(QUEUE_ALARM_INTERVAL_MS * 15, 15_000);
+    if (waiting > 0 && this.canAdmit(Date.now())) {
+      interval = QUEUE_ALARM_INTERVAL_MS;
+    } else if (waiting > 0) {
+      interval = Math.min(5_000, interval);
+    }
+    if (health.enabled) {
+      interval = Math.min(interval, health.intervalSeconds * 1000);
+    }
+    const nextAt = Date.now() + interval;
+
+    if (existing === null || existing > nextAt + 250) {
+      await this.ctx.storage.setAlarm(nextAt);
     }
   }
 }

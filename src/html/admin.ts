@@ -335,7 +335,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
           <li data-step="3">3. Branding</li>
         </ol>
         <div id="wizard-step-1">
-          <p class="muted">Create an admin password for this deploy. Admission tokens still use <code>TOKEN_SECRET</code> from Wrangler.</p>
+          <p class="muted">Prove you own this Worker with <code>TOKEN_SECRET</code> (from Wrangler secrets), then create an admin password.</p>
+          <label>TOKEN_SECRET
+            <input id="setup-token-secret" type="password" autocomplete="off" spellcheck="false" />
+          </label>
           <label>Password
             <input id="setup-password" type="password" autocomplete="new-password" minlength="8" />
           </label>
@@ -356,6 +359,19 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <input id="setup-show-waiting" type="checkbox" />
             Show pool size / ahead &amp; behind on the waiting room
           </label>
+          <label>Default redirect path
+            <input id="setup-redirect" type="text" placeholder="/checkout or leave blank" />
+          </label>
+          <label class="check">
+            <input id="setup-require-click" type="checkbox" />
+            Require click to enter (no auto-redirect)
+          </label>
+          <label>Admit hold (seconds)
+            <input id="setup-admit-hold" type="number" min="15" max="900" value="120" />
+          </label>
+          <p class="muted" style="font-size:0.85rem;margin:0">
+            Redirect is a same-origin path. With click-to-enter, visitors must press Continue within the hold window or lose the spot.
+          </p>
         </div>
         <div id="wizard-step-3" hidden>
           <div class="grid grid-2">
@@ -429,6 +445,19 @@ export function renderAdminApp(options: AdminAppOptions): string {
               <input id="dash-show-waiting" type="checkbox" />
               Show depth on waiting room
             </label>
+            <label>Default redirect path
+              <input id="dash-redirect" type="text" placeholder="/ or /checkout" />
+            </label>
+            <label class="check">
+              <input id="dash-require-click" type="checkbox" />
+              Require click to enter
+            </label>
+            <label>Admit hold (seconds)
+              <input id="dash-admit-hold" type="number" min="15" max="900" />
+            </label>
+            <label>Enter button label
+              <input id="dash-enter-label" type="text" />
+            </label>
             <label>Title
               <input id="dash-title" type="text" />
             </label>
@@ -466,6 +495,75 @@ export function renderAdminApp(options: AdminAppOptions): string {
               Preview updates as you edit. KV is written only when you save.
             </p>
           </div>
+        </div>
+        <div class="panel" style="margin-top:1.25rem">
+            <p class="muted" style="margin-top:0"><strong style="color:var(--text)">Traffic controls</strong></p>
+            <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">
+              Opening time shows a countdown to visitors. Pause and health throttling are silent — the waiting room does not announce them.
+              One browser profile = one seat (ticket cookie). Extra devices can still take extra seats.
+            </p>
+            <label>Opening time (local)
+              <input id="traffic-opens-at" type="datetime-local" />
+            </label>
+            <div class="actions">
+              <button type="button" class="primary" id="save-schedule">Save opening time</button>
+              <button type="button" class="ghost" id="clear-schedule">Open now</button>
+            </div>
+            <label class="check">
+              <input id="traffic-paused" type="checkbox" />
+              Silent pause (stop admissions; visitors are not told)
+            </label>
+            <div class="actions">
+              <button type="button" class="primary" id="save-pause">Apply pause</button>
+            </div>
+            <p class="status" id="traffic-status" data-tone="ok"></p>
+            <hr style="border:0;border-top:1px solid color-mix(in oklab, var(--muted) 35%, transparent);margin:1rem 0" />
+            <label class="check">
+              <input id="health-enabled" type="checkbox" />
+              Origin health throttle
+            </label>
+            <label>Health URL
+              <input id="health-url" type="url" placeholder="https://origin.example.com/health" />
+            </label>
+            <div class="color-grid">
+              <label>Interval (s) <input id="health-interval" type="number" min="15" max="300" /></label>
+              <label>Max latency (ms) <input id="health-latency" type="number" min="100" /></label>
+              <label>Expect status <input id="health-status" type="number" min="100" max="599" /></label>
+              <label>Slow rate (0–1) <input id="health-slow" type="number" min="0.01" max="1" step="0.05" /></label>
+              <label>Fail threshold <input id="health-fail" type="number" min="1" max="20" /></label>
+              <label>Recover threshold <input id="health-recover" type="number" min="1" max="20" /></label>
+            </div>
+            <p class="muted" style="font-size:0.85rem" id="health-live">Health: —</p>
+            <div class="actions">
+              <button type="button" class="primary" id="save-health">Save health</button>
+              <button type="button" class="ghost" id="health-override">Ignore 15m</button>
+              <button type="button" class="ghost" id="health-clear-override">Clear override</button>
+            </div>
+            <p class="status" id="health-status-msg" data-tone="ok"></p>
+        </div>
+        <div class="panel" style="margin-top:1.25rem">
+          <p class="muted" style="margin-top:0"><strong style="color:var(--text)">Origin proxy</strong> — Cloudflare in front of your real site or service</p>
+          <label class="check">
+            <input id="origin-enabled" type="checkbox" />
+            Enable origin proxy
+          </label>
+          <label>Origin URL
+            <input id="origin-url" type="url" placeholder="https://shop.example.com" />
+          </label>
+          <label class="check">
+            <input id="origin-protect-all" type="checkbox" checked />
+            Protect all non-TideGuard paths (recommended)
+          </label>
+          <label>Path prefixes (if not protecting all)
+            <input id="origin-prefixes" type="text" placeholder="/checkout,/account" />
+          </label>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">
+            TideGuard keeps <code>/wait</code>, <code>/admin</code>, <code>/join</code>, and other control paths. Everything else can be gated and proxied to the origin. See docs/protecting-origin.md.
+          </p>
+          <div class="actions">
+            <button type="button" class="primary" id="save-origin">Save origin proxy</button>
+          </div>
+          <p class="status" id="origin-status" data-tone="ok"></p>
         </div>
       </section>
     </div>
@@ -513,6 +611,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
             mutedColor: document.getElementById("b-muted").value,
             fontFamily: defaults.fontFamily,
             showWaitingCount: document.getElementById("setup-show-waiting").checked,
+            redirectUrl: document.getElementById("setup-redirect").value.trim(),
+            requireClickToEnter: document.getElementById("setup-require-click").checked,
+            admitHoldSeconds: Number(document.getElementById("setup-admit-hold").value) || 120,
+            enterButtonLabel: "Continue",
           };
         }
 
@@ -528,6 +630,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
             mutedColor: document.getElementById("dash-muted").value,
             fontFamily: defaults.fontFamily,
             showWaitingCount: document.getElementById("dash-show-waiting").checked,
+            redirectUrl: document.getElementById("dash-redirect").value.trim(),
+            requireClickToEnter: document.getElementById("dash-require-click").checked,
+            admitHoldSeconds: Number(document.getElementById("dash-admit-hold").value) || 120,
+            enterButtonLabel: document.getElementById("dash-enter-label").value.trim() || "Continue",
           };
         }
 
@@ -616,6 +722,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("dash-queue").value = data.queue;
           fillBrandingInputs("dash-", data.branding);
           document.getElementById("dash-show-waiting").checked = !!data.branding.showWaitingCount;
+          document.getElementById("dash-redirect").value = data.branding.redirectUrl || "";
+          document.getElementById("dash-require-click").checked = !!data.branding.requireClickToEnter;
+          document.getElementById("dash-admit-hold").value = String(data.branding.admitHoldSeconds || 120);
+          document.getElementById("dash-enter-label").value = data.branding.enterButtonLabel || "Continue";
           state.admissionMode = data.admissionMode;
           setModeButtons(
             document.getElementById("dash-mode-queue"),
@@ -627,6 +737,42 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("m-capacity").textContent = String(data.metrics.capacity);
           document.getElementById("m-mode").textContent = data.admissionMode;
           paintPreview("dash-preview", dashBranding(), state.admissionMode);
+          if (data.origin) {
+            document.getElementById("origin-enabled").checked = !!data.origin.enabled;
+            document.getElementById("origin-url").value = data.origin.originUrl || "";
+            document.getElementById("origin-protect-all").checked = data.origin.protectAll !== false;
+            document.getElementById("origin-prefixes").value = (data.origin.pathPrefixes || []).join(",");
+          }
+          if (data.traffic) {
+            const opens = data.traffic.opensAt;
+            const opensInput = document.getElementById("traffic-opens-at");
+            if (opens) {
+              const d = new Date(opens);
+              const pad = (n) => String(n).padStart(2, "0");
+              opensInput.value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+            } else {
+              opensInput.value = "";
+            }
+            document.getElementById("traffic-paused").checked = !!data.traffic.paused;
+            const h = data.traffic.health || {};
+            const hc = data.traffic.healthConfig || {};
+            document.getElementById("health-enabled").checked = !!hc.enabled;
+            document.getElementById("health-url").value = hc.url || "";
+            document.getElementById("health-interval").value = String(hc.intervalSeconds || 30);
+            document.getElementById("health-latency").value = String(hc.maxLatencyMs || 3000);
+            document.getElementById("health-status").value = String(hc.expectStatus || 200);
+            document.getElementById("health-slow").value = String(hc.slowRateMultiplier || 0.25);
+            document.getElementById("health-fail").value = String(hc.failThreshold || 2);
+            document.getElementById("health-recover").value = String(hc.recoverThreshold || 2);
+            document.getElementById("health-live").textContent =
+              "Health: " + (h.enabled ? (h.level || "ok") : "off") +
+              (h.lastLatencyMs != null ? (" · " + h.lastLatencyMs + "ms") : "") +
+              (h.autoPaused ? " · auto-paused" : "") +
+              (h.overrideUntil && h.overrideUntil > Date.now() ? " · override active" : "") +
+              (typeof data.traffic.effectiveAdmitPerSecond === "number"
+                ? (" · effective rate " + data.traffic.effectiveAdmitPerSecond + "/s")
+                : "");
+          }
           showView("dashboard");
         }
 
@@ -676,8 +822,13 @@ export function renderAdminApp(options: AdminAppOptions): string {
           const status = document.getElementById("wizard-status");
           setStatus(status, "", "ok");
           if (state.step === 1) {
+            const tokenSecret = document.getElementById("setup-token-secret").value.trim();
             const password = document.getElementById("setup-password").value;
             const confirm = document.getElementById("setup-confirm").value;
+            if (tokenSecret.length < 16) {
+              setStatus(status, "TOKEN_SECRET must be at least 16 characters.", "err");
+              return;
+            }
             if (password.length < 8) {
               setStatus(status, "Password must be at least 8 characters.", "err");
               return;
@@ -695,8 +846,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
           }
           try {
             document.getElementById("wizard-next").disabled = true;
+            const tokenSecret = document.getElementById("setup-token-secret").value.trim();
             await api("/api/admin/setup", {
               method: "POST",
+              headers: { authorization: "Bearer " + tokenSecret },
               body: JSON.stringify({
                 password: document.getElementById("setup-password").value,
                 confirmPassword: document.getElementById("setup-confirm").value,
@@ -761,6 +914,137 @@ export function renderAdminApp(options: AdminAppOptions): string {
             });
             document.getElementById("m-mode").textContent = state.admissionMode;
             setStatus(status, "Admission mode updated.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("save-origin").addEventListener("click", async () => {
+          const status = document.getElementById("origin-status");
+          try {
+            const data = await api("/api/admin/origin", {
+              method: "PUT",
+              body: JSON.stringify({
+                enabled: document.getElementById("origin-enabled").checked,
+                originUrl: document.getElementById("origin-url").value,
+                protectAll: document.getElementById("origin-protect-all").checked,
+                pathPrefixes: document.getElementById("origin-prefixes").value,
+                queue: document.getElementById("dash-queue").value,
+              }),
+            });
+            if (data.origin) {
+              document.getElementById("origin-enabled").checked = !!data.origin.enabled;
+              document.getElementById("origin-url").value = data.origin.originUrl || "";
+              document.getElementById("origin-protect-all").checked = data.origin.protectAll !== false;
+              document.getElementById("origin-prefixes").value = (data.origin.pathPrefixes || []).join(",");
+            }
+            setStatus(status, "Origin proxy saved.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("save-schedule").addEventListener("click", async () => {
+          const status = document.getElementById("traffic-status");
+          try {
+            const raw = document.getElementById("traffic-opens-at").value;
+            await api("/api/admin/schedule", {
+              method: "PUT",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                opensAt: raw ? new Date(raw).toISOString() : null,
+              }),
+            });
+            setStatus(status, "Opening time saved.", "ok");
+            await loadDashboard();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+        document.getElementById("clear-schedule").addEventListener("click", async () => {
+          const status = document.getElementById("traffic-status");
+          try {
+            await api("/api/admin/schedule", {
+              method: "PUT",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                opensAt: null,
+              }),
+            });
+            document.getElementById("traffic-opens-at").value = "";
+            setStatus(status, "Room is open now.", "ok");
+            await loadDashboard();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+        document.getElementById("save-pause").addEventListener("click", async () => {
+          const status = document.getElementById("traffic-status");
+          try {
+            await api("/api/admin/pause", {
+              method: "POST",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                paused: document.getElementById("traffic-paused").checked,
+              }),
+            });
+            setStatus(status, "Pause setting applied.", "ok");
+            await loadDashboard();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+        document.getElementById("save-health").addEventListener("click", async () => {
+          const status = document.getElementById("health-status-msg");
+          try {
+            await api("/api/admin/health", {
+              method: "PUT",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                enabled: document.getElementById("health-enabled").checked,
+                url: document.getElementById("health-url").value,
+                intervalSeconds: Number(document.getElementById("health-interval").value) || 30,
+                maxLatencyMs: Number(document.getElementById("health-latency").value) || 3000,
+                expectStatus: Number(document.getElementById("health-status").value) || 200,
+                slowRateMultiplier: Number(document.getElementById("health-slow").value) || 0.25,
+                failThreshold: Number(document.getElementById("health-fail").value) || 2,
+                recoverThreshold: Number(document.getElementById("health-recover").value) || 2,
+              }),
+            });
+            setStatus(status, "Health settings saved.", "ok");
+            await loadDashboard();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+        document.getElementById("health-override").addEventListener("click", async () => {
+          const status = document.getElementById("health-status-msg");
+          try {
+            await api("/api/admin/health", {
+              method: "PUT",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                overrideMinutes: 15,
+              }),
+            });
+            setStatus(status, "Health ignored for 15 minutes.", "ok");
+            await loadDashboard();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+        document.getElementById("health-clear-override").addEventListener("click", async () => {
+          const status = document.getElementById("health-status-msg");
+          try {
+            await api("/api/admin/health", {
+              method: "PUT",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value,
+                clearOverride: true,
+              }),
+            });
+            setStatus(status, "Health override cleared.", "ok");
+            await loadDashboard();
           } catch (err) {
             setStatus(status, err.message, "err");
           }

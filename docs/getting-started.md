@@ -45,11 +45,13 @@ npm run dev
 ### First-run admin
 
 1. Open `/admin`.
-2. Complete the wizard: password → queue / mode → branding preview → Finish.
+2. Paste your `TOKEN_SECRET` (proves you own the Worker), then set password → queue / mode → branding → Finish.
 3. You are signed in with an HttpOnly session cookie.
 4. Visit `/demo` (or `/wait`) as a visitor to exercise the line.
 
-Details: [admin.md](admin.md)
+Without `Authorization: Bearer <TOKEN_SECRET>`, setup is rejected so a public Workers URL cannot be claimed by a stranger.
+
+Details: [admin.md](admin.md). Before production traffic: [launch-checklist.md](launch-checklist.md).
 
 ## 4. Deploy to Cloudflare
 
@@ -74,9 +76,10 @@ Placeholder KV IDs in `wrangler.jsonc` are intentional. Deploy-to-Cloudflare / W
 
 After deploy:
 
-1. Open `https://<your-worker>.workers.dev/admin` (or your custom domain).
-2. Finish the setup wizard.
-3. Smoke-test `/wait`, `/demo`, and `/cost`.
+1. Attach a custom domain or route (see [protecting-origin.md](protecting-origin.md)).
+2. Open `https://<your-host>/admin` (or `*.workers.dev/admin` if you have not attached a domain yet).
+3. Finish the setup wizard.
+4. Smoke-test `/wait`, `/demo`, and `/cost`.
 
 ## 5. Verify
 

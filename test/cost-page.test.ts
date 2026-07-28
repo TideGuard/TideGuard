@@ -18,8 +18,9 @@ describe("cost calculator surfaces", () => {
     const body = await response.json<{
       estimate: { totalUsd: number; workerRequests: number; dominantCost: string };
     }>();
-    expect(body.estimate.workerRequests).toBeGreaterThan(2_000_000_000);
-    expect(body.estimate.totalUsd).toBeGreaterThan(900);
+    expect(body.estimate.workerRequests).toBe(465_000_000);
+    expect(body.estimate.totalUsd).toBeGreaterThan(150);
+    expect(body.estimate.totalUsd).toBeLessThan(350);
     expect(body.estimate.dominantCost).toBe("polling");
   });
 

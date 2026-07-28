@@ -1,4 +1,5 @@
 import type { AdmissionMode, QueueConfig, QueueMetrics, QueueName } from "../core/types";
+import type { OriginHealthConfig, OriginHealthState } from "../health/origin-probe";
 import { defaultEtaCalculator } from "../core/eta";
 
 export interface QueueRoomVisitorView {
@@ -18,6 +19,12 @@ export interface QueueRoomVisitorView {
   behind: number | null;
   /** 1 / waitingCount while waiting in lottery mode. */
   lotteryOdds: number | null;
+  /** True once the visitor confirmed entry (or auto-admit without click). */
+  entered: boolean;
+  /** Seconds left to confirm when admitted but not yet entered. */
+  holdSecondsRemaining: number | null;
+  /** When false, public APIs should omit depth fields. */
+  showWaitingCount: boolean;
 }
 
 export interface QueueJoinRequest {
@@ -79,6 +86,16 @@ export type QueueSetModeResponse = {
   admissionMode: AdmissionMode;
 };
 
+export type QueueEnterResponse =
+  { ok: true; visitor: QueueRoomVisitorView } | { ok: false; code: "not_found" | "not_admitted" };
+
+export type QueueScheduleResponse = { opensAt: number | null };
+
+export type QueueHealthConfigResponse = {
+  config: OriginHealthConfig;
+  state: OriginHealthState;
+};
+
 export function buildMetrics(input: {
   queue: QueueName;
   config: QueueConfig;
@@ -86,6 +103,9 @@ export function buildMetrics(input: {
   admitted: number;
   paused: boolean;
   admissionMode: AdmissionMode;
+  opensAt: number | null;
+  effectiveAdmitPerSecond: number;
+  health: QueueMetrics["health"];
 }): QueueMetrics {
   return {
     queue: input.queue,
@@ -93,8 +113,14 @@ export function buildMetrics(input: {
     admitted: input.admitted,
     capacity: input.config.maxConcurrentUsers,
     admitPerSecond: input.config.admitPerSecond,
-    estimatedWaitSeconds: defaultEtaCalculator.estimateWaitSeconds(input.waiting, input.config),
+    estimatedWaitSeconds: defaultEtaCalculator.estimateWaitSeconds(input.waiting, {
+      ...input.config,
+      admitPerSecond: Math.max(input.effectiveAdmitPerSecond, 0.0001),
+    }),
     paused: input.paused,
     admissionMode: input.admissionMode,
+    opensAt: input.opensAt,
+    effectiveAdmitPerSecond: input.effectiveAdmitPerSecond,
+    health: input.health,
   };
 }

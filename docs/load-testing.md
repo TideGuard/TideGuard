@@ -47,7 +47,7 @@ Notes:
 
 - Not part of CI (`npm test` excludes `test/load/**`)
 - 100k **DO** joins will be slow and burn CPU; prefer in-memory for that scale
-- Production cost still hinges on polling interval (waiting UI uses ~2.5s) and idle alarm cleanup
+- Production cost still hinges on polling interval (waiting UI uses ~15s) and idle alarm cleanup
 
 ## Interpreting results
 

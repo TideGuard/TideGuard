@@ -105,7 +105,19 @@ function isClaimsShape(value: unknown): value is AccessTokenClaims {
   );
 }
 
+const hmacKeyCache = new Map<string, CryptoKey>();
+
 async function hmacSign(secret: string, payload: string): Promise<string> {
+  const key = await getHmacKey(secret);
+  const signature = await crypto.subtle.sign("HMAC", key, textEncode(payload));
+  return base64UrlEncode(new Uint8Array(signature));
+}
+
+async function getHmacKey(secret: string): Promise<CryptoKey> {
+  const cached = hmacKeyCache.get(secret);
+  if (cached) {
+    return cached;
+  }
   const key = await crypto.subtle.importKey(
     "raw",
     textEncode(secret),
@@ -113,8 +125,8 @@ async function hmacSign(secret: string, payload: string): Promise<string> {
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, textEncode(payload));
-  return base64UrlEncode(new Uint8Array(signature));
+  hmacKeyCache.set(secret, key);
+  return key;
 }
 
 async function timingSafeEqual(a: string, b: string): Promise<boolean> {
