@@ -5,17 +5,57 @@ import {
   formatUsd,
   type CostEstimateBreakdown,
 } from "../core/cost-estimate";
+import {
+  QUEUE_CAPACITY_THRESHOLDS,
+  estimateQueueLoad,
+  queueLoadDisclaimer,
+} from "../core/queue-load";
+import { PRODUCT_STATUS } from "../core/product-status";
+
+const DEFAULT_VISITORS = 5_000_000;
+const DEFAULT_WAIT_MINUTES = 15;
+const DEFAULT_POLL_SECONDS = 15;
+const DEFAULT_HEARTBEAT_SECONDS = 30;
+const DEFAULT_BURST_SECONDS = 60;
+const DEFAULT_ADMISSION_RATE = 2;
+
+function defaultPeakConcurrent(visitors: number): number {
+  const capped = Math.min(Math.max(0, visitors), QUEUE_CAPACITY_THRESHOLDS.recommendedMaxConcurrentWaiting);
+  return capped > 0 ? capped : QUEUE_CAPACITY_THRESHOLDS.recommendedMaxConcurrentWaiting;
+}
 
 /**
- * Interactive ballpark cost calculator for operators.
- * Math lives in `src/core/cost-estimate.ts` — this page only presents it.
+ * Interactive ballpark cost + queue-load calculator for operators.
+ * Cost math lives in `src/core/cost-estimate.ts`; load math in `src/core/queue-load.ts`.
+ * Client script embeds thresholds JSON and duplicates the small estimate formulas.
  */
 export function renderCostCalculatorPage(): string {
+  const visitors = DEFAULT_VISITORS;
+  const waitMinutes = DEFAULT_WAIT_MINUTES;
+  const pollSeconds = DEFAULT_POLL_SECONDS;
+  const heartbeatSeconds = DEFAULT_HEARTBEAT_SECONDS;
+  const peakConcurrent = defaultPeakConcurrent(visitors);
+  const burstSeconds = DEFAULT_BURST_SECONDS;
+  const admissionRate = DEFAULT_ADMISSION_RATE;
+
   const seed = estimateWaitingRoomCost({
-    visitors: 5_000_000,
-    averageWaitSeconds: 15 * 60,
+    visitors,
+    averageWaitSeconds: waitMinutes * 60,
+    pollIntervalSeconds: pollSeconds,
+    heartbeatIntervalSeconds: heartbeatSeconds,
   });
+  const loadSeed = estimateQueueLoad({
+    totalVisitors: visitors,
+    peakConcurrentWaiting: peakConcurrent,
+    statusPollIntervalSeconds: pollSeconds,
+    heartbeatIntervalSeconds: heartbeatSeconds,
+    joinBurstDurationSeconds: burstSeconds,
+  });
+
   const ratesJson = JSON.stringify(DEFAULT_CLOUDFLARE_PAID_RATES);
+  const thresholdsJson = JSON.stringify(QUEUE_CAPACITY_THRESHOLDS);
+  const disclaimer = queueLoadDisclaimer();
+  const architectureLabel = "Single Durable Object";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -36,6 +76,7 @@ export function renderCostCalculatorPage(): string {
         --accent-2: #3dd6c8;
         --line: color-mix(in oklab, var(--text) 14%, transparent);
         --warn: #e2b15c;
+        --danger: #d9776c;
       }
       * { box-sizing: border-box; }
       body {
@@ -49,7 +90,7 @@ export function renderCostCalculatorPage(): string {
       }
       a { color: var(--accent-2); }
       .wrap {
-        width: min(100% - 2rem, 52rem);
+        width: min(100% - 2rem, 56rem);
         margin: 0 auto;
         padding: 2rem 0 3.5rem;
       }
@@ -68,6 +109,18 @@ export function renderCostCalculatorPage(): string {
         text-transform: uppercase;
         color: var(--accent);
       }
+      .badge {
+        display: inline-block;
+        margin-left: 0.55rem;
+        padding: 0.15rem 0.45rem;
+        border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+        border-radius: 0.35rem;
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--accent-2);
+        vertical-align: middle;
+      }
       h1 {
         margin: 0 0 0.6rem;
         font-family: "Fraunces", Georgia, serif;
@@ -78,7 +131,7 @@ export function renderCostCalculatorPage(): string {
       }
       .lede {
         margin: 0 0 1.75rem;
-        max-width: 46ch;
+        max-width: 48ch;
         color: var(--muted);
         line-height: 1.55;
         text-wrap: pretty;
@@ -107,6 +160,10 @@ export function renderCostCalculatorPage(): string {
         font-size: 0.92rem;
       }
       label span { color: var(--muted); }
+      label .hint {
+        font-size: 0.8rem;
+        color: color-mix(in oklab, var(--muted) 85%, transparent);
+      }
       input {
         width: 100%;
         border: 1px solid var(--line);
@@ -140,6 +197,10 @@ export function renderCostCalculatorPage(): string {
       .presets button[aria-pressed="true"] {
         border-color: color-mix(in oklab, var(--accent) 70%, transparent);
         color: var(--accent-2);
+      }
+      .presets button:focus-visible {
+        outline: 2px solid color-mix(in oklab, var(--accent) 65%, transparent);
+        outline-offset: 2px;
       }
       .hero-cost {
         font-family: "Fraunces", Georgia, serif;
@@ -176,6 +237,51 @@ export function renderCostCalculatorPage(): string {
         line-height: 1.45;
       }
       .callout[data-tone="polling"] { border-left-color: var(--warn); }
+      .load-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+        margin-bottom: 1rem;
+      }
+      .load-card {
+        border-top: 1px solid var(--line);
+        padding-top: 0.5rem;
+      }
+      .load-card .label {
+        display: block;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        margin-bottom: 0.2rem;
+      }
+      .load-card .value {
+        font-size: 1.2rem;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      .risk[data-tone="low"] { color: var(--accent); }
+      .risk[data-tone="elevated"] { color: var(--warn); }
+      .risk[data-tone="high"] { color: var(--danger); }
+      .recommendation {
+        margin: 0 0 1rem;
+        padding: 0.85rem 0.9rem;
+        border-left: 3px solid var(--warn);
+        background: color-mix(in oklab, var(--warn) 10%, transparent);
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .recommendation[data-tone="high"] {
+        border-left-color: var(--danger);
+        background: color-mix(in oklab, var(--danger) 10%, transparent);
+      }
+      .recommendation[hidden] { display: none; }
+      .disclaimer {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
       .fine {
         margin-top: 1.5rem;
         font-size: 0.85rem;
@@ -183,17 +289,18 @@ export function renderCostCalculatorPage(): string {
         line-height: 1.5;
       }
       code { font-size: 0.9em; color: var(--text); }
+      .stack { display: grid; gap: 1.5rem; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="top">
-        <p class="brand">TideGuard</p>
+        <p class="brand">TideGuard <span class="badge">${PRODUCT_STATUS.label}</span></p>
         <a href="/">Home</a>
       </div>
       <h1>Calculate cost</h1>
       <p class="lede">
-        Ballpark Cloudflare spend for a waiting-room event. Polling while people wait usually dominates — not the join itself.
+        Ballpark Cloudflare spend and single-queue load for a waiting-room event. Polling while people wait usually dominates cost — not the join itself.
       </p>
 
       <div class="layout">
@@ -205,59 +312,192 @@ export function renderCostCalculatorPage(): string {
             <button type="button" data-preset="long">5M · 60 min wait</button>
             <button type="button" data-preset="small">100k · 5 min wait</button>
           </div>
-          <label>
-            <span>Visitors</span>
-            <input id="visitors" type="number" min="0" step="1000" value="5000000" />
+          <label for="visitors">
+            <span>Total visitors</span>
+            <input id="visitors" name="visitors" type="number" inputmode="numeric" min="0" step="1000" value="${visitors}" aria-describedby="visitors-hint" />
+            <span class="hint" id="visitors-hint">Unique visitors who enter the waiting room</span>
           </label>
-          <label>
+          <label for="peakConcurrent">
+            <span>Peak concurrently waiting users</span>
+            <input id="peakConcurrent" name="peakConcurrent" type="number" inputmode="numeric" min="0" step="100" value="${peakConcurrent}" aria-describedby="peak-hint" />
+            <span class="hint" id="peak-hint">Used for status/heartbeat RPS (planning default caps at ${formatCount(QUEUE_CAPACITY_THRESHOLDS.recommendedMaxConcurrentWaiting)})</span>
+          </label>
+          <label for="waitMinutes">
             <span>Average wait (minutes)</span>
-            <input id="waitMinutes" type="number" min="0" step="1" value="15" />
+            <input id="waitMinutes" name="waitMinutes" type="number" inputmode="decimal" min="0" step="1" value="${waitMinutes}" aria-describedby="wait-hint" />
+            <span class="hint" id="wait-hint">Drives the cost model (polls and heartbeats per visitor)</span>
           </label>
-          <label>
+          <label for="pollSeconds">
             <span>Status poll interval (seconds)</span>
-            <input id="pollSeconds" type="number" min="0.5" step="0.5" value="15" />
+            <input id="pollSeconds" name="pollSeconds" type="number" inputmode="decimal" min="0.5" step="0.5" value="${pollSeconds}" />
           </label>
-          <label>
+          <label for="heartbeatSeconds">
             <span>Heartbeat interval (seconds)</span>
-            <input id="heartbeatSeconds" type="number" min="1" step="1" value="30" />
+            <input id="heartbeatSeconds" name="heartbeatSeconds" type="number" inputmode="numeric" min="1" step="1" value="${heartbeatSeconds}" />
+          </label>
+          <label for="burstSeconds">
+            <span>Join burst duration (seconds)</span>
+            <input id="burstSeconds" name="burstSeconds" type="number" inputmode="numeric" min="1" step="1" value="${burstSeconds}" aria-describedby="burst-hint" />
+            <span class="hint" id="burst-hint">How long the initial join rush is spread over</span>
+          </label>
+          <label for="admissionRate">
+            <span>Admission rate per second</span>
+            <input id="admissionRate" name="admissionRate" type="number" inputmode="decimal" min="0" step="0.5" value="${admissionRate}" aria-describedby="admission-hint" />
+            <span class="hint" id="admission-hint">Informational only — queue load uses join burst, not admission rate</span>
           </label>
         </section>
 
-        <section class="panel" aria-labelledby="result-title" aria-live="polite">
-          <h2 id="result-title">Estimated total</h2>
-          <p class="hero-cost" id="total">${formatUsd(seed.totalUsd)}</p>
-          <p class="hero-note" id="summary">Including Workers Paid base fee. Usage beyond included monthly allotments.</p>
-          <div class="rows" id="rows"></div>
-          <p class="callout" id="callout" data-tone="${seed.dominantCost}"></p>
-        </section>
+        <div class="stack">
+          <section class="panel" aria-labelledby="result-title" aria-live="polite">
+            <h2 id="result-title">Estimated total</h2>
+            <p class="hero-cost" id="total">${formatUsd(seed.totalUsd)}</p>
+            <p class="hero-note" id="summary">Including Workers Paid base fee. Usage beyond included monthly allotments.</p>
+            <div class="rows" id="rows"></div>
+            <p class="callout" id="callout" data-tone="${seed.dominantCost}"></p>
+          </section>
+
+          <section class="panel" aria-labelledby="load-title" aria-live="polite">
+            <h2 id="load-title">Estimated queue load</h2>
+            <div class="load-grid" id="load-grid">
+              <div class="load-card">
+                <span class="label">Peak concurrently waiting</span>
+                <span class="value" id="load-peak">${formatCount(loadSeed.peakConcurrentWaiting)}</span>
+              </div>
+              <div class="load-card">
+                <span class="label">Status RPS</span>
+                <span class="value" id="load-status">${formatRps(loadSeed.statusRps)}</span>
+              </div>
+              <div class="load-card">
+                <span class="label">Heartbeat RPS</span>
+                <span class="value" id="load-heartbeat">${formatRps(loadSeed.heartbeatRps)}</span>
+              </div>
+              <div class="load-card">
+                <span class="label">Join burst RPS</span>
+                <span class="value" id="load-join">${formatRps(loadSeed.joinBurstRps)}</span>
+              </div>
+              <div class="load-card">
+                <span class="label">Estimated peak RPS</span>
+                <span class="value" id="load-peak-rps">${formatRps(loadSeed.estimatedPeakRps)}</span>
+              </div>
+              <div class="load-card">
+                <span class="label">Architecture</span>
+                <span class="value" id="load-arch">${architectureLabel}</span>
+              </div>
+              <div class="load-card">
+                <span class="label">Risk level</span>
+                <span class="value risk" id="load-risk" data-tone="${loadSeed.riskLevel}">${capitalize(loadSeed.riskLevel)}</span>
+              </div>
+            </div>
+            <p class="recommendation" id="recommendation" data-tone="${loadSeed.riskLevel}" ${loadSeed.riskLevel === "low" ? "hidden" : ""}>${escapeHtml(loadSeed.recommendation)}</p>
+            <p class="disclaimer" id="disclaimer">${escapeHtml(disclaimer)}</p>
+            <p class="fine" style="margin-top: 0.85rem;">
+              See capacity planning docs in the repo (<code>docs/capacity-planning.md</code>).
+            </p>
+          </section>
+        </div>
       </div>
 
       <p class="fine">
-        Model source: <code>src/core/cost-estimate.ts</code>.
-        Also available as JSON at <a href="/api/cost-estimate?visitors=5000000&averageWaitSeconds=900"><code>/api/cost-estimate</code></a>.
+        Model source: <code>src/core/cost-estimate.ts</code> and <code>src/core/queue-load.ts</code>.
+        Also available as JSON at <a href="/api/cost-estimate?visitors=5000000&amp;averageWaitSeconds=900"><code>/api/cost-estimate</code></a>.
         Rates are Workers Paid + Durable Objects list prices and may change. Excludes origin hosting and SQLite storage overages.
       </p>
     </div>
 
     <script id="cost-rates" type="application/json">${ratesJson}</script>
+    <script id="queue-thresholds" type="application/json">${thresholdsJson}</script>
     <script>
       (() => {
         const rates = JSON.parse(document.getElementById("cost-rates").textContent);
+        const thresholds = JSON.parse(document.getElementById("queue-thresholds").textContent);
+
         const visitorsInput = document.getElementById("visitors");
+        const peakInput = document.getElementById("peakConcurrent");
         const waitInput = document.getElementById("waitMinutes");
         const pollInput = document.getElementById("pollSeconds");
         const heartbeatInput = document.getElementById("heartbeatSeconds");
+        const burstInput = document.getElementById("burstSeconds");
+        const admissionInput = document.getElementById("admissionRate");
+
         const totalEl = document.getElementById("total");
         const rowsEl = document.getElementById("rows");
         const calloutEl = document.getElementById("callout");
+
+        const loadPeakEl = document.getElementById("load-peak");
+        const loadStatusEl = document.getElementById("load-status");
+        const loadHeartbeatEl = document.getElementById("load-heartbeat");
+        const loadJoinEl = document.getElementById("load-join");
+        const loadPeakRpsEl = document.getElementById("load-peak-rps");
+        const loadRiskEl = document.getElementById("load-risk");
+        const recommendationEl = document.getElementById("recommendation");
         const presets = document.querySelectorAll("[data-preset]");
+
+        function clamp(value, min, max) {
+          if (!Number.isFinite(value)) return min;
+          return Math.min(max, Math.max(min, value));
+        }
+
+        function roundRps(value) {
+          if (!Number.isFinite(value)) return 0;
+          if (value >= 100) return Math.round(value);
+          if (value >= 10) return Math.round(value * 10) / 10;
+          return Math.round(value * 100) / 100;
+        }
+
+        function riskRecommendation(level) {
+          if (level === "high") {
+            return "This scenario may approach or exceed the practical throughput of a single Durable Object. Cost estimates do not confirm production capacity. Reduce request frequency, split traffic across queues or implement sharding before relying on this configuration.";
+          }
+          if (level === "elevated") {
+            return "This scenario may require representative load testing. Consider increasing the polling or heartbeat intervals.";
+          }
+          return "Estimated peak request rate is within a conservative planning band for a single queue, but always benchmark before critical events.";
+        }
+
+        function classifyQueueLoadRisk(estimatedPeakRps) {
+          if (estimatedPeakRps >= thresholds.highRps) return "high";
+          if (estimatedPeakRps >= thresholds.elevatedRps) return "elevated";
+          return "low";
+        }
+
+        /** Mirrors src/core/queue-load.ts estimateQueueLoad using embedded thresholds. */
+        function estimateQueueLoadClient(input) {
+          const peakConcurrentWaiting = clamp(input.peakConcurrentWaiting, 0, 10_000_000);
+          const statusPollIntervalSeconds = clamp(input.statusPollIntervalSeconds, 0.5, 300);
+          const heartbeatIntervalSeconds = clamp(input.heartbeatIntervalSeconds, 1, 600);
+          const joinBurstDurationSeconds = clamp(input.joinBurstDurationSeconds, 1, 86_400);
+          const joinBurstVisitors = clamp(
+            input.joinBurstVisitors != null ? input.joinBurstVisitors : peakConcurrentWaiting,
+            0,
+            Math.max(input.totalVisitors, peakConcurrentWaiting, 0),
+          );
+
+          const statusRps = peakConcurrentWaiting / statusPollIntervalSeconds;
+          const heartbeatRps = peakConcurrentWaiting / heartbeatIntervalSeconds;
+          const backgroundRps = statusRps + heartbeatRps;
+          const joinBurstRps = joinBurstVisitors / joinBurstDurationSeconds;
+          const estimatedPeakRps = backgroundRps + joinBurstRps;
+          const riskLevel = classifyQueueLoadRisk(estimatedPeakRps);
+
+          return {
+            peakConcurrentWaiting,
+            statusRps: roundRps(statusRps),
+            heartbeatRps: roundRps(heartbeatRps),
+            backgroundRps: roundRps(backgroundRps),
+            joinBurstRps: roundRps(joinBurstRps),
+            estimatedPeakRps: roundRps(estimatedPeakRps),
+            riskLevel,
+            architecture: "single_durable_object",
+            recommendation: riskRecommendation(riskLevel),
+          };
+        }
 
         function overageCost(units, included, usdPerMillion) {
           const billable = Math.max(0, units - included);
           return (billable / 1_000_000) * usdPerMillion;
         }
 
-        function estimate(input) {
+        function estimateCost(input) {
           const visitors = Math.max(0, input.visitors);
           const averageWaitSeconds = Math.max(0, input.averageWaitSeconds);
           const pollIntervalSeconds = Math.max(0.5, input.pollIntervalSeconds);
@@ -341,12 +581,48 @@ export function renderCostCalculatorPage(): string {
           }).format(value);
         }
 
+        function formatRps(value) {
+          return new Intl.NumberFormat("en-US", {
+            maximumFractionDigits: value >= 100 ? 0 : value >= 10 ? 1 : 2,
+          }).format(value);
+        }
+
+        function capitalize(s) {
+          return s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
+        function defaultPeak(visitors) {
+          const capped = Math.min(Math.max(0, visitors), thresholds.recommendedMaxConcurrentWaiting);
+          return capped > 0 ? capped : thresholds.recommendedMaxConcurrentWaiting;
+        }
+
+        function readInputs() {
+          const visitors = Math.max(0, Number(visitorsInput.value || 0));
+          const peakConcurrentWaiting = Math.max(0, Number(peakInput.value || 0));
+          const waitMinutes = Math.max(0, Number(waitInput.value || 0));
+          const pollIntervalSeconds = Math.max(0.5, Number(pollInput.value || 15));
+          const heartbeatIntervalSeconds = Math.max(1, Number(heartbeatInput.value || 30));
+          const joinBurstDurationSeconds = Math.max(1, Number(burstInput.value || 60));
+          const admissionRatePerSecond = Math.max(0, Number(admissionInput.value || 0));
+          return {
+            visitors,
+            peakConcurrentWaiting,
+            waitMinutes,
+            pollIntervalSeconds,
+            heartbeatIntervalSeconds,
+            joinBurstDurationSeconds,
+            admissionRatePerSecond,
+          };
+        }
+
         function render() {
-          const result = estimate({
-            visitors: Number(visitorsInput.value || 0),
-            averageWaitSeconds: Number(waitInput.value || 0) * 60,
-            pollIntervalSeconds: Number(pollInput.value || 15),
-            heartbeatIntervalSeconds: Number(heartbeatInput.value || 30),
+          const input = readInputs();
+
+          const result = estimateCost({
+            visitors: input.visitors,
+            averageWaitSeconds: input.waitMinutes * 60,
+            pollIntervalSeconds: input.pollIntervalSeconds,
+            heartbeatIntervalSeconds: input.heartbeatIntervalSeconds,
           });
 
           totalEl.textContent = formatUsd(result.totalUsd);
@@ -377,13 +653,70 @@ export function renderCostCalculatorPage(): string {
           };
           calloutEl.dataset.tone = result.dominantCost;
           calloutEl.textContent = messages[result.dominantCost] || messages.mixed;
+
+          const load = estimateQueueLoadClient({
+            totalVisitors: input.visitors,
+            peakConcurrentWaiting: input.peakConcurrentWaiting,
+            statusPollIntervalSeconds: input.pollIntervalSeconds,
+            heartbeatIntervalSeconds: input.heartbeatIntervalSeconds,
+            joinBurstDurationSeconds: input.joinBurstDurationSeconds,
+          });
+
+          loadPeakEl.textContent = formatCount(load.peakConcurrentWaiting);
+          loadStatusEl.textContent = formatRps(load.statusRps);
+          loadHeartbeatEl.textContent = formatRps(load.heartbeatRps);
+          loadJoinEl.textContent = formatRps(load.joinBurstRps);
+          loadPeakRpsEl.textContent = formatRps(load.estimatedPeakRps);
+          loadRiskEl.textContent = capitalize(load.riskLevel);
+          loadRiskEl.dataset.tone = load.riskLevel;
+
+          if (load.riskLevel === "low") {
+            recommendationEl.hidden = true;
+            recommendationEl.textContent = "";
+          } else {
+            recommendationEl.hidden = false;
+            recommendationEl.dataset.tone = load.riskLevel;
+            recommendationEl.textContent = load.recommendation;
+          }
         }
 
         const presetValues = {
-          short: { visitors: 5000000, wait: 2, poll: 15, heartbeat: 30 },
-          medium: { visitors: 5000000, wait: 15, poll: 15, heartbeat: 30 },
-          long: { visitors: 5000000, wait: 60, poll: 15, heartbeat: 30 },
-          small: { visitors: 100000, wait: 5, poll: 15, heartbeat: 30 },
+          short: {
+            visitors: 5000000,
+            wait: 2,
+            poll: 15,
+            heartbeat: 30,
+            peak: 5000,
+            burst: 30,
+            admission: 2,
+          },
+          medium: {
+            visitors: 5000000,
+            wait: 15,
+            poll: 15,
+            heartbeat: 30,
+            peak: 5000,
+            burst: 60,
+            admission: 2,
+          },
+          long: {
+            visitors: 5000000,
+            wait: 60,
+            poll: 15,
+            heartbeat: 30,
+            peak: 5000,
+            burst: 90,
+            admission: 2,
+          },
+          small: {
+            visitors: 100000,
+            wait: 5,
+            poll: 15,
+            heartbeat: 30,
+            peak: 2000,
+            burst: 45,
+            admission: 2,
+          },
         };
 
         presets.forEach((btn) => {
@@ -391,17 +724,35 @@ export function renderCostCalculatorPage(): string {
             const preset = presetValues[btn.getAttribute("data-preset")];
             if (!preset) return;
             visitorsInput.value = String(preset.visitors);
+            peakInput.value = String(preset.peak);
             waitInput.value = String(preset.wait);
             pollInput.value = String(preset.poll);
             heartbeatInput.value = String(preset.heartbeat);
+            burstInput.value = String(preset.burst);
+            admissionInput.value = String(preset.admission);
             presets.forEach((b) => b.setAttribute("aria-pressed", "false"));
             btn.setAttribute("aria-pressed", "true");
             render();
           });
         });
 
-        [visitorsInput, waitInput, pollInput, heartbeatInput].forEach((el) => {
-          el.addEventListener("input", render);
+        [visitorsInput, peakInput, waitInput, pollInput, heartbeatInput, burstInput, admissionInput].forEach(
+          (el) => {
+            el.addEventListener("input", () => {
+              presets.forEach((b) => b.setAttribute("aria-pressed", "false"));
+              render();
+            });
+          },
+        );
+
+        visitorsInput.addEventListener("change", () => {
+          const visitors = Math.max(0, Number(visitorsInput.value || 0));
+          if (!peakInput.dataset.touched) {
+            peakInput.value = String(defaultPeak(visitors));
+          }
+        });
+        peakInput.addEventListener("input", () => {
+          peakInput.dataset.touched = "1";
         });
 
         render();
@@ -409,6 +760,24 @@ export function renderCostCalculatorPage(): string {
     </script>
   </body>
 </html>`;
+}
+
+function formatRps(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: value >= 100 ? 0 : value >= 10 ? 1 : 2,
+  }).format(value);
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 /** Keep TypeScript aware that seed formatting helpers are used server-side. */
