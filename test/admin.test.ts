@@ -152,9 +152,7 @@ describe("admin setup wizard and dashboard", () => {
     );
     expect(save.status).toBe(200);
 
-    const wait = await exports.default.fetch(
-      new Request("https://example.com/wait?queue=admin-q"),
-    );
+    const wait = await exports.default.fetch(new Request("https://example.com/wait?queue=admin-q"));
     const html = await wait.text();
     expect(html).toContain("Updated title");
     expect(html).toContain("Updated message");

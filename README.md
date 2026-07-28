@@ -1,17 +1,17 @@
 # TideGuard
 
-**Website:** [tideguard.dev](https://tideguard.dev) · **Repo:** open-source Worker package
+[Website](https://tideguard.dev)
 
-[![CI](https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard)
+<p>
+  <a href="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml"><img src="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml/badge.svg" alt="CI" height="20" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" height="20" /></a>
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="20" /></a>
+</p>
 
 **An open-source waiting room for Cloudflare Workers.**  
 Hold the flood at the edge. Admit people at a rate your origin can survive.
 
 When a launch, drop, or ticket sale spikes traffic, TideGuard puts visitors in a calm virtual line (or a lottery pool), then lets them through with signed access tokens. Built on Workers, Durable Objects, and KV. Cheap to run, easy to explain, ready to deploy.
-
-Product site and pitch: **[https://tideguard.dev](https://tideguard.dev)**. This repository is the deployable Worker.
 
 ```text
 Spike hits → waiting room → controlled admit → signed token → protected page
@@ -23,16 +23,14 @@ Commercial waiting rooms work. They are also expensive, opaque, and hard to stud
 
 TideGuard is the opposite shape:
 
-| You get | Why it matters |
-| --- | --- |
-| **Durable Object queue** | Strong consistency for join / leave / admit. KV is not a queue. |
-| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters. |
-| **HMAC admission tokens** | Time-limited access without a session database. |
-| **Admin setup wizard** | Branding, mode, and depth display with live preview before KV save. |
-| **Cost calculator** | Ballpark Cloudflare spend before the launch, not after the invoice. |
-| **One-click deploy** | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box. |
-
-Inspired by products like Queue-it. Written as a portfolio-grade reference: typed TypeScript, Vitest on the Workers runtime, architecture you can walk through in an interview.
+| You get                        | Why it matters                                                      |
+| ------------------------------ | ------------------------------------------------------------------- |
+| **Durable Object queue**       | Strong consistency for join / leave / admit. KV is not a queue.     |
+| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.            |
+| **HMAC admission tokens**      | Time-limited access without a session database.                     |
+| **Admin setup wizard**         | Branding, mode, and depth display with live preview before KV save. |
+| **Cost calculator**            | Ballpark Cloudflare spend before the launch, not after the invoice. |
+| **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.   |
 
 ## Try it in three steps
 
@@ -44,10 +42,10 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 
 ## What visitors see
 
-- **Queue Mode:** position, estimated wait, optional ahead / behind counts  
-- **Lottery Mode:** odds in the pool, optional pool size  
-- Heartbeats so abandoned tabs leave the line  
-- Soft branding (colors, title, message) without rewriting the waiting-room layout  
+- **Queue Mode:** position, estimated wait, optional ahead / behind counts
+- **Lottery Mode:** odds in the pool, optional pool size
+- Heartbeats so abandoned tabs leave the line
+- Soft branding (colors, title, message) without rewriting the waiting-room layout
 
 Depth stats are off by default. Turn them on in admin (`showWaitingCount`) or with `?showWaiting=1` on `/wait`.
 
@@ -69,14 +67,14 @@ Deep dive: [docs/architecture.md](docs/architecture.md)
 
 ## Documentation
 
-| Guide | Start here if you want to… |
-| --- | --- |
-| [Getting started](docs/getting-started.md) | Clone, run locally, deploy, first `/admin` setup |
-| [Architecture](docs/architecture.md) | Understand Workers / DO / KV choices and cost rules |
-| [API](docs/api.md) | Integrate `/join`, `/status`, tokens, operator routes |
-| [Admin](docs/admin.md) | Wizard, login, branding preview, mode switch, reset |
-| [Load testing](docs/load-testing.md) | Prove FIFO / lottery behavior at 1k–100k simulated users |
-| [Security](SECURITY.md) | Secrets, tokens, and what not to put in git |
+| Guide                                      | Start here if you want to…                               |
+| ------------------------------------------ | -------------------------------------------------------- |
+| [Getting started](docs/getting-started.md) | Clone, run locally, deploy, first `/admin` setup         |
+| [Architecture](docs/architecture.md)       | Understand Workers / DO / KV choices and cost rules      |
+| [API](docs/api.md)                         | Integrate `/join`, `/status`, tokens, operator routes    |
+| [Admin](docs/admin.md)                     | Wizard, login, branding preview, mode switch, reset      |
+| [Load testing](docs/load-testing.md)       | Prove FIFO / lottery behavior at 1k–100k simulated users |
+| [Security](SECURITY.md)                    | Secrets, tokens, and what not to put in git              |
 
 ## Quick start (local)
 
@@ -89,14 +87,14 @@ cp .dev.vars.example .dev.vars   # set TOKEN_SECRET
 npm run dev
 ```
 
-| URL | Purpose |
-| --- | --- |
-| http://localhost:8787 | Landing |
-| http://localhost:8787/wait | Waiting room |
-| http://localhost:8787/demo | Protected demo (redirects to `/wait` until admitted) |
-| http://localhost:8787/admin | Setup wizard / control room |
-| http://localhost:8787/cost | Cost calculator |
-| http://localhost:8787/health | Liveness |
+| URL                          | Purpose                                              |
+| ---------------------------- | ---------------------------------------------------- |
+| http://localhost:8787        | Landing                                              |
+| http://localhost:8787/wait   | Waiting room                                         |
+| http://localhost:8787/demo   | Protected demo (redirects to `/wait` until admitted) |
+| http://localhost:8787/admin  | Setup wizard / control room                          |
+| http://localhost:8787/cost   | Cost calculator                                      |
+| http://localhost:8787/health | Liveness                                             |
 
 ```bash
 npm run ci            # format, lint, typecheck, tests
@@ -107,19 +105,19 @@ npm run test:load     # in-memory scale test (see docs/load-testing.md)
 
 Defaults live in `wrangler.jsonc` under `vars`:
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `MAX_CONCURRENT_USERS` | `20` | Capacity past the waiting room |
-| `ADMIT_PER_SECOND` | `2` | Steady admission rate |
-| `TOKEN_TTL_SECONDS` | `600` | Admission token lifetime |
-| `HEARTBEAT_TIMEOUT_SECONDS` | `60` | Drop silent waiting visitors |
-| `QUEUE_TIMEOUT_SECONDS` | `1800` | Max time in queue |
-| `DEFAULT_QUEUE` | `default` | Queue when none is specified |
-| `ADMISSION_MODE` | `queue` | `queue` (FIFO) or `lottery` |
-| `ENVIRONMENT` | `production` | Reported by `/health` |
+| Variable                    | Default      | Meaning                        |
+| --------------------------- | ------------ | ------------------------------ |
+| `MAX_CONCURRENT_USERS`      | `20`         | Capacity past the waiting room |
+| `ADMIT_PER_SECOND`          | `2`          | Steady admission rate          |
+| `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime       |
+| `HEARTBEAT_TIMEOUT_SECONDS` | `60`         | Drop silent waiting visitors   |
+| `QUEUE_TIMEOUT_SECONDS`     | `1800`       | Max time in queue              |
+| `DEFAULT_QUEUE`             | `default`    | Queue when none is specified   |
+| `ADMISSION_MODE`            | `queue`      | `queue` (FIFO) or `lottery`    |
+| `ENVIRONMENT`               | `production` | Reported by `/health`          |
 
-| Secret | Purpose |
-| --- | --- |
+| Secret         | Purpose                                        |
+| -------------- | ---------------------------------------------- |
 | `TOKEN_SECRET` | HMAC key for visitor tokens and admin sessions |
 
 Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)

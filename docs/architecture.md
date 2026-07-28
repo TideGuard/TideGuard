@@ -86,10 +86,10 @@ Keeping HTTP, crypto, and queue math separate makes the core easier to unit test
 
 ## Admission modes
 
-| Mode      | Selection                         | Visitor UI                         |
-| --------- | --------------------------------- | ---------------------------------- |
-| `queue`   | Oldest `sequence` first (FIFO)    | Position in line + ETA             |
-| `lottery` | `ORDER BY RANDOM()` among waiters | Equal odds (`1 / waiting`) + ETA   |
+| Mode      | Selection                         | Visitor UI                       |
+| --------- | --------------------------------- | -------------------------------- |
+| `queue`   | Oldest `sequence` first (FIFO)    | Position in line + ETA           |
+| `lottery` | `ORDER BY RANDOM()` among waiters | Equal odds (`1 / waiting`) + ETA |
 
 Default: `ADMISSION_MODE` Worker var (`queue`). Operators can switch live with `POST /mode`.
 
@@ -106,14 +106,14 @@ The calculator is an interface (`EtaCalculator`) so more advanced estimators can
 
 Cloudflare bills for Worker requests, Durable Object requests/duration, KV operations, and alarms. TideGuard is designed to stay cheap under load:
 
-| Path                            | Strategy                                                                   |
-| ------------------------------- | -------------------------------------------------------------------------- |
-| Queue join / status / heartbeat | Durable Object only — **no KV writes** on the hot path                     |
-| Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle        |
-| Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side |
+| Path                            | Strategy                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| Queue join / status / heartbeat | Durable Object only — **no KV writes** on the hot path                        |
+| Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle           |
+| Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side        |
 | Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `TOKEN_SECRET` |
-| Metrics                         | Computed from DO SQL counts — not mirrored to KV on every change           |
-| Status polling                  | Necessary for consistency; keep intervals at 2–3s in the waiting UI        |
+| Metrics                         | Computed from DO SQL counts — not mirrored to KV on every change              |
+| Status polling                  | Necessary for consistency; keep intervals at 2–3s in the waiting UI           |
 
 Avoid:
 

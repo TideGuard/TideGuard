@@ -33,14 +33,14 @@ openssl rand -hex 32
 npm run dev
 ```
 
-| URL | What it is |
-| --- | --- |
-| http://localhost:8787 | Landing page |
-| http://localhost:8787/wait?queue=default | Waiting room |
-| http://localhost:8787/demo | Protected demo (needs admission) |
-| http://localhost:8787/admin | First-run wizard, then control room |
-| http://localhost:8787/cost | Cost calculator |
-| http://localhost:8787/health | Health JSON |
+| URL                                      | What it is                          |
+| ---------------------------------------- | ----------------------------------- |
+| http://localhost:8787                    | Landing page                        |
+| http://localhost:8787/wait?queue=default | Waiting room                        |
+| http://localhost:8787/demo               | Protected demo (needs admission)    |
+| http://localhost:8787/admin              | First-run wizard, then control room |
+| http://localhost:8787/cost               | Cost calculator                     |
+| http://localhost:8787/health             | Health JSON                         |
 
 ### First-run admin
 
@@ -88,12 +88,12 @@ curl -s "http://localhost:8787/api/cost-estimate?visitors=100000&averageWaitSeco
 
 ## Configuration cheat sheet
 
-| Knob | Where | Notes |
-| --- | --- | --- |
-| Capacity / admit rate / timeouts | `wrangler.jsonc` → `vars` | Restart / redeploy to apply |
-| Default admission mode | `ADMISSION_MODE` var or `/admin` | Live switch via admin or `POST /mode` |
-| Branding + depth display | `/admin` → Save branding | KV write on save only |
-| Admin password | `/admin` wizard | PBKDF2 hash in KV; reset with `TOKEN_SECRET` |
+| Knob                             | Where                            | Notes                                        |
+| -------------------------------- | -------------------------------- | -------------------------------------------- |
+| Capacity / admit rate / timeouts | `wrangler.jsonc` → `vars`        | Restart / redeploy to apply                  |
+| Default admission mode           | `ADMISSION_MODE` var or `/admin` | Live switch via admin or `POST /mode`        |
+| Branding + depth display         | `/admin` → Save branding         | KV write on save only                        |
+| Admin password                   | `/admin` wizard                  | PBKDF2 hash in KV; reset with `TOKEN_SECRET` |
 
 Full var table: [README configuration](../README.md#configuration)  
 API reference: [api.md](api.md)

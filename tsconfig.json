@@ -13,11 +13,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "rootDir": ".",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "rootDir": "."
   },
   "include": ["src/**/*.ts", "worker-configuration.d.ts", "src/env.d.ts"],
   "exclude": ["node_modules", "dist", "test"]

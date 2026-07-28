@@ -12,11 +12,11 @@ Visitor pages never write KV. Admin does, and only on explicit Save / Finish set
 
 Shown when `admin:config` is missing from KV.
 
-| Step | You set | Stored when |
-| --- | --- | --- |
-| 1. Password | Admin password (8–128 chars) | Finish setup |
-| 2. Queue | Queue name, Queue vs Lottery, show depth | Finish setup |
-| 3. Branding | Title, message, colors | Finish setup (live preview is client-side only) |
+| Step        | You set                                  | Stored when                                     |
+| ----------- | ---------------------------------------- | ----------------------------------------------- |
+| 1. Password | Admin password (8–128 chars)             | Finish setup                                    |
+| 2. Queue    | Queue name, Queue vs Lottery, show depth | Finish setup                                    |
+| 3. Branding | Title, message, colors                   | Finish setup (live preview is client-side only) |
 
 On finish, TideGuard:
 
@@ -33,31 +33,31 @@ After setup, `/admin` asks for the password. Success sets `tg_admin` (HttpOnly, 
 
 ## Control room
 
-| Control | Effect |
-| --- | --- |
-| Live preview | Updates as you edit; no KV write |
-| Save branding | One KV put for `branding:<queue>` |
-| Apply mode | `queue` or `lottery` on the Durable Object |
-| Show depth | Persisted with branding as `showWaitingCount` |
-| Metrics | Waiting / admitted / capacity / mode from the DO |
+| Control       | Effect                                           |
+| ------------- | ------------------------------------------------ |
+| Live preview  | Updates as you edit; no KV write                 |
+| Save branding | One KV put for `branding:<queue>`                |
+| Apply mode    | `queue` or `lottery` on the Durable Object       |
+| Show depth    | Persisted with branding as `showWaitingCount`    |
+| Metrics       | Waiting / admitted / capacity / mode from the DO |
 
 Waiting-room depth UI:
 
-- **Lottery:** In pool  
-- **Queue:** Ahead and Behind  
+- **Lottery:** In pool
+- **Queue:** Ahead and Behind
 
 ## API (admin)
 
-| Method | Path | Auth |
-| --- | --- | --- |
-| `GET` | `/api/admin/bootstrap` | Public (`setupComplete`) |
-| `POST` | `/api/admin/setup` | Public once |
-| `POST` | `/api/admin/login` | Public |
-| `POST` | `/api/admin/logout` | Session |
-| `GET` | `/api/admin/state` | Session |
-| `PUT` | `/api/admin/branding` | Session |
-| `POST` | `/api/admin/mode` | Session |
-| `POST` | `/api/admin/reset` | `Authorization: Bearer <TOKEN_SECRET>` only |
+| Method | Path                   | Auth                                        |
+| ------ | ---------------------- | ------------------------------------------- |
+| `GET`  | `/api/admin/bootstrap` | Public (`setupComplete`)                    |
+| `POST` | `/api/admin/setup`     | Public once                                 |
+| `POST` | `/api/admin/login`     | Public                                      |
+| `POST` | `/api/admin/logout`    | Session                                     |
+| `GET`  | `/api/admin/state`     | Session                                     |
+| `PUT`  | `/api/admin/branding`  | Session                                     |
+| `POST` | `/api/admin/mode`      | Session                                     |
+| `POST` | `/api/admin/reset`     | `Authorization: Bearer <TOKEN_SECRET>` only |
 
 Operator routes `/admit` and `/mode` accept either the admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
 

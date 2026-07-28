@@ -14,11 +14,11 @@ Include:
 
 ## Threat model (short)
 
-| Trust | Do not trust |
-| --- | --- |
-| Durable Object queue state | Client-reported position / odds |
-| HMAC tokens signed with `TOKEN_SECRET` | Unsigned cookies or query params |
-| Admin session after password verify | Public `/api/admin/setup` after setup is complete |
+| Trust                                  | Do not trust                                      |
+| -------------------------------------- | ------------------------------------------------- |
+| Durable Object queue state             | Client-reported position / odds                   |
+| HMAC tokens signed with `TOKEN_SECRET` | Unsigned cookies or query params                  |
+| Admin session after password verify    | Public `/api/admin/setup` after setup is complete |
 
 ## Operator checklist
 

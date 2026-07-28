@@ -1,8 +1,4 @@
-import {
-  DEFAULT_BRANDING,
-  mergeBranding,
-  type WaitingRoomBranding,
-} from "../core/branding";
+import { DEFAULT_BRANDING, mergeBranding, type WaitingRoomBranding } from "../core/branding";
 import type { AdminConfig } from "./types";
 import { ADMIN_CONFIG_KEY, brandingKey } from "./types";
 
@@ -45,10 +41,7 @@ export async function isAdminSetupComplete(env: Env): Promise<boolean> {
   return (await readAdminConfig(env)) !== null;
 }
 
-export async function readBranding(
-  env: Env,
-  queue: string,
-): Promise<WaitingRoomBranding> {
+export async function readBranding(env: Env, queue: string): Promise<WaitingRoomBranding> {
   try {
     const raw = await env.CONFIG_KV.get(brandingKey(queue), "json");
     if (!raw || typeof raw !== "object") {

@@ -84,7 +84,10 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
   await room.setMode({ queue, config, mode });
 
   const session = await signAdminSession(requireTokenSecret(env));
-  return withCookie(jsonOk({ ok: true, queue, admissionMode: mode }), buildAdminSessionCookie(session, request));
+  return withCookie(
+    jsonOk({ ok: true, queue, admissionMode: mode }),
+    buildAdminSessionCookie(session, request),
+  );
 }
 
 export async function handleAdminLogin(request: Request, env: Env): Promise<Response> {
@@ -101,7 +104,10 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
   }
 
   const session = await signAdminSession(requireTokenSecret(env));
-  return withCookie(jsonOk({ ok: true, queue: admin.defaultQueue }), buildAdminSessionCookie(session, request));
+  return withCookie(
+    jsonOk({ ok: true, queue: admin.defaultQueue }),
+    buildAdminSessionCookie(session, request),
+  );
 }
 
 export async function handleAdminLogout(request: Request, _env: Env): Promise<Response> {

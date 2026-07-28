@@ -115,16 +115,16 @@ First visit runs a **setup wizard** (password → queue/mode → branding with l
 
 ### Admin API
 
-| Method | Path | Auth | Notes |
-| ------ | ---- | ---- | ----- |
-| `GET` | `/api/admin/bootstrap` | public | `{ setupComplete, defaultQueue }` |
-| `POST` | `/api/admin/setup` | public once | Creates password hash + branding; sets session cookie |
-| `POST` | `/api/admin/login` | public | Session cookie on success |
-| `POST` | `/api/admin/logout` | session | Clears cookie |
-| `GET` | `/api/admin/state` | session | Branding + metrics |
-| `PUT` | `/api/admin/branding` | session | KV write |
-| `POST` | `/api/admin/mode` | session | Queue ↔ Lottery |
-| `POST` | `/api/admin/reset` | `TOKEN_SECRET` bearer only | Clears setup (emergency / tests) |
+| Method | Path                   | Auth                       | Notes                                                 |
+| ------ | ---------------------- | -------------------------- | ----------------------------------------------------- |
+| `GET`  | `/api/admin/bootstrap` | public                     | `{ setupComplete, defaultQueue }`                     |
+| `POST` | `/api/admin/setup`     | public once                | Creates password hash + branding; sets session cookie |
+| `POST` | `/api/admin/login`     | public                     | Session cookie on success                             |
+| `POST` | `/api/admin/logout`    | session                    | Clears cookie                                         |
+| `GET`  | `/api/admin/state`     | session                    | Branding + metrics                                    |
+| `PUT`  | `/api/admin/branding`  | session                    | KV write                                              |
+| `POST` | `/api/admin/mode`      | session                    | Queue ↔ Lottery                                       |
+| `POST` | `/api/admin/reset`     | `TOKEN_SECRET` bearer only | Clears setup (emergency / tests)                      |
 
 `/admit` and `/mode` accept either an admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
 

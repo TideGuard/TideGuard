@@ -1,6 +1,6 @@
 # Contributing to TideGuard
 
-Thanks for helping improve TideGuard. This project aims to stay small, readable, and interview-explainable.
+Thanks for helping improve TideGuard. This project aims to stay small, readable, and easy to operate.
 
 ## Docs first
 

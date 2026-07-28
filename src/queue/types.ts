@@ -57,8 +57,7 @@ export interface QueueSetModeRequest {
 export type QueueJoinResponse = QueueRoomVisitorView;
 
 export type QueueStatusResponse =
-  | { ok: true; visitor: QueueRoomVisitorView }
-  | { ok: false; code: "not_found" };
+  { ok: true; visitor: QueueRoomVisitorView } | { ok: false; code: "not_found" };
 
 export type QueueLeaveResponse = {
   visitorId: string;
@@ -66,8 +65,7 @@ export type QueueLeaveResponse = {
 };
 
 export type QueueHeartbeatResponse =
-  | { ok: true; visitor: QueueRoomVisitorView }
-  | { ok: false; code: "not_found" };
+  { ok: true; visitor: QueueRoomVisitorView } | { ok: false; code: "not_found" };
 
 export type QueueMetricsResponse = QueueMetrics;
 
