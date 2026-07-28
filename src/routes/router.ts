@@ -196,6 +196,7 @@ function landingPage(): string {
         with Queue Mode (FIFO) or Lottery Mode at the edge.
       </p>
       <p class="meta">
+        <a href="https://tideguard.dev">Website</a>
         <a href="/demo">Try the demo</a>
         <a href="/wait?queue=default&return=/demo">Waiting room</a>
         <a href="/admin">Admin</a>

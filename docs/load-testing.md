@@ -1,8 +1,10 @@
 # Load testing
 
-TideGuard includes two load suites so you can probe queue behavior from hundreds to 100k users without paying Cloudflare request costs for every experiment.
+Prove queue behavior from hundreds to 100k users without paying Cloudflare for every experiment.
 
-## In-memory FIFO scale test (recommended)
+For product overview, see the [README](../README.md). For Durable Object semantics, see [architecture.md](architecture.md).
+
+## In-memory scale test (recommended)
 
 Runs a pure TypeScript queue that mirrors Durable Object semantics (capacity, FIFO, rate-limited admit). Fast enough for 100k users on a laptop.
 

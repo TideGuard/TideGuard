@@ -1,5 +1,9 @@
 # Architecture
 
+How TideGuard uses Cloudflare Workers, Durable Objects, and KV, and why those choices keep admission correct and costs predictable.
+
+If you only need deploy steps, start with [getting-started.md](getting-started.md).
+
 ## System overview
 
 ```text

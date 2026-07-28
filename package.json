@@ -2,6 +2,14 @@
   "name": "tideguard",
   "version": "0.1.0",
   "description": "Lightweight open-source waiting room for Cloudflare Workers",
+  "homepage": "https://tideguard.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TideGuard/TideGuard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TideGuard/TideGuard/issues"
+  },
   "private": true,
   "type": "module",
   "license": "MIT",

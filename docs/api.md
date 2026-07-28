@@ -1,6 +1,10 @@
 # API
 
-Base URL is your Worker hostname (local: `http://localhost:8787`).
+HTTP contracts for TideGuard. Base URL is your Worker hostname (local: `http://localhost:8787`).
+
+For first deploy and `/admin` setup, see [getting-started.md](getting-started.md). For the wizard and branding control room, see [admin.md](admin.md).
+
+## Errors
 
 All JSON error responses use:
 

@@ -1,20 +1,17 @@
 /**
  * TideGuard Worker configuration.
  *
- * Resource IDs are left empty so `wrangler deploy` and Deploy to Cloudflare
- * can provision KV / Durable Objects automatically.
+ * Placeholder resource IDs let `wrangler deploy` and Deploy to Cloudflare
+ * provision KV / Durable Objects automatically.
  */
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // Must match the Worker name in Cloudflare Workers Builds / dashboard.
-  // Connected builds override a mismatch (e.g. tideguard-website vs tideguardwebsite).
-  "name": "tideguardwebsite",
+  "name": "tideguard",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-28",
   "compatibility_flags": ["nodejs_compat"],
-  // Custom domain is the public route; disable workers.dev + preview URLs.
-  "workers_dev": false,
-  "preview_urls": false,
+  "workers_dev": true,
+  "preview_urls": true,
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

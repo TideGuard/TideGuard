@@ -1,206 +1,158 @@
 # TideGuard
 
-[![CI](https://github.com/OWNER/TideGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/TideGuard/actions/workflows/ci.yml)
+**Website:** [tideguard.dev](https://tideguard.dev) · **Repo:** open-source Worker package
+
+[![CI](https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/OWNER/TideGuard)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard)
 
-Lightweight, open-source **waiting room** for [Cloudflare Workers](https://workers.cloudflare.com/) — inspired by products like Queue-it, built for the edge.
+**An open-source waiting room for Cloudflare Workers.**  
+Hold the flood at the edge. Admit people at a rate your origin can survive.
 
-TideGuard protects origin capacity during traffic spikes by placing visitors in a virtual waiting room — **Queue Mode** (FIFO) or **Lottery Mode** (random) — then admitting them at a controlled rate with signed access tokens.
+When a launch, drop, or ticket sale spikes traffic, TideGuard puts visitors in a calm virtual line (or a lottery pool), then lets them through with signed access tokens. Built on Workers, Durable Objects, and KV. Cheap to run, easy to explain, ready to deploy.
 
-> Replace `OWNER/TideGuard` in the badges above with your GitHub org or username after publishing.
+Product site and pitch: **[https://tideguard.dev](https://tideguard.dev)**. This repository is the deployable Worker.
 
-## Features
+```text
+Spike hits → waiting room → controlled admit → signed token → protected page
+```
 
-- Virtual waiting room on Cloudflare Workers (Queue Mode or Lottery Mode)
-- Durable Object as the authoritative queue coordinator
-- KV for configuration and eventually-consistent reads
-- Typed REST API with structured errors
-- HMAC-signed admission tokens
-- Pluggable ETA calculation
-- Vanilla HTML waiting room and protected demo site
-- One-click Deploy to Cloudflare
+## Why TideGuard
 
-## Architecture
+Commercial waiting rooms work. They are also expensive, opaque, and hard to study.
+
+TideGuard is the opposite shape:
+
+| You get | Why it matters |
+| --- | --- |
+| **Durable Object queue** | Strong consistency for join / leave / admit. KV is not a queue. |
+| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters. |
+| **HMAC admission tokens** | Time-limited access without a session database. |
+| **Admin setup wizard** | Branding, mode, and depth display with live preview before KV save. |
+| **Cost calculator** | Ballpark Cloudflare spend before the launch, not after the invoice. |
+| **One-click deploy** | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box. |
+
+Inspired by products like Queue-it. Written as a portfolio-grade reference: typed TypeScript, Vitest on the Workers runtime, architecture you can walk through in an interview.
+
+## Try it in three steps
+
+1. **Deploy** with the button above (or `npm run deploy`).
+2. Set the `TOKEN_SECRET` secret (`openssl rand -hex 32`).
+3. Open `/admin`, finish the setup wizard, then hit `/demo`.
+
+Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/cost`.
+
+## What visitors see
+
+- **Queue Mode:** position, estimated wait, optional ahead / behind counts  
+- **Lottery Mode:** odds in the pool, optional pool size  
+- Heartbeats so abandoned tabs leave the line  
+- Soft branding (colors, title, message) without rewriting the waiting-room layout  
+
+Depth stats are off by default. Turn them on in admin (`showWaitingCount`) or with `?showWaiting=1` on `/wait`.
+
+## Architecture (short version)
 
 ```text
 Browser
   │
   ▼
-Cloudflare Worker   ← routing, auth, HTML, config validation
+Worker          routing · tokens · HTML · validation
   │
-  ├─► Durable Object (QueueRoom)  ← admission order, heartbeats
-  │
-  └─► Cloudflare KV               ← config / branding / metrics snapshots
+  ├─► QueueRoom (Durable Object)   authoritative waiting pool
+  └─► CONFIG_KV                    branding + admin password hash
 ```
 
-| Component          | Responsibility                                               |
-| ------------------ | ------------------------------------------------------------ |
-| **Worker**         | Stateless edge entrypoint: HTTP routing, token checks, HTML  |
-| **Durable Object** | Strongly consistent queue state for one named queue          |
-| **KV**             | Fast global reads for config — never used for queue ordering |
+One Durable Object instance per queue name. One alarm per active queue for rate-limited admission and expiry. **No KV writes on join, status, or heartbeat.** That is the cost discipline.
 
-Durable Objects are preferred over KV for queue state because admission needs serialized, strongly consistent writes. KV is eventually consistent and cannot safely coordinate concurrent join/admit operations.
+Deep dive: [docs/architecture.md](docs/architecture.md)
 
-See [docs/architecture.md](docs/architecture.md) for request lifecycle diagrams and design notes.
+## Documentation
 
-## Quick start
+| Guide | Start here if you want to… |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | Clone, run locally, deploy, first `/admin` setup |
+| [Architecture](docs/architecture.md) | Understand Workers / DO / KV choices and cost rules |
+| [API](docs/api.md) | Integrate `/join`, `/status`, tokens, operator routes |
+| [Admin](docs/admin.md) | Wizard, login, branding preview, mode switch, reset |
+| [Load testing](docs/load-testing.md) | Prove FIFO / lottery behavior at 1k–100k simulated users |
+| [Security](SECURITY.md) | Secrets, tokens, and what not to put in git |
 
-### Prerequisites
-
-- Node.js 20+
-- A Cloudflare account (for deploy)
-- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) via local `npm` scripts
-
-### Install
+## Quick start (local)
 
 ```bash
-git clone https://github.com/OWNER/TideGuard.git
+git clone https://github.com/TideGuard/TideGuard.git
 cd TideGuard
 npm install
 npm run types
-cp .dev.vars.example .dev.vars
-# Set TOKEN_SECRET to a random value: openssl rand -hex 32
-```
-
-### Local development
-
-```bash
+cp .dev.vars.example .dev.vars   # set TOKEN_SECRET
 npm run dev
 ```
 
-Open `http://localhost:8787` and `http://localhost:8787/health`.
-
-### Test / lint
-
-```bash
-npm run ci
-```
-
-### Load tests
-
-```bash
-npm run test:load                          # 1000 users (in-memory)
-LOAD_TEST_USERS=5000 npm run test:load
-LOAD_TEST_USERS=100000 npm run test:load
-RUN_DO_LOAD=1 LOAD_TEST_USERS=500 npm run test:load:do
-```
-
-## Cost calculator
-
-Open [`/cost`](/cost) on a running Worker (or locally via `npm run dev`) for an interactive estimate.
-
-The model lives in `src/core/cost-estimate.ts` and is also exposed as:
+| URL | Purpose |
+| --- | --- |
+| http://localhost:8787 | Landing |
+| http://localhost:8787/wait | Waiting room |
+| http://localhost:8787/demo | Protected demo (redirects to `/wait` until admitted) |
+| http://localhost:8787/admin | Setup wizard / control room |
+| http://localhost:8787/cost | Cost calculator |
+| http://localhost:8787/health | Liveness |
 
 ```bash
-curl "http://localhost:8787/api/cost-estimate?visitors=5000000&averageWaitSeconds=900"
+npm run ci            # format, lint, typecheck, tests
+npm run test:load     # in-memory scale test (see docs/load-testing.md)
 ```
-
-It prices Workers requests/CPU and Durable Object requests/duration on Workers Paid list rates. Polling while visitors wait is usually the dominant line item.
-
-### Deploy
-
-```bash
-npm run deploy
-```
-
-Or use the **Deploy to Cloudflare** button at the top of this README. Cloudflare clones the repo, provisions KV and Durable Objects from `wrangler.jsonc`, and deploys the Worker.
-
-Set the `TOKEN_SECRET` secret when prompted (or with `npx wrangler secret put TOKEN_SECRET`).
 
 ## Configuration
 
 Defaults live in `wrangler.jsonc` under `vars`:
 
-| Variable                    | Default      | Meaning                           |
-| --------------------------- | ------------ | --------------------------------- |
-| `MAX_CONCURRENT_USERS`      | `20`         | Capacity past the waiting room    |
-| `ADMIT_PER_SECOND`          | `2`          | Steady admission rate             |
-| `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime          |
-| `HEARTBEAT_TIMEOUT_SECONDS` | `60`         | Drop silent waiting visitors      |
-| `QUEUE_TIMEOUT_SECONDS`     | `1800`       | Max time in queue                 |
-| `DEFAULT_QUEUE`             | `default`    | Queue name when none is specified |
-| `ADMISSION_MODE`            | `queue`      | `queue` (FIFO) or `lottery`       |
-| `ENVIRONMENT`               | `production` | Reported by `/health`             |
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MAX_CONCURRENT_USERS` | `20` | Capacity past the waiting room |
+| `ADMIT_PER_SECOND` | `2` | Steady admission rate |
+| `TOKEN_TTL_SECONDS` | `600` | Admission token lifetime |
+| `HEARTBEAT_TIMEOUT_SECONDS` | `60` | Drop silent waiting visitors |
+| `QUEUE_TIMEOUT_SECONDS` | `1800` | Max time in queue |
+| `DEFAULT_QUEUE` | `default` | Queue when none is specified |
+| `ADMISSION_MODE` | `queue` | `queue` (FIFO) or `lottery` |
+| `ENVIRONMENT` | `production` | Reported by `/health` |
 
-Secrets:
+| Secret | Purpose |
+| --- | --- |
+| `TOKEN_SECRET` | HMAC key for visitor tokens and admin sessions |
 
-| Secret         | Purpose                       |
-| -------------- | ----------------------------- |
-| `TOKEN_SECRET` | HMAC key for admission tokens |
-
-## API (current)
-
-| Method | Path                 | Description                          |
-| ------ | -------------------- | ------------------------------------ |
-| `GET`  | `/health`            | Liveness and version                 |
-| `GET`  | `/`                  | Landing page                         |
-| `POST` | `/join`              | Enter a queue                        |
-| `GET`  | `/status`            | Visitor position / admission         |
-| `POST` | `/leave`             | Leave the queue                      |
-| `POST` | `/heartbeat`         | Keep a waiting visitor alive         |
-| `GET`  | `/admin`             | Setup wizard / login / control room  |
-| `GET`  | `/api/admin/*`       | Admin bootstrap, state, branding API |
-| `POST` | `/admit`             | Operator force-admit (auth required) |
-| `POST` | `/mode`              | Operator set Queue/Lottery mode      |
-| `GET`  | `/metrics`           | Queue statistics                     |
-| `GET`  | `/cost`              | Ballpark cost calculator (HTML)      |
-| `GET`  | `/api/cost-estimate` | JSON cost estimate                   |
-
-Full request/response details: [docs/api.md](docs/api.md).
-
-Visitor UI:
-
-| Path            | Description                                           |
-| --------------- | ----------------------------------------------------- |
-| `/wait?queue=…` | Waiting room (add `&embed=1` for iframe widget; `&showWaiting=1` to show queue depth) |
-| `/demo?queue=…` | Protected demo (redirects to `/wait` without a token) |
-| `/admin`        | Setup wizard, login, and branding / mode control room |
-| `/cost`         | Cloudflare cost calculator for a launch               |
-
-JSON: `GET /api/cost-estimate?visitors=5000000&averageWaitSeconds=900`
+Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)
 
 ## Project layout
 
 ```text
 src/
-  core/             Shared types, config, ETA, errors
+  core/             Types, config, ETA, cost model
   auth/             Admission tokens, admin password + session
-  admin/            Admin KV store helpers
-  queue/            Pure queue engine (extractable later)
-  routes/           HTTP handlers
-  durable-object/   QueueRoom Durable Object
+  admin/            KV helpers for branding and setup
+  queue/            Pure queue engine + in-memory load simulator
+  durable-object/   QueueRoom (SQLite + alarms)
+  routes/           HTTP adapters
+  html/             Waiting room, admin, cost calculator
   demo/             Protected demo page
-  html/             Waiting-room + admin templates
+docs/               Guides (start with docs/README.md)
 test/               Vitest + Workers pool tests
-public/             Static assets
-docs/               Architecture and deeper guides
-.github/            CI, templates, Dependabot
 ```
-
-## Security
-
-- Admission tokens are HMAC-SHA256 signed and time-limited (see [docs/api.md](docs/api.md)).
-- Protected routes must verify tokens with a timing-safe comparison (`requireAdmission`).
-- `POST /admit` and `POST /mode` accept an admin session cookie or `TOKEN_SECRET` bearer / `X-TideGuard-Operator`.
-- First deploy: open `/admin` and complete the setup wizard (creates the admin password in KV).
-- Secrets never belong in source control — use `.dev.vars` locally and Wrangler secrets in production.
-- Do not use KV as the source of truth for queue membership or ordering.
-- Prefer 2–3s polling intervals on waiting pages to limit Durable Object request volume.
 
 ## Roadmap
 
-- [x] Project scaffold, config validation, health endpoint
-- [x] Durable Object queue (join / leave / admit / heartbeat)
-- [x] Queue Mode (FIFO) and Lottery Mode (random admit)
+- [x] Durable Object waiting room (Queue + Lottery)
 - [x] REST API + HMAC admission tokens
-- [x] Waiting room HTML + protected demo (+ embed mode)
-- [x] Admin dashboard with setup wizard and live branding preview
-- [ ] Deploy-button polish and OpenAPI (stretch)
+- [x] Waiting room, demo, embed mode, cost calculator
+- [x] Admin wizard with live branding preview
+- [x] Docs hub (getting started, architecture, API, admin, load testing)
+- [ ] OpenAPI spec
+- [ ] Deploy-button polish and richer operator controls in UI
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+PRs welcome. Keep the surface small and the story clear. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

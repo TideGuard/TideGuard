@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Protected demo (`/demo`) gated by admission token cookie
 - Configurable in-memory load tests (100 → 100k users) plus optional DO load suite
 - Public cost calculator (`/cost` + `/api/cost-estimate`) for launch ballpark spend
+- Docs hub: getting started, architecture, API, admin, load testing
 
 ### Changed
 
