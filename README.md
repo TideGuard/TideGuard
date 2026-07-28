@@ -3,6 +3,7 @@
 <p>
   <a href="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml"><img src="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml/badge.svg" alt="CI" height="20" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" height="20" /></a>
+  <img src="https://img.shields.io/badge/status-Public%20Beta-2bb0a6" alt="Public Beta" height="20" />
 </p>
 
 <p>
@@ -10,9 +11,9 @@
 </p>
 
 **An open-source waiting room for Cloudflare Workers.**  
-Hold the flood at the edge. Admit people at a rate your origin can survive.
+**Public Beta** — test it against your expected traffic pattern before using it for mission-critical events.
 
-When a launch, drop, or ticket sale spikes traffic, TideGuard puts visitors in a calm virtual line (or a lottery pool), then lets them through with signed access tokens. Built on Workers, Durable Objects, and KV. Cheap to run, easy to explain, ready to deploy.
+Hold the flood at the edge. Admit people at a rate your origin can survive.
 
 ```text
 Spike hits → waiting room → controlled admit → signed token → protected page
@@ -39,7 +40,22 @@ TideGuard is the opposite shape:
 2. Set the `TOKEN_SECRET` secret (`openssl rand -hex 32`).
 3. Open `/admin`, finish the setup wizard, then hit `/demo`.
 
-Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/cost`.
+Visitors land on `/wait`. Operators live in `/admin`. Costs and queue-load planning are on `/cost`. Try the isolated **live demo** at `/demo/live`.
+
+## Capacity (single queue)
+
+One named queue = **one Durable Object**. Default poll/heartbeat (15s / 30s) implies ~0.1 background RPS per waiting user. TideGuard recommends keeping a single queue below about **5,000 concurrently waiting clients** until you benchmark a real deployment — a planning aid, not a hard limit.
+
+Details: [docs/capacity-planning.md](docs/capacity-planning.md)
+
+## Beta limitations
+
+- Production throughput has not yet been verified for every traffic pattern.
+- A single queue currently uses one Durable Object.
+- Large deployments require representative load testing.
+- APIs and configuration may change before version 1.0.
+- The open-source project does not include a managed SLA.
+- TideGuard does not replace bot protection, identity verification, or a WAF.
 
 ## What visitors see
 
@@ -98,6 +114,7 @@ Deep dive: [docs/architecture.md](docs/architecture.md)
 | Guide                                              | Start here if you want to…                               |
 | -------------------------------------------------- | -------------------------------------------------------- |
 | [Getting started](docs/getting-started.md)         | Clone, run locally, deploy, first `/admin` setup         |
+| [Capacity planning](docs/capacity-planning.md)     | Single-DO load model, recommendations, beta limits       |
 | [Launch checklist](docs/launch-checklist.md)       | Pre-production go-live review                            |
 | [Protecting a domain](docs/protecting-origin.md)   | Custom domains, routes, Cloudflare in front of origin    |
 | [Verifying admission](docs/verifying-admission.md) | Redirect URL, click-to-enter, how origins trust tokens   |
@@ -119,14 +136,15 @@ cp .dev.vars.example .dev.vars   # set TOKEN_SECRET
 npm run dev
 ```
 
-| URL                          | Purpose                                              |
-| ---------------------------- | ---------------------------------------------------- |
-| http://localhost:8787        | Landing                                              |
-| http://localhost:8787/wait   | Waiting room                                         |
-| http://localhost:8787/demo   | Protected demo (redirects to `/wait` until admitted) |
-| http://localhost:8787/admin  | Setup wizard / control room                          |
-| http://localhost:8787/cost   | Cost calculator                                      |
-| http://localhost:8787/health | Liveness                                             |
+| URL                             | Purpose                                              |
+| ------------------------------- | ---------------------------------------------------- |
+| http://localhost:8787           | Landing                                              |
+| http://localhost:8787/wait      | Waiting room                                         |
+| http://localhost:8787/demo      | Protected demo (redirects to `/wait` until admitted) |
+| http://localhost:8787/demo/live | Isolated **live** Worker/DO demo                     |
+| http://localhost:8787/admin     | Setup wizard / control room                          |
+| http://localhost:8787/cost      | Cost + queue-load calculator                         |
+| http://localhost:8787/health    | Liveness                                             |
 
 ```bash
 npm run ci            # format, lint, typecheck, tests

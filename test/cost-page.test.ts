@@ -8,6 +8,10 @@ describe("cost calculator surfaces", () => {
     const html = await response.text();
     expect(html).toContain("Calculate cost");
     expect(html).toContain("visitors");
+    expect(html).toContain("Estimated queue load");
+    expect(html).toContain("Peak concurrently waiting");
+    expect(html).toContain("planning aids");
+    expect(html).toContain("Public Beta");
   });
 
   it("returns JSON estimates from the API", async () => {
@@ -17,11 +21,17 @@ describe("cost calculator surfaces", () => {
     expect(response.status).toBe(200);
     const body = await response.json<{
       estimate: { totalUsd: number; workerRequests: number; dominantCost: string };
+      queueLoad: { riskLevel: string; estimatedPeakRps: number; architecture: string };
+      disclaimer: string;
     }>();
     expect(body.estimate.workerRequests).toBe(465_000_000);
     expect(body.estimate.totalUsd).toBeGreaterThan(150);
     expect(body.estimate.totalUsd).toBeLessThan(350);
     expect(body.estimate.dominantCost).toBe("polling");
+    expect(body.queueLoad.architecture).toBe("single_durable_object");
+    expect(body.queueLoad.estimatedPeakRps).toBeGreaterThan(0);
+    expect(["low", "elevated", "high"]).toContain(body.queueLoad.riskLevel);
+    expect(body.disclaimer).toContain("planning aids");
   });
 
   it("links the calculator from the landing page", async () => {

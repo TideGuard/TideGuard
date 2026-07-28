@@ -1,2 +1,4 @@
-/** Package version surfaced by `/health` and docs. */
-export const VERSION = "0.1.0";
+/** Package / health version — kept in sync with PRODUCT_STATUS.version. */
+import { PRODUCT_STATUS } from "./core/product-status";
+
+export const VERSION = PRODUCT_STATUS.version;

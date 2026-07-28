@@ -1,13 +1,16 @@
 import { estimateWaitingRoomCost } from "../core/cost-estimate";
-import { ApiError } from "../core/errors";
-import { jsonOk } from "../core/errors";
+import {
+  estimateQueueLoad,
+  queueLoadDisclaimer,
+  QUEUE_CAPACITY_THRESHOLDS,
+} from "../core/queue-load";
+import { ApiError, jsonOk } from "../core/errors";
 import { renderCostCalculatorPage } from "../html/cost-calculator";
 
 export function handleCostPage(): Response {
   return new Response(renderCostCalculatorPage(), {
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
     },
   });
 }
@@ -20,21 +23,44 @@ export function handleCostEstimateApi(request: Request): Response {
   const heartbeatIntervalSeconds = parseOptionalNumber(
     url.searchParams.get("heartbeatIntervalSeconds"),
   );
+  const peakConcurrentWaiting = parseOptionalNumber(url.searchParams.get("peakConcurrentWaiting"));
+  const joinBurstDurationSeconds = parseOptionalNumber(
+    url.searchParams.get("joinBurstDurationSeconds"),
+  );
+  const joinBurstVisitors = parseOptionalNumber(url.searchParams.get("joinBurstVisitors"));
 
   if (visitors < 0 || averageWaitSeconds < 0) {
     throw new ApiError("bad_request", "visitors and averageWaitSeconds must be >= 0", 400);
   }
 
+  const poll = pollIntervalSeconds ?? 15;
+  const heartbeat = heartbeatIntervalSeconds ?? 30;
+  const peak =
+    peakConcurrentWaiting ??
+    Math.min(Math.max(visitors, 0), QUEUE_CAPACITY_THRESHOLDS.recommendedMaxConcurrentWaiting);
+
   const estimate = estimateWaitingRoomCost({
     visitors,
     averageWaitSeconds,
-    ...(pollIntervalSeconds !== undefined ? { pollIntervalSeconds } : {}),
-    ...(heartbeatIntervalSeconds !== undefined ? { heartbeatIntervalSeconds } : {}),
+    pollIntervalSeconds: poll,
+    heartbeatIntervalSeconds: heartbeat,
+  });
+
+  const queueLoad = estimateQueueLoad({
+    totalVisitors: visitors,
+    peakConcurrentWaiting: peak,
+    statusPollIntervalSeconds: poll,
+    heartbeatIntervalSeconds: heartbeat,
+    joinBurstDurationSeconds: joinBurstDurationSeconds ?? 60,
+    ...(joinBurstVisitors !== undefined ? { joinBurstVisitors } : {}),
   });
 
   return jsonOk({
     estimate,
-    disclaimer:
+    queueLoad,
+    thresholds: QUEUE_CAPACITY_THRESHOLDS,
+    disclaimer: queueLoadDisclaimer(),
+    costDisclaimer:
       "Ballpark Workers Paid + Durable Objects usage for a TideGuard waiting-room event. Not an invoice.",
   });
 }

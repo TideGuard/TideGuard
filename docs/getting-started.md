@@ -2,6 +2,8 @@
 
 Deploy TideGuard on Cloudflare, or run it locally with Wrangler.
 
+TideGuard is in **Public Beta**. Validate your traffic pattern before mission-critical events — see [capacity-planning.md](capacity-planning.md).
+
 ## Prerequisites
 
 - Node.js 20+
@@ -38,8 +40,9 @@ npm run dev
 | http://localhost:8787                    | Landing page                        |
 | http://localhost:8787/wait?queue=default | Waiting room                        |
 | http://localhost:8787/demo               | Protected demo (needs admission)    |
+| http://localhost:8787/demo/live          | Isolated live Worker/DO demo        |
 | http://localhost:8787/admin              | First-run wizard, then control room |
-| http://localhost:8787/cost               | Cost calculator                     |
+| http://localhost:8787/cost               | Cost + queue-load calculator        |
 | http://localhost:8787/health             | Health JSON                         |
 
 ### First-run admin

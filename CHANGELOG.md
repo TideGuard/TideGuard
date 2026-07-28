@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAPI document at `/openapi.yaml` and `/openapi.json` (also `docs/openapi.yaml`)
 - Auto-refreshing admin metrics (5s) and richer Worker landing page
 - HEAD support for TideGuard GET routes
+- Capacity planning docs + queue-load risk bands on `/cost`
+- Public Beta product status (`PRODUCT_STATUS`)
+- Isolated live demo at `/demo/live` (real Worker + Durable Object sessions)
 
 ### Added (prior)
 

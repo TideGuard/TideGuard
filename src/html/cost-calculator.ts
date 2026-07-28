@@ -20,7 +20,10 @@ const DEFAULT_BURST_SECONDS = 60;
 const DEFAULT_ADMISSION_RATE = 2;
 
 function defaultPeakConcurrent(visitors: number): number {
-  const capped = Math.min(Math.max(0, visitors), QUEUE_CAPACITY_THRESHOLDS.recommendedMaxConcurrentWaiting);
+  const capped = Math.min(
+    Math.max(0, visitors),
+    QUEUE_CAPACITY_THRESHOLDS.recommendedMaxConcurrentWaiting,
+  );
   return capped > 0 ? capped : QUEUE_CAPACITY_THRESHOLDS.recommendedMaxConcurrentWaiting;
 }
 

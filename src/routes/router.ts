@@ -23,9 +23,23 @@ import {
   handleAdminState,
 } from "./admin";
 import { handleCostEstimateApi, handleCostPage } from "./cost";
+import {
+  handleDemoAdmit,
+  handleDemoHeartbeat,
+  handleDemoJoin,
+  handleDemoPause,
+  handleDemoProtected,
+  handleDemoRate,
+  handleDemoReset,
+  handleDemoSessionCreate,
+  handleDemoStatus,
+  handleLiveDemoPage,
+  matchDemoApiPath,
+} from "./demo-live";
 import { handleHealth } from "./health";
 import { OPENAPI_DOCUMENT, OPENAPI_YAML } from "./openapi";
 import { handleDemo, handleWaitingRoom } from "./pages";
+import { PRODUCT_STATUS } from "../core/product-status";
 import {
   handleAdmit,
   handleEnter,
@@ -57,7 +71,10 @@ const STATIC_TIDEGUARD = new Set([
   "/admin",
   "/cost",
   "/demo",
+  "/demo/live",
+  "/demo/live/protected",
   "/api/cost-estimate",
+  "/api/demo/session",
   "/openapi.yaml",
   "/openapi.json",
 ]);
@@ -120,7 +137,10 @@ function isStaticTideGuardPath(pathname: string): boolean {
   if (STATIC_TIDEGUARD.has(pathname)) {
     return true;
   }
-  return pathname === "/api/admin" || pathname.startsWith("/api/admin/");
+  if (pathname === "/api/admin" || pathname.startsWith("/api/admin/")) {
+    return true;
+  }
+  return pathname === "/api/demo" || pathname.startsWith("/api/demo/");
 }
 
 async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promise<Response> {
@@ -163,6 +183,44 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "GET" && url.pathname === "/api/cost-estimate") {
     return handleCostEstimateApi(request);
+  }
+
+  if (request.method === "GET" && url.pathname === "/demo/live") {
+    return handleLiveDemoPage();
+  }
+
+  if (request.method === "GET" && url.pathname === "/demo/live/protected") {
+    return await handleDemoProtected(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/demo/session") {
+    return await handleDemoSessionCreate(request, env);
+  }
+
+  const demoApi = matchDemoApiPath(url.pathname);
+  if (demoApi) {
+    const { sessionId, action } = demoApi;
+    if (request.method === "POST" && action === "join") {
+      return await handleDemoJoin(request, env, sessionId);
+    }
+    if (request.method === "GET" && action === "status") {
+      return await handleDemoStatus(request, env, sessionId);
+    }
+    if (request.method === "POST" && action === "heartbeat") {
+      return await handleDemoHeartbeat(request, env, sessionId);
+    }
+    if (request.method === "POST" && action === "admit") {
+      return await handleDemoAdmit(request, env, sessionId);
+    }
+    if (request.method === "POST" && action === "pause") {
+      return await handleDemoPause(request, env, sessionId);
+    }
+    if (request.method === "POST" && action === "rate") {
+      return await handleDemoRate(request, env, sessionId);
+    }
+    if (request.method === "POST" && action === "reset") {
+      return await handleDemoReset(request, env, sessionId);
+    }
   }
 
   if (request.method === "GET" && url.pathname === "/admin") {
@@ -287,6 +345,7 @@ function landingPage(): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TideGuard</title>
+    <meta name="description" content="${PRODUCT_STATUS.headline}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -310,6 +369,19 @@ function landingPage(): string {
         padding: 2rem 1.25rem 3rem;
       }
       main { max-width: 40rem; margin: 0 auto; }
+      .badge {
+        display: inline-block;
+        margin: 0 0 0 0.55rem;
+        padding: 0.15rem 0.45rem;
+        border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+        border-radius: 0.35rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--accent);
+        vertical-align: middle;
+      }
       h1 {
         font-family: "Fraunces", Georgia, serif;
         font-weight: 650;
@@ -317,6 +389,11 @@ function landingPage(): string {
         margin: 0 0 0.75rem;
         letter-spacing: -0.02em;
         text-wrap: balance;
+      }
+      h1 .badge {
+        font-family: "Source Sans 3", "Segoe UI", sans-serif;
+        position: relative;
+        top: -0.35em;
       }
       h2 {
         font-family: "Fraunces", Georgia, serif;
@@ -331,7 +408,15 @@ function landingPage(): string {
         text-wrap: pretty;
       }
       a { color: var(--accent); }
-      .lead { margin-bottom: 1.25rem; }
+      .lead { margin-bottom: 0.85rem; }
+      .beta-note {
+        margin: 0 0 1.25rem;
+        padding: 0.65rem 0.8rem;
+        border-left: 3px solid color-mix(in oklab, var(--accent) 70%, transparent);
+        background: color-mix(in oklab, var(--accent) 10%, transparent);
+        color: var(--fg);
+        font-size: 0.95rem;
+      }
       .actions {
         display: flex;
         flex-wrap: wrap;
@@ -370,9 +455,10 @@ function landingPage(): string {
         flex-wrap: wrap;
         gap: 0.75rem 1.1rem;
       }
+      .version { margin-top: 1.25rem; font-size: 0.85rem; color: var(--muted); }
       @media (prefers-reduced-motion: no-preference) {
         h1 { animation: rise 700ms ease both; }
-        .lead { animation: rise 700ms ease 80ms both; }
+        .lead, .beta-note { animation: rise 700ms ease 80ms both; }
         .actions { animation: rise 700ms ease 140ms both; }
       }
       @keyframes rise {
@@ -383,13 +469,15 @@ function landingPage(): string {
   </head>
   <body>
     <main>
-      <h1>TideGuard</h1>
+      <h1>TideGuard <span class="badge">${PRODUCT_STATUS.label}</span></h1>
       <p class="lead">
         Open-source waiting room for Cloudflare Workers. Hold the flood at the edge,
         then admit people at a rate your origin can survive.
       </p>
+      <p class="beta-note">${PRODUCT_STATUS.headline}</p>
       <div class="actions">
-        <a class="btn btn-primary" href="/demo">Try the demo</a>
+        <a class="btn btn-primary" href="/demo/live">Live demo</a>
+        <a class="btn btn-ghost" href="/demo">Protected demo</a>
         <a class="btn btn-ghost" href="/admin">Open admin</a>
         <a class="btn btn-ghost" href="https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard">Deploy</a>
       </div>
@@ -402,15 +490,25 @@ function landingPage(): string {
       <h2>Operator path</h2>
       <p>
         Finish <a href="/admin">/admin</a> setup, tune capacity live, then send traffic through
-        <a href="/wait?queue=default&amp;return=/demo">/wait</a>. Estimate spend on
-        <a href="/cost">/cost</a>.
+        <a href="/wait?queue=default&amp;return=/demo">/wait</a>. Estimate spend and queue load on
+        <a href="/cost">/cost</a>. Read capacity guidance in <code>docs/capacity-planning.md</code>.
       </p>
+      <h2>Beta limitations</h2>
+      <ol>
+        <li>Production throughput has not yet been verified for every traffic pattern.</li>
+        <li>A single queue currently uses one Durable Object.</li>
+        <li>Large deployments require representative load testing.</li>
+        <li>APIs and configuration may change before version 1.0.</li>
+        <li>The open-source project does not include a managed SLA.</li>
+        <li>TideGuard does not replace bot protection, identity verification or a WAF.</li>
+      </ol>
       <p class="meta">
         <a href="https://tideguard.dev">Website</a>
         <a href="/openapi.yaml">OpenAPI</a>
         <a href="/health">Health</a>
         <a href="https://github.com/TideGuard/TideGuard">GitHub</a>
       </p>
+      <p class="version">${PRODUCT_STATUS.label} · v${PRODUCT_STATUS.version}</p>
     </main>
   </body>
 </html>`;

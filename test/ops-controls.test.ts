@@ -29,7 +29,8 @@ describe("HEAD and OpenAPI surfaces", () => {
     const response = await exports.default.fetch(new Request("https://example.com/"));
     const html = await response.text();
     expect(html).toContain("How it works");
-    expect(html).toContain("Try the demo");
+    expect(html).toContain("Live demo");
+    expect(html).toContain("Public Beta");
     expect(html).toContain("/openapi.yaml");
   });
 });

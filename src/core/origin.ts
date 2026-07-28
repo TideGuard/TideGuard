@@ -41,12 +41,15 @@ const RESERVED_EXACT = new Set([
   "/admin",
   "/cost",
   "/demo",
+  "/demo/live",
+  "/demo/live/protected",
   "/api/cost-estimate",
+  "/api/demo/session",
   "/openapi.yaml",
   "/openapi.json",
 ]);
 
-const RESERVED_PREFIXES = ["/api/admin"];
+const RESERVED_PREFIXES = ["/api/admin", "/api/demo"];
 
 /**
  * When origin proxy is enabled, `/` is proxied to the origin home instead of
