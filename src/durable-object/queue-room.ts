@@ -441,7 +441,6 @@ export class QueueRoom extends DurableObject<Env> {
     if (version < 3) {
       this.reconcileDepth();
       this.setMeta("schema_version", "3");
-      version = 3;
     }
   }
 

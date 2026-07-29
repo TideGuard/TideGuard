@@ -4,6 +4,7 @@ export interface AdminAppOptions {
   setupComplete: boolean;
   defaultQueue: string;
   defaultBranding: WaitingRoomBranding;
+  version: string;
 }
 
 /**
@@ -14,6 +15,8 @@ export function renderAdminApp(options: AdminAppOptions): string {
   const brandingJson = JSON.stringify(options.defaultBranding);
   const setupComplete = JSON.stringify(options.setupComplete);
   const defaultQueue = JSON.stringify(options.defaultQueue);
+  const versionJson = JSON.stringify(options.version);
+  const versionLabel = escapeAttr(options.version);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -378,7 +381,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
     <div class="shell">
       <header class="top">
         <div>
-          <p class="brand">TideGuard</p>
+          <p class="brand">TideGuard <span class="muted" style="font-weight:500;letter-spacing:0;text-transform:none;font-size:0.8rem">v${versionLabel}</span></p>
           <h1 id="page-title">Admin</h1>
         </div>
         <div class="row">
@@ -763,6 +766,22 @@ export function renderAdminApp(options: AdminAppOptions): string {
           </div>
           <p class="status" id="cloudflare-status" data-tone="ok"></p>
         </div>
+
+        <div class="panel" style="margin-top:1.25rem">
+          <p class="muted" style="margin-top:0"><strong style="color:var(--text)">Updates</strong> · GitHub releases</p>
+          <p class="muted" style="font-size:0.9rem;margin:0 0 0.75rem" id="update-summary">
+            Running <strong style="color:var(--text)">v${versionLabel}</strong>. Check against
+            <a href="https://github.com/TideGuard/TideGuard/releases" target="_blank" rel="noopener">GitHub Releases</a>
+            when you want to know if a newer build is out.
+          </p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.85rem" id="update-detail" aria-live="polite">—</p>
+          <div class="actions" style="margin-top:0">
+            <button type="button" class="primary" id="check-updates">Check for updates</button>
+            <a class="ghost" id="update-release-link" href="https://github.com/TideGuard/TideGuard/releases" target="_blank" rel="noopener" hidden style="display:inline-flex;align-items:center;text-decoration:none;padding:0.55rem 0.9rem;border-radius:8px;border:1px solid var(--line);color:var(--text)">Release notes</a>
+            <a class="ghost" href="https://github.com/TideGuard/TideGuard/blob/main/docs/upgrading.md" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none;padding:0.55rem 0.9rem;border-radius:8px;border:1px solid var(--line);color:var(--text)">Upgrade guide</a>
+          </div>
+          <p class="status" id="update-status" data-tone="ok"></p>
+        </div>
       </section>
     </div>
     <script>
@@ -770,11 +789,13 @@ export function renderAdminApp(options: AdminAppOptions): string {
         const initialSetupComplete = ${setupComplete};
         const defaultQueue = ${defaultQueue};
         const defaults = ${brandingJson};
+        const appVersion = ${versionJson};
 
         const state = {
           step: 1,
           admissionMode: "queue",
           setupComplete: initialSetupComplete,
+          updatesChecked: false,
         };
         let metricsTimer = null;
         let analyticsRangeHours = 12;
@@ -1276,6 +1297,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
           }
           showView("dashboard");
           startMetricsPoll();
+          if (!state.updatesChecked) {
+            state.updatesChecked = true;
+            refreshUpdates(false).catch(() => {});
+          }
         }
 
         function paintBypass(bypass) {
@@ -1771,6 +1796,58 @@ export function renderAdminApp(options: AdminAppOptions): string {
           } catch (err) {
             setStatus(status, err.message, "err");
           }
+        });
+
+        function paintUpdateCheck(data) {
+          const detail = document.getElementById("update-detail");
+          const summary = document.getElementById("update-summary");
+          const link = document.getElementById("update-release-link");
+          const current = data.currentVersion || appVersion;
+          summary.innerHTML =
+            "Running <strong style=\\"color:var(--text)\\">v" +
+            escapeHtml(current) +
+            "</strong>. Checked against GitHub Releases.";
+          detail.textContent = data.message || "—";
+          if (data.updateAvailable && (data.releaseUrl || data.releasesUrl)) {
+            link.hidden = false;
+            link.style.display = "inline-flex";
+            link.href = data.releaseUrl || data.releasesUrl;
+            link.textContent = data.latestTag
+              ? "Open " + data.latestTag
+              : "Release notes";
+          } else {
+            link.hidden = true;
+            link.style.display = "none";
+            link.href = data.releasesUrl || "https://github.com/TideGuard/TideGuard/releases";
+          }
+        }
+
+        function escapeHtml(value) {
+          return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+        }
+
+        async function refreshUpdates(force) {
+          const status = document.getElementById("update-status");
+          try {
+            const q = force ? "?refresh=1" : "";
+            const data = await api("/api/admin/updates" + q);
+            paintUpdateCheck(data);
+            setStatus(
+              status,
+              data.updateAvailable ? "Update available" : data.source === "unavailable" ? "Check failed" : "Checked",
+              data.updateAvailable || data.source === "unavailable" ? "err" : "ok",
+            );
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        }
+
+        document.getElementById("check-updates").addEventListener("click", () => {
+          refreshUpdates(true);
         });
 
         ["b-title","b-message","b-primary","b-accent","b-bg","b-surface","b-text","b-muted","setup-show-waiting"].forEach((id) => {

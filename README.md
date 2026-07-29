@@ -90,6 +90,7 @@ The `/admin` control room is the launch desk:
 | **Pass queue**        | Issue an admission cookie for this browser to smoke-test the protected app                                  |
 | **Country block**     | Temporary `CF-IPCountry` gate with TTL for event windows ([docs/geo-block.md](docs/geo-block.md))           |
 | **Cloudflare access** | Optional Zone ID + API token to check/fix proxied DNS and IP Geolocation                                    |
+| **Updates**           | Shows running version; checks GitHub Releases for a newer tag ([docs/upgrading.md](docs/upgrading.md))       |
 | **Origin proxy**      | Gate paths and forward admitted traffic upstream ([docs/protecting-origin.md](docs/protecting-origin.md))   |
 
 Analytics chart history is kept in the operator’s browser while the control room is open — no server-side time-series store. Details: [docs/analytics.md](docs/analytics.md).
@@ -117,6 +118,7 @@ Deep dive: [docs/architecture.md](docs/architecture.md)
 | Guide                                              | Start here if you want to…                               |
 | -------------------------------------------------- | -------------------------------------------------------- |
 | [Getting started](docs/getting-started.md)         | Clone, run locally, deploy, first `/admin` setup         |
+| [Upgrading](docs/upgrading.md)                     | Update an existing deploy without losing KV / secrets    |
 | [Launch checklist](docs/launch-checklist.md)       | Pre-production go-live review                            |
 | [Protecting a domain](docs/protecting-origin.md)   | Custom domains, routes, Cloudflare in front of origin    |
 | [Verifying admission](docs/verifying-admission.md) | Redirect URL, click-to-enter, how origins trust tokens   |

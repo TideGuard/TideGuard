@@ -98,15 +98,23 @@ The control room includes an **Origin proxy** panel:
 
 Saved via `PUT /api/admin/origin` to KV. Full guide: [protecting-origin.md](protecting-origin.md).
 
+### Updates
+
+The control room shows the running package version (`v0.1.0` and later) and can check
+[GitHub Releases](https://github.com/TideGuard/TideGuard/releases) via `GET /api/admin/updates`.
+Publish a release tag (e.g. `v0.1.0`) so operators see “up to date” or “update available.”
+Upgrade steps: [upgrading.md](upgrading.md).
+
 ## API (admin)
 
 | Method | Path                   | Auth                                        |
 | ------ | ---------------------- | ------------------------------------------- |
-| `GET`  | `/api/admin/bootstrap` | Public (`setupComplete`)                    |
+| `GET`  | `/api/admin/bootstrap` | Public (`setupComplete`, `version`)         |
 | `POST` | `/api/admin/setup`     | `Authorization: Bearer <TOKEN_SECRET>` once |
 | `POST` | `/api/admin/login`     | Public (rate-limited)                       |
 | `POST` | `/api/admin/logout`    | Session                                     |
 | `GET`  | `/api/admin/state`     | Session                                     |
+| `GET`  | `/api/admin/updates`   | Session (optional `?refresh=1`)             |
 | `PUT`  | `/api/admin/branding`  | Session                                     |
 | `PUT`  | `/api/admin/origin`    | Session (origin proxy settings)             |
 | `POST` | `/api/admin/mode`      | Session                                     |

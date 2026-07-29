@@ -5,6 +5,7 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 | Guide                                                 | Audience                                                              |
 | ----------------------------------------------------- | --------------------------------------------------------------------- |
 | [Getting started](getting-started.md)                 | Operators deploying or running locally for the first time             |
+| [Upgrading](upgrading.md)                             | Pull a newer TideGuard into an existing Cloudflare deploy             |
 | [Launch checklist](launch-checklist.md)               | Pre-production go-live review                                         |
 | [Protecting a domain or origin](protecting-origin.md) | Putting Cloudflare + TideGuard in front of a real site or service     |
 | [Verifying admission](verifying-admission.md)         | Redirect URL, click-to-enter hold, how to verify tokens at the origin |

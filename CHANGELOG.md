@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Admin **Updates** panel + `GET /api/admin/updates` — compare running `0.1.0` to GitHub `releases/latest` (KV-cached)
+- Operator [upgrading guide](docs/upgrading.md) for Deploy-to-Cloudflare forks and CLI redeploys (preserve KV IDs, secrets, queue state)
 - FIFO `QueueRoom` Durable Object with join, leave, status, heartbeat, metrics, and pause
 - **Lottery Mode** — uniform random admission among waiters (`ADMISSION_MODE` / `POST /mode`)
 - Rate-limited admission via a single per-queue alarm (cleared when idle)

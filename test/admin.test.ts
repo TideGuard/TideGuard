@@ -24,6 +24,22 @@ describe("admin setup wizard and dashboard", () => {
     expect(html).toContain("TideGuard");
     expect(html).toContain("Setup");
     expect(html).toContain("/api/admin/setup");
+    expect(html).toContain("Check for updates");
+    expect(html).toContain("/api/admin/updates");
+  });
+
+  it("exposes version on bootstrap and requires session for update check", async () => {
+    const boot = await exports.default.fetch(
+      new Request("https://example.com/api/admin/bootstrap"),
+    );
+    expect(boot.status).toBe(200);
+    const bootBody = await json<{ version: string }>(boot);
+    expect(bootBody.version).toMatch(/^\d+\.\d+\.\d+/);
+
+    const denied = await exports.default.fetch(
+      new Request("https://example.com/api/admin/updates"),
+    );
+    expect(denied.status).toBe(401);
   });
 
   it("reports setup incomplete before wizard finishes", async () => {

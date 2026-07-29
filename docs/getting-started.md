@@ -81,6 +81,8 @@ After deploy:
 3. Finish the setup wizard.
 4. Smoke-test `/wait`, `/demo`, and `/cost`.
 
+Later releases: do **not** click Deploy to Cloudflare again. Follow [upgrading.md](upgrading.md) (merge upstream or `git pull`, then redeploy / push to Workers Builds).
+
 ## 5. Verify
 
 ```bash

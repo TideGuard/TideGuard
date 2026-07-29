@@ -166,11 +166,12 @@ First visit runs a **setup wizard** (`TOKEN_SECRET` → password → queue/mode 
 
 | Method | Path                   | Auth                         | Notes                                                 |
 | ------ | ---------------------- | ---------------------------- | ----------------------------------------------------- |
-| `GET`  | `/api/admin/bootstrap` | public                       | `{ setupComplete, defaultQueue }`                     |
+| `GET`  | `/api/admin/bootstrap` | public                       | `{ setupComplete, defaultQueue, version }`            |
 | `POST` | `/api/admin/setup`     | `TOKEN_SECRET` bearer (once) | Creates password hash + branding; sets session cookie |
 | `POST` | `/api/admin/login`     | public (rate-limited)        | Session cookie on success                             |
 | `POST` | `/api/admin/logout`    | session                      | Clears cookie                                         |
-| `GET`  | `/api/admin/state`     | session                      | Branding + metrics + origin                           |
+| `GET`  | `/api/admin/state`     | session                      | Branding + metrics + origin + `version`               |
+| `GET`  | `/api/admin/updates`   | session                      | GitHub latest release vs running `VERSION` (KV cache) |
 | `PUT`  | `/api/admin/branding`  | session                      | KV write                                              |
 | `PUT`  | `/api/admin/origin`    | session                      | Origin proxy override in KV                           |
 | `POST` | `/api/admin/mode`      | session                      | Queue ↔ Lottery                                       |

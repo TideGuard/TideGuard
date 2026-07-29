@@ -57,8 +57,10 @@ import {
 import { clientConnectingIp, hasConnectingIpHeader } from "../auth/client-ip";
 import { clientCountryCode, isCountryBlocked } from "../auth/geo-country";
 import { normalizeOriginUrl, parsePathPrefixes } from "../core/origin";
+import { checkForUpdates, UPDATE_CHECK_CACHE_KEY } from "../admin/update-check";
 import { renderAdminApp } from "../html/admin";
 import { configFromEnv, getQueueRoom } from "../queue/client";
+import { VERSION } from "../version";
 import { parseQueueName, readJsonBody } from "./validation";
 
 export async function handleAdminPage(_request: Request, env: Env): Promise<Response> {
@@ -67,6 +69,7 @@ export async function handleAdminPage(_request: Request, env: Env): Promise<Resp
     setupComplete,
     defaultQueue: env.DEFAULT_QUEUE || "default",
     defaultBranding: DEFAULT_BRANDING,
+    version: VERSION,
   });
   return withSecurityHeaders(
     new Response(html, {
@@ -82,6 +85,7 @@ export async function handleAdminBootstrap(_request: Request, env: Env): Promise
   return jsonOk({
     setupComplete: await isAdminSetupComplete(env),
     defaultQueue: env.DEFAULT_QUEUE || "default",
+    version: VERSION,
   });
 }
 
@@ -217,7 +221,17 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
       effectiveAdmitPerSecond: metrics.effectiveAdmitPerSecond,
       healthConfig: health.config,
     },
+    version: VERSION,
   });
+}
+
+/** Compare running VERSION to GitHub releases/latest (KV-cached). */
+export async function handleAdminUpdates(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  rateLimitOrThrow(clientKey(request, "updates"), { limit: 30, windowMs: 60_000 });
+  const force = new URL(request.url).searchParams.get("refresh") === "1";
+  const result = await checkForUpdates(env, { force });
+  return jsonOk(result);
 }
 
 export async function handleAdminSaveBypass(request: Request, env: Env): Promise<Response> {
@@ -642,6 +656,7 @@ export async function handleAdminReset(request: Request, env: Env): Promise<Resp
   await clearBypassSettings(env);
   await clearGeoBlockSettings(env);
   await clearGeoBlockStats(env);
+  await env.CONFIG_KV.delete(UPDATE_CHECK_CACHE_KEY);
   return jsonOk({ ok: true, setupComplete: false });
 }
 

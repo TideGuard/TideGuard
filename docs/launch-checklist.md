@@ -56,5 +56,6 @@ Use `/cost` for Cloudflare Workers paid-plan estimates.
 ## Related
 
 - [Getting started](getting-started.md)
+- [Upgrading](upgrading.md)
 - [Protecting origin](protecting-origin.md)
 - [SECURITY.md](../SECURITY.md)

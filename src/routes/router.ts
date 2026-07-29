@@ -24,6 +24,7 @@ import {
   handleAdminSetMode,
   handleAdminSetup,
   handleAdminState,
+  handleAdminUpdates,
 } from "./admin";
 import { maybeAdmitIpBypass } from "../admin/ip-bypass";
 import { evaluateGeoBlock } from "../admin/geo-block";
@@ -240,6 +241,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "PUT" && url.pathname === "/api/admin/health") {
     return await handleAdminHealth(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/updates") {
+    return await handleAdminUpdates(request, env);
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/reset") {

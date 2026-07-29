@@ -2,7 +2,8 @@
  * TideGuard Worker configuration.
  *
  * Placeholder resource IDs let `wrangler deploy` and Deploy to Cloudflare
- * provision KV / Durable Objects automatically.
+ * provision KV / Durable Objects automatically. On upgrades, keep your real
+ * KV IDs — see docs/upgrading.md.
  */
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
