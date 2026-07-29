@@ -6,15 +6,15 @@ First-time install: [getting-started.md](getting-started.md). Pre-launch checks:
 
 ## What survives a normal upgrade
 
-| Asset                         | Survives redeploy? | Notes                                                                 |
-| ----------------------------- | ------------------ | --------------------------------------------------------------------- |
-| Worker code                   | Replaced           | That is the point of upgrading                                        |
-| `TOKEN_SECRET`                | Yes                | Wrangler secret; do not re-prompt unless you intend to rotate         |
-| KV (`CONFIG_KV`) data         | Yes                | Admin password hash, branding, origin, allowlist, geo-block           |
-| Durable Object queue state    | Yes                | Same class + migration tags; visitors stay in line across redeploys   |
-| Custom domains / routes       | Yes                | Dashboard / Workers Builds settings                                   |
-| `wrangler.jsonc` `vars`       | Replaced by deploy | Capacity / timeouts / `ORIGIN_*` come from the file you deploy        |
-| Admin overrides in KV         | Yes                | Origin / branding saved in `/admin` win over empty or older defaults  |
+| Asset                      | Survives redeploy? | Notes                                                                |
+| -------------------------- | ------------------ | -------------------------------------------------------------------- |
+| Worker code                | Replaced           | That is the point of upgrading                                       |
+| `TOKEN_SECRET`             | Yes                | Wrangler secret; do not re-prompt unless you intend to rotate        |
+| KV (`CONFIG_KV`) data      | Yes                | Admin password hash, branding, origin, allowlist, geo-block          |
+| Durable Object queue state | Yes                | Same class + migration tags; visitors stay in line across redeploys  |
+| Custom domains / routes    | Yes                | Dashboard / Workers Builds settings                                  |
+| `wrangler.jsonc` `vars`    | Replaced by deploy | Capacity / timeouts / `ORIGIN_*` come from the file you deploy       |
+| Admin overrides in KV      | Yes                | Origin / branding saved in `/admin` win over empty or older defaults |
 
 Re-clicking **Deploy to Cloudflare** on the README is a **new** install (new fork / new resources). It is not an upgrade.
 
@@ -88,11 +88,11 @@ After login, the control room **Updates** panel compares the running `VERSION` (
 
 ## What the project migrates for you
 
-| Layer                         | Mechanism                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------- |
-| Durable Object SQL            | `QueueRoom.migrate()` + `schema_version` in DO storage                    |
-| Durable Object class binding  | Append-only `migrations` entries in `wrangler.jsonc` (never rewrite old tags) |
-| Admin / branding KV           | Soft merges + defaults for new fields; additive changes should not wipe UI |
+| Layer                        | Mechanism                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| Durable Object SQL           | `QueueRoom.migrate()` + `schema_version` in DO storage                        |
+| Durable Object class binding | Append-only `migrations` entries in `wrangler.jsonc` (never rewrite old tags) |
+| Admin / branding KV          | Soft merges + defaults for new fields; additive changes should not wipe UI    |
 
 Breaking changes (renamed bindings, removed KV keys, token format, DO class rename/delete) will be called out under **Upgrade notes** in the CHANGELOG with exact operator steps.
 

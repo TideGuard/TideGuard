@@ -1,9 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import {
-  UPDATE_CHECK_CACHE_KEY,
-  checkForUpdates,
-} from "../src/admin/update-check";
+import { UPDATE_CHECK_CACHE_KEY, checkForUpdates } from "../src/admin/update-check";
 import { VERSION, compareSemVer, normalizeVersion } from "../src/version";
 
 describe("version helpers", () => {

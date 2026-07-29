@@ -6,8 +6,7 @@ export const GITHUB_REPO = "TideGuard/TideGuard";
 
 export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
 
-export const GITHUB_RELEASES_LATEST_API =
-  `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+export const GITHUB_RELEASES_LATEST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 /** Strip a leading `v` / `V` and trim. */
 export function normalizeVersion(raw: string): string {
