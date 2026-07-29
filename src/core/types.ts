@@ -54,9 +54,20 @@ export interface QueueMetrics {
   queue: QueueName;
   waiting: number;
   admitted: number;
+  /** Admitted visitors who have confirmed entry (or auto-entered). */
+  entered: number;
+  /** Admitted but still in click-to-enter hold. */
+  holding: number;
+  /** Remaining concurrent capacity (capacity - admitted). */
+  openSlots: number;
   capacity: number;
   admitPerSecond: number;
+  /** ETA for a new joiner at the back of the line (rate-based). */
   estimatedWaitSeconds: number;
+  /** Mean elapsed wait among people currently waiting (0 if empty). */
+  averageWaitSeconds: number;
+  /** Longest elapsed wait among people currently waiting (0 if empty). */
+  oldestWaitSeconds: number;
   paused: boolean;
   admissionMode: AdmissionMode;
   /** Unix ms; null when the room is open immediately. */
@@ -124,6 +135,7 @@ export type ApiErrorCode =
   | "bad_request"
   | "not_found"
   | "unauthorized"
+  | "forbidden"
   | "conflict"
   | "queue_full"
   | "internal_error"

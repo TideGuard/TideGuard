@@ -15,6 +15,7 @@ import { ConfigError, parseAdmissionMode } from "../core/config";
 import { ApiError, jsonOk } from "../core/errors";
 import type { JoinResult, StatusResult } from "../core/types";
 import { configFromEnv, getQueueRoom } from "../queue/client";
+import { evaluateGeoBlock } from "../admin/geo-block";
 import {
   parseOptionalCount,
   parseOptionalVisitorId,
@@ -77,6 +78,14 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
   const config = loadConfig(env);
   const secret = requireTokenSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+
+  const geo = await evaluateGeoBlock(request, env);
+  if (geo.blocked) {
+    throw new ApiError("forbidden", "Access is not available from your region", 403, {
+      country: geo.country,
+    });
+  }
+
   let visitorId = parseOptionalVisitorId(body.visitorId);
 
   // Same-browser multi-tab: resume the ticket-bound visitor and ignore conflicting ids.

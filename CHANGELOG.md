@@ -22,11 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin Traffic panel + `/api/admin/schedule` / `pause` / `health`
 - Admin setup wizard (PBKDF2 password in KV) + session login
 - Admin control room with live branding preview (KV write on Save only)
+- **Live queue** panel (≈5s refresh) with waiting / admitted / wait times / open slots / geo hits
+- **Analytics** panel — 5-minute client-side charts for queue depth, average wait, and geo-block hits (1h / 12h / 24h)
+- **IP allowlist** — staff bypass via `CF-Connecting-IP` without consuming queue capacity
+- **Pass queue** — admin-issued admission cookie for this browser (`POST /api/admin/pass`)
+- **Country block** — temporary `CF-IPCountry` gate with TTL, hit counters, and allowlist/Pass overrides
+- Optional **Cloudflare access** helper (Zone ID + API token) to check/fix proxied DNS and IP Geolocation
 - Operator auth accepts admin session cookie or `TOKEN_SECRET` bearer
 - Protected demo (`/demo`) gated by admission token cookie
 - Configurable in-memory load tests (100 → 100k users) plus optional DO load suite
 - Public cost calculator (`/cost` + `/api/cost-estimate`) for launch ballpark spend
-- Docs hub: getting started, architecture, API, admin, load testing
+- Docs hub: getting started, architecture, API, admin, analytics, IP allowlist, country block, load testing
 - Configurable origin proxy: gate non-TideGuard paths and forward to upstream (`ORIGIN_URL` / admin UI)
 
 ### Changed

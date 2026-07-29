@@ -90,7 +90,7 @@ Keeping HTTP, crypto, and queue math separate makes the core easier to unit test
 | Mode      | Selection                         | Visitor UI                       |
 | --------- | --------------------------------- | -------------------------------- |
 | `queue`   | Oldest `sequence` first (FIFO)    | Position in line + ETA           |
-| `lottery` | `ORDER BY RANDOM()` among waiters | Equal odds (`1 / waiting`) + ETA |
+| `lottery` | Uniform index sample (`OFFSET`) among waiters; large admin batches may use `ORDER BY RANDOM()` | Equal odds (`1 / waiting`) + ETA |
 
 Default: `ADMISSION_MODE` Worker var (`queue`). Operators can switch live with `POST /mode`.
 
@@ -113,7 +113,7 @@ Cloudflare bills for Worker requests, Durable Object requests/duration, KV opera
 | Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle           |
 | Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side        |
 | Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `TOKEN_SECRET` |
-| Metrics                         | Computed from DO SQL counts — not mirrored to KV on every change              |
+| Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV           |
 | Status polling                  | Necessary for consistency; keep intervals at **~15s** in the waiting UI       |
 
 Avoid:

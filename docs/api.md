@@ -125,7 +125,21 @@ Operator-only: silent pause / resume. Visitors are not told; admissions stop whi
 
 ### `GET /metrics?queue=…`
 
-Operator-only (same auth as `/admit`). Queue depth, capacity, ETA, pause state, opening time, effective admit rate, health snapshot, and `admissionMode`. Computed in the Durable Object (no KV write).
+Operator-only (same auth as `/admit`). Queue depth, capacity, ETA, pause state, opening time, effective admit rate, health snapshot, `admissionMode`, plus ops fields: `entered`, `holding`, `openSlots`, `averageWaitSeconds`, `oldestWaitSeconds`. Computed in the Durable Object (no KV write).
+
+Admin UI also polls `GET /api/admin/metrics` every 5s (admin session). Response includes live metrics and geo-block hit stats. Charts are built client-side from those polls (see [analytics.md](analytics.md)).
+
+### `POST /api/admin/pass`
+
+Admin session only. Mints an admission cookie for **this browser** and returns `{ redirectTo }` so operators can open the protected app without joining the queue. Does not consume a concurrent slot.
+
+### `PUT /api/admin/geo-block`
+
+Admin session only. Temporary country block list (`CF-IPCountry`) with required TTL when enabling.
+
+```json
+{ "enabled": true, "countriesText": "CN\\nRU", "ttlHours": 24 }
+```
 
 ### Cost estimate
 

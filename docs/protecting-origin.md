@@ -131,4 +131,6 @@ Keep marketing on another host; iframe `/wait?embed=1&return=/checkout` on the g
 - [Architecture](architecture.md)
 - [API](api.md)
 - [Verifying admission](verifying-admission.md)
+- [IP allowlist](ip-allowlist.md)
+- [Country block](geo-block.md)
 - [tideguard.dev](https://tideguard.dev)

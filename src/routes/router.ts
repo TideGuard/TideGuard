@@ -5,19 +5,30 @@ import { requireAdmission, withSecurityHeaders } from "../auth";
 import { proxyToOrigin } from "../proxy/origin-proxy";
 import {
   handleAdminBootstrap,
+  handleAdminCloudflareCheck,
+  handleAdminCloudflareFixProxy,
   handleAdminHealth,
   handleAdminLogin,
   handleAdminLogout,
+  handleAdminMetrics,
   handleAdminPage,
+  handleAdminPass,
   handleAdminPause,
   handleAdminReset,
   handleAdminSaveBranding,
+  handleAdminSaveBypass,
+  handleAdminSaveCloudflare,
+  handleAdminSaveGeoBlock,
   handleAdminSaveOrigin,
   handleAdminSchedule,
   handleAdminSetMode,
   handleAdminSetup,
   handleAdminState,
 } from "./admin";
+import { maybeAdmitIpBypass } from "../admin/ip-bypass";
+import { evaluateGeoBlock } from "../admin/geo-block";
+import { geoBlockedResponse } from "../html/geo-blocked";
+import { appendSetCookies } from "../auth";
 import { handleCostEstimateApi, handleCostPage } from "./cost";
 import { handleHealth } from "./health";
 import { handleDemo, handleWaitingRoom } from "./pages";
@@ -84,6 +95,21 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           );
         } catch (error) {
           if (error instanceof ApiError && error.code === "unauthorized") {
+            const bypass = await maybeAdmitIpBypass(request, env, originConfig.queue);
+            if (bypass) {
+              return withSecurityHeaders(
+                appendSetCookies(
+                  await proxyToOrigin(request, originConfig, {
+                    visitorId: bypass.visitorId,
+                  }),
+                  [bypass.accessCookie],
+                ),
+              );
+            }
+            const geo = await evaluateGeoBlock(request, env);
+            if (geo.blocked) {
+              return withSecurityHeaders(geoBlockedResponse(geo.country));
+            }
             const wait = new URL("/wait", url.origin);
             wait.searchParams.set("queue", originConfig.queue);
             wait.searchParams.set("return", `${url.pathname}${url.search}`);
@@ -162,12 +188,40 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminState(request, env);
   }
 
+  if (request.method === "GET" && url.pathname === "/api/admin/metrics") {
+    return await handleAdminMetrics(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/pass") {
+    return await handleAdminPass(request, env);
+  }
+
   if (request.method === "PUT" && url.pathname === "/api/admin/branding") {
     return await handleAdminSaveBranding(request, env);
   }
 
   if (request.method === "PUT" && url.pathname === "/api/admin/origin") {
     return await handleAdminSaveOrigin(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/bypass") {
+    return await handleAdminSaveBypass(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/geo-block") {
+    return await handleAdminSaveGeoBlock(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/cloudflare") {
+    return await handleAdminSaveCloudflare(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/cloudflare/check") {
+    return await handleAdminCloudflareCheck(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/cloudflare/fix-proxy") {
+    return await handleAdminCloudflareFixProxy(request, env);
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/mode") {

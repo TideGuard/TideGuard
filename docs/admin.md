@@ -43,7 +43,11 @@ Dark teal single-page UI (Source Sans). Two columns on desktop:
 | “Show depth” checkbox                         |                                     |
 | Title, message, color pickers                 |                                     |
 | **Traffic controls** (opening, pause, health) |                                     |
+| **Origin proxy**                              |                                     |
+| **IP allowlist** + Cloudflare DNS check       |                                     |
 | **Save branding** / **Apply mode**            |                                     |
+
+Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). The control room includes a **Live queue** panel (5s refresh) and an **Analytics** panel with queue / wait / geo-block charts ([analytics.md](analytics.md)).
 
 | Control                | Effect                                                                                         |
 | ---------------------- | ---------------------------------------------------------------------------------------------- |

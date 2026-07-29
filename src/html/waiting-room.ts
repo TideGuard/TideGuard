@@ -314,6 +314,24 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           el.status.dataset.tone = tone || "ok";
         }
 
+        function showGeoBlocked(country) {
+          if (timer) { clearInterval(timer); timer = null; }
+          if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+          if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+          el.enterPanel.hidden = true;
+          el.progress.hidden = true;
+          if (el.stats) el.stats.hidden = true;
+          el.primaryLabel.textContent = "Region";
+          el.position.textContent = country || "—";
+          el.eta.textContent = "—";
+          setStatus(
+            country
+              ? ("Not available in your region (" + country + "). This event is temporarily geo-restricted.")
+              : "Not available in your region. This event is temporarily geo-restricted.",
+            "err",
+          );
+        }
+
         function formatEta(seconds) {
           if (!Number.isFinite(seconds) || seconds <= 0) return "now";
           if (seconds < 60) return seconds + "s";
@@ -473,7 +491,14 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
             body: JSON.stringify(body),
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error?.message || "Join failed");
+          if (!res.ok) {
+            if (res.status === 403 && data.error?.code === "forbidden") {
+              const country = data.error?.details?.country;
+              showGeoBlocked(country);
+              return;
+            }
+            throw new Error(data.error?.message || "Join failed");
+          }
           visitorId = data.visitorId;
           localStorage.setItem(storageKey, visitorId);
           if (data.status === "admitted") {

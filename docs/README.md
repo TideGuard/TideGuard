@@ -11,6 +11,9 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 | [Architecture](architecture.md)                       | Engineers who need the Workers / Durable Object / KV story            |
 | [API](api.md)                                         | Anyone integrating join, status, tokens, or operator routes           |
 | [Admin](admin.md)                                     | Operators using the setup wizard and branding control room            |
+| [Analytics](analytics.md)                             | Control-room charts for queue depth, wait, and geo-block hits         |
+| [IP allowlist](ip-allowlist.md)                       | Staff bypass, Pass queue, and Cloudflare access helper                |
+| [Country block](geo-block.md)                         | Temporary event-window geo gate via `CF-IPCountry`                    |
 | [Load testing](load-testing.md)                       | Contributors validating queue behavior at scale                       |
 
 Project overview and sales pitch live in the root [README](../README.md). Primary website: [tideguard.dev](https://tideguard.dev). Security expectations live in [SECURITY.md](../SECURITY.md).

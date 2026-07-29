@@ -1,9 +1,18 @@
 import { parseAdmissionMode } from "../core/config";
 import { ApiError, jsonOk } from "../core/errors";
-import { DEFAULT_BRANDING, type WaitingRoomBranding } from "../core/branding";
+import {
+  DEFAULT_BRANDING,
+  sanitizeRedirectUrl,
+  type WaitingRoomBranding,
+} from "../core/branding";
 import type { AdmissionMode } from "../core/types";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { signAdminSession } from "../auth/admin-session";
+import {
+  buildAccessCookie,
+  buildAdmissionClaims,
+  signAccessToken,
+} from "../auth";
 import {
   buildAdminSessionCookie,
   clearAdminSessionCookie,
@@ -25,6 +34,32 @@ import {
   resolveOriginConfig,
   writeOriginOverride,
 } from "../admin/origin-store";
+import {
+  BypassConfigError,
+  clearBypassSettings,
+  readBypassSettings,
+  toBypassPublicView,
+  writeAllowlist,
+  writeCloudflareLink,
+  readCloudflareApiToken,
+} from "../admin/bypass-store";
+import {
+  clearGeoBlockSettings,
+  effectiveBlockedCountries,
+  GeoBlockConfigError,
+  readGeoBlockSettings,
+  toGeoBlockPublicView,
+  writeGeoBlockSettings,
+} from "../admin/geo-block-store";
+import {
+  clearGeoBlockStats,
+  readGeoBlockStats,
+  resetGeoBlockStatsWindow,
+  toGeoBlockStatsPublic,
+} from "../admin/geo-block-stats";
+import { checkHostnameProxy, CloudflareApiError, enableHostnameProxy } from "../admin/cloudflare-api";
+import { clientConnectingIp, hasConnectingIpHeader } from "../auth/client-ip";
+import { clientCountryCode, isCountryBlocked } from "../auth/geo-country";
 import { normalizeOriginUrl, parsePathPrefixes } from "../core/origin";
 import { renderAdminApp } from "../html/admin";
 import { configFromEnv, getQueueRoom } from "../queue/client";
@@ -150,19 +185,35 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
   );
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
-  const [branding, metrics, origin, health] = await Promise.all([
-    readBranding(env, queue),
-    room.metrics({ queue, config }),
-    resolveOriginConfig(env),
-    room.getHealth(),
-  ]);
+  const [branding, metrics, origin, health, bypassSettings, geoSettings, geoStats] =
+    await Promise.all([
+      readBranding(env, queue),
+      room.metrics({ queue, config }),
+      resolveOriginConfig(env),
+      room.getHealth(),
+      readBypassSettings(env),
+      readGeoBlockSettings(env),
+      readGeoBlockStats(env),
+    ]);
 
+  const clientIp = clientConnectingIp(request);
+  const clientCountry = clientCountryCode(request);
+  const blockedCountries = effectiveBlockedCountries(geoSettings);
   return jsonOk({
     queue,
     branding,
     metrics,
     admissionMode: metrics.admissionMode as AdmissionMode,
     origin,
+    bypass: toBypassPublicView(bypassSettings, {
+      clientIp,
+      connectingIpPresent: hasConnectingIpHeader(request),
+    }),
+    geoBlock: toGeoBlockPublicView(geoSettings, {
+      clientCountry,
+      clientBlocked: isCountryBlocked(clientCountry, blockedCountries),
+      stats: toGeoBlockStatsPublic(geoStats),
+    }),
     traffic: {
       opensAt: metrics.opensAt,
       paused: metrics.paused,
@@ -171,6 +222,240 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
       healthConfig: health.config,
     },
   });
+}
+
+export async function handleAdminSaveBypass(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+  const text =
+    typeof body.allowlistText === "string"
+      ? body.allowlistText
+      : Array.isArray(body.allowlist)
+        ? body.allowlist.filter((v): v is string => typeof v === "string").join("\n")
+        : "";
+
+  try {
+    const settings = await writeAllowlist(env, text);
+    const clientIp = clientConnectingIp(request);
+    return jsonOk({
+      ok: true,
+      bypass: toBypassPublicView(settings, {
+        clientIp,
+        connectingIpPresent: hasConnectingIpHeader(request),
+      }),
+    });
+  } catch (error) {
+    if (error instanceof BypassConfigError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminSaveCloudflare(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+
+  try {
+    const payload: {
+      zoneId: string | null;
+      hostname: string | null;
+      apiToken?: string | null;
+      clearApiToken?: boolean;
+    } = {
+      zoneId: typeof body.zoneId === "string" ? body.zoneId : null,
+      hostname: typeof body.hostname === "string" ? body.hostname : null,
+    };
+    if (body.clearApiToken === true) {
+      payload.clearApiToken = true;
+    } else if (typeof body.apiToken === "string") {
+      payload.apiToken = body.apiToken;
+    }
+    const settings = await writeCloudflareLink(env, payload);
+    const clientIp = clientConnectingIp(request);
+    return jsonOk({
+      ok: true,
+      bypass: toBypassPublicView(settings, {
+        clientIp,
+        connectingIpPresent: hasConnectingIpHeader(request),
+      }),
+    });
+  } catch (error) {
+    if (error instanceof BypassConfigError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminCloudflareCheck(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  return runCloudflareProxyAction(request, env, "check");
+}
+
+export async function handleAdminCloudflareFixProxy(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  return runCloudflareProxyAction(request, env, "fix");
+}
+
+async function runCloudflareProxyAction(
+  request: Request,
+  env: Env,
+  action: "check" | "fix",
+): Promise<Response> {
+  const settings = await readBypassSettings(env);
+  const body = await readJsonBody(request).catch(() => ({}) as Record<string, unknown>);
+
+  const zoneId =
+    (typeof body.zoneId === "string" && body.zoneId.trim()) || settings.zoneId || "";
+  const hostname =
+    (typeof body.hostname === "string" && body.hostname.trim()) ||
+    settings.hostname ||
+    new URL(request.url).hostname;
+
+  if (!zoneId) {
+    throw new ApiError("bad_request", "zoneId is required (from the Cloudflare overview page)", 400);
+  }
+
+  const apiToken = await readCloudflareApiToken(env);
+  if (!apiToken) {
+    throw new ApiError(
+      "bad_request",
+      "Save a Cloudflare API token first (Zone DNS Edit, Zone Read, Zone Settings Edit)",
+      400,
+    );
+  }
+
+  try {
+    const result =
+      action === "fix"
+        ? await enableHostnameProxy({ apiToken, zoneId, hostname })
+        : await checkHostnameProxy({ apiToken, zoneId, hostname });
+    return jsonOk({ ok: result.ok, check: result });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminMetrics(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const queue = parseQueueName(
+    new URL(request.url).searchParams.get("queue") ?? admin.defaultQueue,
+    admin.defaultQueue,
+  );
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+  const [metrics, geoSettings, geoStats] = await Promise.all([
+    room.metrics({ queue, config }),
+    readGeoBlockSettings(env),
+    readGeoBlockStats(env),
+  ]);
+  const clientCountry = clientCountryCode(request);
+  const blockedCountries = effectiveBlockedCountries(geoSettings);
+  return jsonOk({
+    ok: true,
+    metrics,
+    geoBlock: toGeoBlockPublicView(geoSettings, {
+      clientCountry,
+      clientBlocked: isCountryBlocked(clientCountry, blockedCountries),
+      stats: toGeoBlockStatsPublic(geoStats),
+    }),
+    refreshedAt: Date.now(),
+  });
+}
+
+/**
+ * Issue an admission cookie for this admin browser and skip the waiting room.
+ * Does not join the Durable Object queue or consume a concurrent slot.
+ */
+export async function handleAdminPass(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  const [branding, origin] = await Promise.all([
+    readBranding(env, queue),
+    resolveOriginConfig(env),
+  ]);
+  const fallback = branding.redirectUrl || (origin.enabled ? "/" : "/demo");
+  const redirectTo =
+    sanitizeRedirectUrl(
+      typeof body.returnTo === "string" ? body.returnTo : "",
+      fallback,
+    ) || fallback;
+
+  const config = configFromEnv(env);
+  const secret = requireTokenSecret(env);
+  const visitorId = `admin_pass_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  const accessToken = await signAccessToken(
+    buildAdmissionClaims({
+      visitorId,
+      queue,
+      tokenTTLSeconds: config.tokenTTLSeconds,
+    }),
+    secret,
+  );
+
+  return withCookie(
+    jsonOk({ ok: true, redirectTo, visitorId, queue }),
+    buildAccessCookie(accessToken, request, config.tokenTTLSeconds),
+  );
+}
+
+export async function handleAdminSaveGeoBlock(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+  const enabled = body.enabled === true || body.enabled === "true";
+  const countriesText =
+    typeof body.countriesText === "string"
+      ? body.countriesText
+      : Array.isArray(body.countries)
+        ? body.countries.filter((v): v is string => typeof v === "string").join("\n")
+        : "";
+
+  try {
+    const settings = await writeGeoBlockSettings(env, {
+      enabled,
+      countriesText,
+      ttlHours:
+        body.ttlHours === undefined || body.ttlHours === null || body.ttlHours === ""
+          ? null
+          : Number(body.ttlHours),
+      expiresAt:
+        typeof body.expiresAt === "number" && Number.isFinite(body.expiresAt)
+          ? body.expiresAt
+          : null,
+    });
+    const stats = enabled
+      ? await resetGeoBlockStatsWindow(env)
+      : await readGeoBlockStats(env);
+    const clientCountry = clientCountryCode(request);
+    return jsonOk({
+      ok: true,
+      geoBlock: toGeoBlockPublicView(settings, {
+        clientCountry,
+        clientBlocked: isCountryBlocked(clientCountry, effectiveBlockedCountries(settings)),
+        stats: toGeoBlockStatsPublic(stats),
+      }),
+    });
+  } catch (error) {
+    if (error instanceof GeoBlockConfigError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
 }
 
 export async function handleAdminSaveBranding(request: Request, env: Env): Promise<Response> {
@@ -359,6 +644,9 @@ export async function handleAdminReset(request: Request, env: Env): Promise<Resp
 
   await clearAdminConfig(env);
   await clearOriginOverride(env);
+  await clearBypassSettings(env);
+  await clearGeoBlockSettings(env);
+  await clearGeoBlockStats(env);
   return jsonOk({ ok: true, setupComplete: false });
 }
 
@@ -376,10 +664,7 @@ function requireSetupBearer(request: Request, env: Env): void {
 }
 
 function clientKey(request: Request, action: string): string {
-  const ip =
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "unknown";
+  const ip = clientConnectingIp(request) || "unknown";
   return `${action}:${ip}`;
 }
 

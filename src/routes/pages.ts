@@ -1,10 +1,13 @@
 import { ApiError } from "../core/errors";
 import { sanitizeRedirectUrl } from "../core/branding";
-import { requireAdmission, withSecurityHeaders } from "../auth";
+import { appendSetCookies, requireAdmission, withSecurityHeaders } from "../auth";
 import { renderProtectedDemo } from "../demo/protected";
 import { renderWaitingRoom } from "../html/waiting-room";
 import { readBranding } from "../admin/store";
 import { resolveOriginConfig } from "../admin/origin-store";
+import { maybeAdmitIpBypass } from "../admin/ip-bypass";
+import { evaluateGeoBlock } from "../admin/geo-block";
+import { geoBlockedResponse } from "../html/geo-blocked";
 import { getQueueRoom } from "../queue/client";
 import { parseQueueName } from "./validation";
 
@@ -16,6 +19,20 @@ export async function handleWaitingRoom(request: Request, env: Env): Promise<Res
   const branding = await readBranding(env, queue);
   const fallbackReturn = branding.redirectUrl || (origin.enabled ? "/" : "/demo");
   const returnTo = resolveReturnTo(url.searchParams.get("return"), fallbackReturn);
+
+  const bypass = await maybeAdmitIpBypass(request, env, queue);
+  if (bypass && !embed) {
+    return withSecurityHeaders(
+      appendSetCookies(Response.redirect(new URL(returnTo, url.origin).toString(), 302), [
+        bypass.accessCookie,
+      ]),
+    );
+  }
+
+  const geo = await evaluateGeoBlock(request, env);
+  if (geo.blocked) {
+    return withSecurityHeaders(geoBlockedResponse(geo.country, { embed }));
+  }
 
   let opensAt: number | null;
   try {
@@ -64,6 +81,28 @@ export async function handleDemo(request: Request, env: Env): Promise<Response> 
     );
   } catch (error) {
     if (error instanceof ApiError && error.code === "unauthorized") {
+      const bypass = await maybeAdmitIpBypass(request, env, queue);
+      if (bypass) {
+        const html = renderProtectedDemo({
+          queueName: bypass.queue,
+          visitorId: bypass.visitorId,
+        });
+        return withSecurityHeaders(
+          appendSetCookies(
+            new Response(html, {
+              headers: {
+                "content-type": "text/html; charset=utf-8",
+                "cache-control": "no-store",
+              },
+            }),
+            [bypass.accessCookie],
+          ),
+        );
+      }
+      const geo = await evaluateGeoBlock(request, env);
+      if (geo.blocked) {
+        return withSecurityHeaders(geoBlockedResponse(geo.country));
+      }
       const wait = new URL("/wait", url.origin);
       wait.searchParams.set("queue", queue);
       wait.searchParams.set("return", "/demo");

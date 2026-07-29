@@ -236,6 +236,65 @@ export function renderAdminApp(options: AdminAppOptions): string {
         font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
+      .chart-card {
+        border-top: 1px solid var(--line);
+        padding-top: 0.75rem;
+      }
+      .chart-title {
+        margin: 0 0 0.5rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .chart-svg {
+        width: 100%;
+        min-height: 9rem;
+        background: color-mix(in oklab, var(--bg) 55%, transparent);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .chart-svg svg { display: block; width: 100%; height: 9rem; }
+      .chart-legend {
+        margin: 0.4rem 0 0;
+        font-size: 0.8rem;
+        color: var(--muted);
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      .chart-legend .swatch {
+        display: inline-block;
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: 2px;
+        margin-right: 0.35rem;
+        vertical-align: -0.05rem;
+      }
+      .chart-legend .swatch.waiting { background: var(--accent); }
+      .chart-legend .swatch.admitted { background: color-mix(in oklab, var(--text) 55%, transparent); }
+      .range-toggle {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.15rem;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--bg) 70%, transparent);
+      }
+      .range-toggle button {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 0.8rem;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .range-toggle button[aria-pressed="true"] {
+        background: color-mix(in oklab, var(--accent) 18%, transparent);
+        color: var(--text);
+        font-weight: 600;
+      }
       .preview {
         border-radius: var(--radius);
         overflow: hidden;
@@ -426,6 +485,59 @@ export function renderAdminApp(options: AdminAppOptions): string {
       </section>
 
       <section id="view-dashboard" hidden>
+        <div class="panel" id="ops-panel" style="margin-bottom:1.25rem">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
+            <p class="muted" style="margin:0"><strong style="color:var(--text)">Live queue</strong> · auto-refresh 5s</p>
+            <p class="muted" style="margin:0;font-size:0.85rem" id="ops-refreshed">Updated —</p>
+          </div>
+          <div class="metrics ops" id="ops-metrics" style="margin-top:0.85rem;margin-bottom:0.5rem">
+            <div class="metric"><span class="label">Waiting</span><span class="value" id="ops-waiting">—</span></div>
+            <div class="metric"><span class="label">Admitted</span><span class="value" id="ops-admitted">—</span></div>
+            <div class="metric"><span class="label">In app</span><span class="value" id="ops-entered">—</span></div>
+            <div class="metric"><span class="label">Holding</span><span class="value" id="ops-holding">—</span></div>
+            <div class="metric"><span class="label">Open slots</span><span class="value" id="ops-open">—</span></div>
+            <div class="metric"><span class="label">Capacity</span><span class="value" id="ops-capacity">—</span></div>
+            <div class="metric"><span class="label">Avg wait</span><span class="value" id="ops-avg-wait">—</span></div>
+            <div class="metric"><span class="label">Oldest wait</span><span class="value" id="ops-oldest-wait">—</span></div>
+            <div class="metric"><span class="label">ETA (back)</span><span class="value" id="ops-eta">—</span></div>
+            <div class="metric"><span class="label">Admit / s</span><span class="value" id="ops-rate">—</span></div>
+            <div class="metric"><span class="label">Geo blocks</span><span class="value" id="ops-geo-hits">—</span></div>
+          </div>
+          <p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0" id="ops-status-line">—</p>
+          <p class="muted" style="font-size:0.85rem;margin:0.35rem 0 0" id="ops-geo-line" hidden>—</p>
+        </div>
+        <div class="panel" id="analytics-panel" style="margin-bottom:1.25rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+            <p class="muted" style="margin:0"><strong style="color:var(--text)">Analytics</strong> · 5-minute intervals</p>
+            <div class="range-toggle" role="group" aria-label="Analytics time range">
+              <button type="button" data-analytics-range="1" aria-pressed="false">1h</button>
+              <button type="button" data-analytics-range="12" aria-pressed="true">12h</button>
+              <button type="button" data-analytics-range="24" aria-pressed="false">24h</button>
+            </div>
+          </div>
+          <div class="charts" style="display:grid;gap:1rem;margin-top:0.85rem">
+            <div class="chart-card">
+              <p class="chart-title">Queue depth over time</p>
+              <div class="chart-svg" id="chart-queue" role="img" aria-label="Waiting and admitted over time"></div>
+              <p class="chart-legend"><span class="swatch waiting"></span> Waiting <span class="swatch admitted"></span> Admitted</p>
+            </div>
+            <div class="chart-card">
+              <p class="chart-title">Average wait (seconds)</p>
+              <div class="chart-svg" id="chart-wait" role="img" aria-label="Average wait over time"></div>
+            </div>
+            <div class="chart-card">
+              <p class="chart-title">Country block hits over time</p>
+              <div class="chart-svg" id="chart-geo" role="img" aria-label="Geo block hits over time"></div>
+            </div>
+            <div class="chart-card">
+              <p class="chart-title">Blocked countries (this window)</p>
+              <div class="chart-svg" id="chart-geo-bars" role="img" aria-label="Hits by country"></div>
+            </div>
+          </div>
+          <p class="muted" style="font-size:0.85rem;margin:0.75rem 0 0" id="analytics-empty">
+            Charts build in this browser while the control room is open — one point every 5 minutes from live metrics. Keep this tab open to grow history.
+          </p>
+        </div>
         <div class="grid grid-2">
           <div class="panel">
             <div class="metrics" id="metrics">
@@ -565,6 +677,84 @@ export function renderAdminApp(options: AdminAppOptions): string {
           </div>
           <p class="status" id="origin-status" data-tone="ok"></p>
         </div>
+        <div class="panel" style="margin-top:1.25rem">
+          <p class="muted" style="margin-top:0"><strong style="color:var(--text)">IP allowlist</strong> — office / staff skip the queue</p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">
+            Matching clients get a normal admission cookie and never join the Durable Object queue.
+            TideGuard trusts only <code>CF-Connecting-IP</code> (set automatically when the hostname is
+            <strong>proxied</strong> / orange-clouded). There is no separate “enable Connecting-IP” toggle.
+            Use <strong>Pass queue</strong> to skip the line for this admin browser without changing the allowlist.
+          </p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem" id="bypass-ip-live">Your IP: —</p>
+          <label>Allowed IPs / CIDRs (one per line)
+            <textarea id="bypass-allowlist" rows="4" placeholder="203.0.113.0/24&#10;2001:db8::/64"></textarea>
+          </label>
+          <div class="actions">
+            <button type="button" class="primary" id="save-bypass">Save allowlist</button>
+            <button type="button" class="ghost" id="pass-queue">Pass queue (this browser)</button>
+          </div>
+          <p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0">
+            <strong style="color:var(--text)">Pass queue</strong> issues an admission cookie for this browser and opens the protected app — no waiting room, no queue slot.
+          </p>
+          <p class="status" id="bypass-status" data-tone="ok"></p>
+          <hr style="border:0;border-top:1px solid color-mix(in oklab, var(--muted) 35%, transparent);margin:1rem 0" />
+          <p class="muted" style="margin:0 0 0.5rem"><strong style="color:var(--text)">Country block</strong> — temporary geo gate</p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">
+            Blocks visitors by <code>CF-IPCountry</code> (requires IP Geolocation on).
+            IP allowlist and Pass queue still get through. Unknown codes (<code>XX</code>/<code>T1</code>) are not blocked unless listed.
+            A TTL is required so the list expires automatically.
+          </p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem" id="geo-live">Your country: —</p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem" id="geo-hits-live">Blocks this window: —</p>
+          <label class="check">
+            <input id="geo-enabled" type="checkbox" />
+            Enable country block
+          </label>
+          <label>Blocked countries (ISO codes, one per line)
+            <textarea id="geo-countries" rows="3" placeholder="CN&#10;RU&#10;KP"></textarea>
+          </label>
+          <label>TTL (hours, max 720 / 30 days)
+            <input id="geo-ttl-hours" type="number" min="0.25" max="720" step="0.25" value="24" />
+          </label>
+          <div class="actions">
+            <button type="button" class="primary" id="save-geo-block">Save country block</button>
+            <button type="button" class="ghost" id="clear-geo-block">Disable now</button>
+          </div>
+          <p class="status" id="geo-status" data-tone="ok"></p>
+          <hr style="border:0;border-top:1px solid color-mix(in oklab, var(--muted) 35%, transparent);margin:1rem 0" />
+          <p class="muted" style="margin:0 0 0.5rem"><strong style="color:var(--text)">Cloudflare access</strong> — API token + Zone ID</p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">
+            Paste credentials so TideGuard can check DNS proxy (needed for <code>CF-Connecting-IP</code> allowlisting)
+            and optionally enable <strong>IP Geolocation</strong> (<code>CF-IPCountry</code> — country code, not the visitor IP).
+            Zone ID is the 32-character id on the zone Overview page (same id in API URLs like
+            <code>/zones/&lt;zone_id&gt;/settings/…</code>).
+          </p>
+          <label>Zone ID
+            <input id="cf-zone-id" type="text" placeholder="e.g. 8de9847589590c558962a6deb0e85a05" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>API token <span class="muted" id="cf-token-state">(not saved)</span>
+            <input id="cf-api-token" type="password" placeholder="Paste token, then Save — leave blank to keep existing" autocomplete="new-password" />
+          </label>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">
+            Create token:
+            <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">API Tokens</a>
+            → Create Custom Token → permissions
+            <code>Zone → DNS → Edit</code>,
+            <code>Zone → Zone → Read</code>,
+            <code>Zone → Zone Settings → Edit</code>,
+            include <strong>only this zone</strong>. Stored encrypted; never shown again.
+          </p>
+          <label>Hostname to check
+            <input id="cf-hostname" type="text" placeholder="www.example.com" autocomplete="off" />
+          </label>
+          <div class="actions">
+            <button type="button" class="primary" id="save-cloudflare">Save Cloudflare access</button>
+            <button type="button" class="ghost" id="check-cloudflare">Check setup</button>
+            <button type="button" class="ghost" id="fix-cloudflare-proxy">Fix setup</button>
+            <button type="button" class="ghost" id="clear-cloudflare-token">Clear token</button>
+          </div>
+          <p class="status" id="cloudflare-status" data-tone="ok"></p>
+        </div>
       </section>
     </div>
     <script>
@@ -578,6 +768,11 @@ export function renderAdminApp(options: AdminAppOptions): string {
           admissionMode: "queue",
           setupComplete: initialSetupComplete,
         };
+        let metricsTimer = null;
+        let analyticsRangeHours = 12;
+        let lastGeoForCharts = null;
+        const ANALYTICS_INTERVAL_MS = 5 * 60 * 1000;
+        const ANALYTICS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
         const views = {
           wizard: document.getElementById("view-wizard"),
@@ -590,6 +785,296 @@ export function renderAdminApp(options: AdminAppOptions): string {
           el.dataset.tone = tone || "ok";
         }
 
+        function formatDuration(sec) {
+          if (!Number.isFinite(sec) || sec < 0) return "—";
+          const n = Math.round(sec);
+          if (n < 60) return n + "s";
+          const m = Math.floor(n / 60);
+          const s = n % 60;
+          if (m < 60) return m + "m " + s + "s";
+          return Math.floor(m / 60) + "h " + (m % 60) + "m";
+        }
+
+        function paintMetrics(m, refreshedAt) {
+          if (!m) return;
+          document.getElementById("m-waiting").textContent = String(m.waiting);
+          document.getElementById("m-admitted").textContent = String(m.admitted);
+          document.getElementById("m-capacity").textContent = String(m.capacity);
+          document.getElementById("m-mode").textContent = m.admissionMode || state.admissionMode;
+
+          document.getElementById("ops-waiting").textContent = String(m.waiting);
+          document.getElementById("ops-admitted").textContent = String(m.admitted);
+          document.getElementById("ops-entered").textContent = String(m.entered ?? "—");
+          document.getElementById("ops-holding").textContent = String(m.holding ?? "—");
+          document.getElementById("ops-open").textContent = String(m.openSlots ?? "—");
+          document.getElementById("ops-capacity").textContent = String(m.capacity);
+          document.getElementById("ops-avg-wait").textContent = formatDuration(m.averageWaitSeconds);
+          document.getElementById("ops-oldest-wait").textContent = formatDuration(m.oldestWaitSeconds);
+          document.getElementById("ops-eta").textContent = formatDuration(m.estimatedWaitSeconds);
+          document.getElementById("ops-rate").textContent =
+            typeof m.effectiveAdmitPerSecond === "number"
+              ? String(m.effectiveAdmitPerSecond)
+              : "—";
+
+          const bits = [];
+          bits.push(m.admissionMode === "lottery" ? "Lottery" : "FIFO");
+          if (m.paused) bits.push("paused");
+          if (m.opensAt && m.opensAt > Date.now()) {
+            bits.push("opens " + new Date(m.opensAt).toLocaleString());
+          } else {
+            bits.push("open");
+          }
+          const h = m.health || {};
+          if (h.enabled) {
+            bits.push("health " + (h.level || "ok") + (h.autoPaused ? " (auto-paused)" : ""));
+          }
+          document.getElementById("ops-status-line").textContent = bits.join(" · ");
+          if (refreshedAt) {
+            document.getElementById("ops-refreshed").textContent =
+              "Updated " + new Date(refreshedAt).toLocaleTimeString();
+          }
+        }
+
+        function paintGeoHits(geo) {
+          const hitsEl = document.getElementById("ops-geo-hits");
+          const lineEl = document.getElementById("ops-geo-line");
+          if (!hitsEl || !lineEl) return;
+          if (!geo || !geo.stats) {
+            hitsEl.textContent = "—";
+            lineEl.hidden = true;
+            return;
+          }
+          hitsEl.textContent = String(geo.stats.totalHits || 0);
+          if (!geo.active && !(geo.stats.totalHits > 0)) {
+            lineEl.hidden = true;
+            return;
+          }
+          const parts = [];
+          if (geo.active) {
+            parts.push("Blocking " + (geo.countries || []).join(", "));
+          } else if (geo.enabled) {
+            parts.push("Country block inactive/expired");
+          }
+          const top = (geo.stats.byCountry || []).slice(0, 6)
+            .map((row) => row.country + " " + row.hits)
+            .join(" · ");
+          if (top) parts.push("Hits: " + top);
+          if (geo.stats.lastHitAt) {
+            parts.push(
+              "Last " +
+                (geo.stats.lastHitCountry || "") +
+                " @ " +
+                new Date(geo.stats.lastHitAt).toLocaleTimeString(),
+            );
+          }
+          lineEl.textContent = parts.join(" · ");
+          lineEl.hidden = parts.length === 0;
+        }
+
+        async function refreshMetrics() {
+          const queue = document.getElementById("dash-queue").value || defaultQueue;
+          const data = await api("/api/admin/metrics?queue=" + encodeURIComponent(queue));
+          paintMetrics(data.metrics, data.refreshedAt);
+          if (data.geoBlock) {
+            paintGeoHits(data.geoBlock);
+            paintGeoBlock(data.geoBlock);
+          }
+          recordAnalyticsPoint(queue, data.metrics, data.geoBlock);
+          paintAnalytics(queue, data.geoBlock);
+        }
+
+        function analyticsStorageKey(queue) {
+          return "tideguard.analytics.v1:" + (queue || defaultQueue);
+        }
+
+        function loadAnalyticsPoints(queue) {
+          try {
+            const raw = localStorage.getItem(analyticsStorageKey(queue));
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            const cutoff = Date.now() - ANALYTICS_MAX_AGE_MS;
+            return parsed.filter((row) => row && typeof row.ts === "number" && row.ts >= cutoff);
+          } catch {
+            return [];
+          }
+        }
+
+        function saveAnalyticsPoints(queue, points) {
+          try {
+            localStorage.setItem(analyticsStorageKey(queue), JSON.stringify(points));
+          } catch {
+            /* ignore quota / private mode */
+          }
+        }
+
+        function recordAnalyticsPoint(queue, metrics, geo) {
+          if (!metrics) return;
+          const now = Date.now();
+          const bucket = Math.floor(now / ANALYTICS_INTERVAL_MS) * ANALYTICS_INTERVAL_MS;
+          const cutoff = now - ANALYTICS_MAX_AGE_MS;
+          const points = loadAnalyticsPoints(queue).filter((row) => row.ts >= cutoff);
+          const geoHits =
+            geo && geo.stats && typeof geo.stats.totalHits === "number" ? geo.stats.totalHits : 0;
+          const point = {
+            ts: bucket,
+            waiting: Number(metrics.waiting) || 0,
+            admitted: Number(metrics.admitted) || 0,
+            entered: Number(metrics.entered) || 0,
+            holding: Number(metrics.holding) || 0,
+            averageWaitSeconds: Number(metrics.averageWaitSeconds) || 0,
+            oldestWaitSeconds: Number(metrics.oldestWaitSeconds) || 0,
+            geoHits: geoHits,
+          };
+          const last = points[points.length - 1];
+          if (last && last.ts === bucket) {
+            points[points.length - 1] = point;
+          } else {
+            points.push(point);
+          }
+          saveAnalyticsPoints(queue, points);
+        }
+
+        function pointsInRange(points) {
+          const since = Date.now() - analyticsRangeHours * 60 * 60 * 1000;
+          return points.filter((row) => row.ts >= since);
+        }
+
+        function geoHitsSeries(points) {
+          return points.map((row, i) => {
+            const prev = i > 0 ? points[i - 1].geoHits : row.geoHits;
+            let hits = row.geoHits - prev;
+            if (i === 0) hits = 0;
+            if (row.geoHits < prev) hits = row.geoHits;
+            return { ts: row.ts, hits: Math.max(0, hits) };
+          });
+        }
+
+        function paintAnalytics(queue, geo) {
+          if (geo) lastGeoForCharts = geo;
+          const chartGeo = geo || lastGeoForCharts;
+          const all = loadAnalyticsPoints(queue || defaultQueue);
+          const samples = pointsInRange(all);
+          const geoTimeline = geoHitsSeries(samples);
+          const geoCountries = (chartGeo && chartGeo.stats && chartGeo.stats.byCountry) || [];
+          const empty = document.getElementById("analytics-empty");
+          const hasData = samples.length > 0 || geoCountries.length > 0;
+          if (empty) empty.hidden = hasData;
+
+          renderLineChart("chart-queue", samples, [
+            { key: "waiting", color: "var(--accent)" },
+            { key: "admitted", color: "color-mix(in oklab, var(--text) 55%, transparent)" },
+          ]);
+          renderLineChart("chart-wait", samples, [
+            { key: "averageWaitSeconds", color: "var(--accent)" },
+          ]);
+          renderLineChart("chart-geo", geoTimeline, [{ key: "hits", color: "#e07a7a" }]);
+          renderBarChart("chart-geo-bars", geoCountries.slice(0, 10));
+        }
+
+        function setAnalyticsRange(hours) {
+          analyticsRangeHours = hours;
+          document.querySelectorAll("[data-analytics-range]").forEach((btn) => {
+            btn.setAttribute("aria-pressed", String(Number(btn.getAttribute("data-analytics-range")) === hours));
+          });
+          const queueEl = document.getElementById("dash-queue");
+          const queue = (queueEl && queueEl.value) || defaultQueue;
+          paintAnalytics(queue, lastGeoForCharts);
+        }
+
+        document.querySelectorAll("[data-analytics-range]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            setAnalyticsRange(Number(btn.getAttribute("data-analytics-range")) || 12);
+          });
+        });
+
+        function renderLineChart(containerId, rows, series) {
+          const root = document.getElementById(containerId);
+          if (!root) return;
+          if (!rows || rows.length === 0) {
+            root.innerHTML = '<p class="muted" style="margin:0;padding:1rem;font-size:0.85rem">No points in this range yet</p>';
+            return;
+          }
+          const w = 640;
+          const h = 144;
+          const pad = { t: 12, r: 12, b: 24, l: 36 };
+          const innerW = w - pad.l - pad.r;
+          const innerH = h - pad.t - pad.b;
+          const xs = rows.map((r) => r.ts);
+          const minX = Math.min(...xs);
+          const maxX = Math.max(...xs);
+          let maxY = 1;
+          for (const s of series) {
+            for (const r of rows) {
+              const v = Number(r[s.key]) || 0;
+              if (v > maxY) maxY = v;
+            }
+          }
+          const xAt = (ts) => pad.l + ((ts - minX) / Math.max(1, maxX - minX)) * innerW;
+          const yAt = (v) => pad.t + innerH - (v / maxY) * innerH;
+          const paths = series.map((s) => {
+            const d = rows.map((r, i) => {
+              const x = xAt(r.ts);
+              const y = yAt(Number(r[s.key]) || 0);
+              return (i === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1);
+            }).join(" ");
+            return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />';
+          }).join("");
+          const grid = [0, 0.5, 1].map((f) => {
+            const y = pad.t + innerH * (1 - f);
+            const label = Math.round(maxY * f);
+            return '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (w - pad.r) + '" y2="' + y + '" stroke="color-mix(in oklab, var(--muted) 25%, transparent)" stroke-width="1" />'
+              + '<text x="4" y="' + (y + 4) + '" fill="var(--muted)" font-size="10">' + label + '</text>';
+          }).join("");
+          const startLabel = new Date(minX).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const endLabel = new Date(maxX).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          root.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + grid + paths
+            + '<text x="' + pad.l + '" y="' + (h - 6) + '" fill="var(--muted)" font-size="10">' + startLabel + '</text>'
+            + '<text x="' + (w - pad.r) + '" y="' + (h - 6) + '" fill="var(--muted)" font-size="10" text-anchor="end">' + endLabel + '</text>'
+            + '</svg>';
+        }
+
+        function renderBarChart(containerId, rows) {
+          const root = document.getElementById(containerId);
+          if (!root) return;
+          if (!rows || rows.length === 0) {
+            root.innerHTML = '<p class="muted" style="margin:0;padding:1rem;font-size:0.85rem">No geo blocks recorded yet</p>';
+            return;
+          }
+          const w = 640;
+          const h = 144;
+          const pad = { t: 12, r: 12, b: 28, l: 36 };
+          const innerW = w - pad.l - pad.r;
+          const innerH = h - pad.t - pad.b;
+          const maxY = Math.max(1, ...rows.map((r) => r.hits));
+          const gap = 6;
+          const barW = Math.max(8, (innerW - gap * (rows.length - 1)) / rows.length);
+          const bars = rows.map((r, i) => {
+            const x = pad.l + i * (barW + gap);
+            const bh = (r.hits / maxY) * innerH;
+            const y = pad.t + innerH - bh;
+            return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1)
+              + '" height="' + Math.max(1, bh).toFixed(1) + '" fill="#e07a7a" rx="2" />'
+              + '<text x="' + (x + barW / 2).toFixed(1) + '" y="' + (h - 8) + '" fill="var(--muted)" font-size="10" text-anchor="middle">'
+              + r.country + '</text>';
+          }).join("");
+          root.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + bars + '</svg>';
+        }
+
+        function startMetricsPoll() {
+          stopMetricsPoll();
+          metricsTimer = setInterval(() => {
+            refreshMetrics().catch(() => {});
+          }, 5000);
+        }
+
+        function stopMetricsPoll() {
+          if (metricsTimer) {
+            clearInterval(metricsTimer);
+            metricsTimer = null;
+          }
+        }
+
         function showView(name) {
           views.wizard.hidden = name !== "wizard";
           views.login.hidden = name !== "login";
@@ -597,6 +1082,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("logout-btn").hidden = name !== "dashboard";
           document.getElementById("page-title").textContent =
             name === "wizard" ? "Setup" : name === "login" ? "Sign in" : "Control room";
+          if (name !== "dashboard") stopMetricsPoll();
         }
 
         function wizardBranding() {
@@ -732,10 +1218,13 @@ export function renderAdminApp(options: AdminAppOptions): string {
             document.getElementById("dash-mode-lottery"),
             data.admissionMode,
           );
-          document.getElementById("m-waiting").textContent = String(data.metrics.waiting);
-          document.getElementById("m-admitted").textContent = String(data.metrics.admitted);
-          document.getElementById("m-capacity").textContent = String(data.metrics.capacity);
-          document.getElementById("m-mode").textContent = data.admissionMode;
+          paintMetrics(data.metrics, Date.now());
+          if (data.geoBlock) {
+            paintGeoHits(data.geoBlock);
+            paintGeoBlock(data.geoBlock);
+          }
+          recordAnalyticsPoint(data.queue || defaultQueue, data.metrics, data.geoBlock);
+          paintAnalytics(data.queue || defaultQueue, data.geoBlock);
           paintPreview("dash-preview", dashBranding(), state.admissionMode);
           if (data.origin) {
             document.getElementById("origin-enabled").checked = !!data.origin.enabled;
@@ -743,6 +1232,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
             document.getElementById("origin-protect-all").checked = data.origin.protectAll !== false;
             document.getElementById("origin-prefixes").value = (data.origin.pathPrefixes || []).join(",");
           }
+          paintBypass(data.bypass);
           if (data.traffic) {
             const opens = data.traffic.opensAt;
             const opensInput = document.getElementById("traffic-opens-at");
@@ -774,6 +1264,76 @@ export function renderAdminApp(options: AdminAppOptions): string {
                 : "");
           }
           showView("dashboard");
+          startMetricsPoll();
+        }
+
+        function paintBypass(bypass) {
+          if (!bypass) return;
+          document.getElementById("bypass-allowlist").value = bypass.allowlistText || "";
+          document.getElementById("cf-zone-id").value = bypass.zoneId || "";
+          document.getElementById("cf-hostname").value = bypass.hostname || "";
+          document.getElementById("cf-token-state").textContent = bypass.hasApiToken
+            ? "(saved · encrypted)"
+            : "(not saved)";
+          const ipEl = document.getElementById("bypass-ip-live");
+          if (!bypass.connectingIpPresent) {
+            ipEl.textContent =
+              "Your IP: not visible — this request has no CF-Connecting-IP. Hostname may be DNS-only (grey cloud) or not on Cloudflare.";
+          } else if (bypass.clientIpMatched) {
+            ipEl.textContent = "Your IP: " + bypass.clientIp + " · matches allowlist (you skip the queue)";
+          } else {
+            ipEl.textContent =
+              "Your IP: " + bypass.clientIp +
+              (bypass.allowlist && bypass.allowlist.length
+                ? " · not on allowlist"
+                : " · allowlist empty");
+          }
+        }
+
+        function paintGeoBlock(geo) {
+          if (!geo) return;
+          document.getElementById("geo-enabled").checked = !!geo.enabled;
+          document.getElementById("geo-countries").value = geo.countriesText || "";
+          const live = document.getElementById("geo-live");
+          const country = geo.clientCountry || "—";
+          if (geo.enabled && !geo.active) {
+            live.textContent =
+              "Your country: " + country + " · list expired or empty (not blocking)";
+          } else if (!geo.active) {
+            live.textContent = "Your country: " + country + " · country block inactive";
+          } else if (geo.clientBlocked) {
+            live.textContent =
+              "Your country: " + country + " · would be blocked (allowlist/pass still override)";
+          } else {
+            const until = geo.expiresAt
+              ? " · active until " + new Date(geo.expiresAt).toLocaleString()
+              : "";
+            live.textContent = "Your country: " + country + " · not blocked" + until;
+          }
+          if (geo.active && geo.hoursRemaining != null) {
+            document.getElementById("geo-ttl-hours").value = String(
+              Math.max(0.25, Math.round(geo.hoursRemaining * 4) / 4),
+            );
+          }
+          const hits = document.getElementById("geo-hits-live");
+          if (hits) {
+            const stats = geo.stats || {};
+            const top = (stats.byCountry || [])
+              .slice(0, 8)
+              .map((row) => row.country + "×" + row.hits)
+              .join(", ");
+            hits.textContent =
+              "Blocks this window: " +
+              String(stats.totalHits || 0) +
+              (top ? " (" + top + ")" : "") +
+              (stats.lastHitAt
+                ? " · last " +
+                  (stats.lastHitCountry || "") +
+                  " " +
+                  new Date(stats.lastHitAt).toLocaleTimeString()
+                : "");
+          }
+          paintGeoHits(geo);
         }
 
         async function boot() {
@@ -882,8 +1442,14 @@ export function renderAdminApp(options: AdminAppOptions): string {
         });
 
         document.getElementById("logout-btn").addEventListener("click", async () => {
+          stopMetricsPoll();
           await api("/api/admin/logout", { method: "POST", body: "{}" });
           showView("login");
+        });
+
+        document.getElementById("dash-queue").addEventListener("change", () => {
+          refreshMetrics().catch(() => {});
+          startMetricsPoll();
         });
 
         document.getElementById("save-branding").addEventListener("click", async () => {
@@ -942,6 +1508,152 @@ export function renderAdminApp(options: AdminAppOptions): string {
           } catch (err) {
             setStatus(status, err.message, "err");
           }
+        });
+
+        document.getElementById("save-bypass").addEventListener("click", async () => {
+          const status = document.getElementById("bypass-status");
+          try {
+            const data = await api("/api/admin/bypass", {
+              method: "PUT",
+              body: JSON.stringify({
+                allowlistText: document.getElementById("bypass-allowlist").value,
+              }),
+            });
+            paintBypass(data.bypass);
+            setStatus(status, "Allowlist saved.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("pass-queue").addEventListener("click", async () => {
+          const status = document.getElementById("bypass-status");
+          try {
+            const data = await api("/api/admin/pass", {
+              method: "POST",
+              body: JSON.stringify({
+                queue: document.getElementById("dash-queue").value || defaultQueue,
+                returnTo: document.getElementById("dash-redirect").value.trim() || undefined,
+              }),
+            });
+            setStatus(status, "Passing queue…", "ok");
+            window.location.assign(data.redirectTo || "/");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("save-geo-block").addEventListener("click", async () => {
+          const status = document.getElementById("geo-status");
+          try {
+            const data = await api("/api/admin/geo-block", {
+              method: "PUT",
+              body: JSON.stringify({
+                enabled: document.getElementById("geo-enabled").checked,
+                countriesText: document.getElementById("geo-countries").value,
+                ttlHours: Number(document.getElementById("geo-ttl-hours").value),
+              }),
+            });
+            paintGeoBlock(data.geoBlock);
+            setStatus(
+              status,
+              data.geoBlock && data.geoBlock.active
+                ? "Country block active until " + new Date(data.geoBlock.expiresAt).toLocaleString()
+                : "Country block saved (inactive).",
+              "ok",
+            );
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("clear-geo-block").addEventListener("click", async () => {
+          const status = document.getElementById("geo-status");
+          try {
+            const data = await api("/api/admin/geo-block", {
+              method: "PUT",
+              body: JSON.stringify({
+                enabled: false,
+                countriesText: document.getElementById("geo-countries").value,
+              }),
+            });
+            document.getElementById("geo-enabled").checked = false;
+            paintGeoBlock(data.geoBlock);
+            setStatus(status, "Country block disabled.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("save-cloudflare").addEventListener("click", async () => {
+          const status = document.getElementById("cloudflare-status");
+          try {
+            const token = document.getElementById("cf-api-token").value.trim();
+            const data = await api("/api/admin/cloudflare", {
+              method: "PUT",
+              body: JSON.stringify({
+                zoneId: document.getElementById("cf-zone-id").value,
+                hostname: document.getElementById("cf-hostname").value,
+                ...(token ? { apiToken: token } : {}),
+              }),
+            });
+            document.getElementById("cf-api-token").value = "";
+            paintBypass(data.bypass);
+            setStatus(status, "Cloudflare access saved.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("clear-cloudflare-token").addEventListener("click", async () => {
+          const status = document.getElementById("cloudflare-status");
+          try {
+            const data = await api("/api/admin/cloudflare", {
+              method: "PUT",
+              body: JSON.stringify({
+                zoneId: document.getElementById("cf-zone-id").value,
+                hostname: document.getElementById("cf-hostname").value,
+                clearApiToken: true,
+              }),
+            });
+            paintBypass(data.bypass);
+            setStatus(status, "API token cleared.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        async function runCloudflareAction(path, label) {
+          const status = document.getElementById("cloudflare-status");
+          try {
+            const data = await api(path, {
+              method: "POST",
+              body: JSON.stringify({
+                zoneId: document.getElementById("cf-zone-id").value,
+                hostname: document.getElementById("cf-hostname").value,
+              }),
+            });
+            const check = data.check || {};
+            const geo =
+              check.ipGeolocation == null
+                ? ""
+                : check.ipGeolocation.on
+                  ? " · IP Geolocation on"
+                  : " · IP Geolocation off";
+            const extra = (check.suggestions || []).length
+              ? " — " + check.suggestions[0]
+              : "";
+            setStatus(status, (check.summary || label) + geo + extra, data.ok ? "ok" : "err");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        }
+
+        document.getElementById("check-cloudflare").addEventListener("click", () => {
+          runCloudflareAction("/api/admin/cloudflare/check", "Check complete");
+        });
+        document.getElementById("fix-cloudflare-proxy").addEventListener("click", () => {
+          runCloudflareAction("/api/admin/cloudflare/fix-proxy", "Setup updated");
         });
 
         document.getElementById("save-schedule").addEventListener("click", async () => {

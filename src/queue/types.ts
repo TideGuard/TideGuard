@@ -101,6 +101,11 @@ export function buildMetrics(input: {
   config: QueueConfig;
   waiting: number;
   admitted: number;
+  entered: number;
+  holding: number;
+  openSlots: number;
+  averageWaitSeconds: number;
+  oldestWaitSeconds: number;
   paused: boolean;
   admissionMode: AdmissionMode;
   opensAt: number | null;
@@ -111,12 +116,17 @@ export function buildMetrics(input: {
     queue: input.queue,
     waiting: input.waiting,
     admitted: input.admitted,
+    entered: input.entered,
+    holding: input.holding,
+    openSlots: input.openSlots,
     capacity: input.config.maxConcurrentUsers,
     admitPerSecond: input.config.admitPerSecond,
     estimatedWaitSeconds: defaultEtaCalculator.estimateWaitSeconds(input.waiting, {
       ...input.config,
       admitPerSecond: Math.max(input.effectiveAdmitPerSecond, 0.0001),
     }),
+    averageWaitSeconds: input.averageWaitSeconds,
+    oldestWaitSeconds: input.oldestWaitSeconds,
     paused: input.paused,
     admissionMode: input.admissionMode,
     opensAt: input.opensAt,

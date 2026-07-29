@@ -61,8 +61,16 @@ interface VisitorRow {
  * - All queue mutations stay inside this object (no per-request KV writes).
  * - A single alarm sweeps admission + expiry; it is cleared when the room is idle.
  * - Branding / admin config belongs in KV and is read on page render, not on every poll.
+ * - Waiting/admitted depth is cached in meta (+ memory) so status polls avoid COUNT(*).
+ * - FIFO "ahead" counts are memoized between waiting-set mutations (poll-storm friendly).
+ * - Lottery picks use indexed OFFSET samples instead of sorting the full waiting set.
  */
 export class QueueRoom extends DurableObject<Env> {
+  /** Hot-path depth; mirrored to meta (`count_waiting` / `count_admitted`). */
+  private depth: { waiting: number; admitted: number } | null = null;
+  /** sequence → waitingAhead; cleared when anyone leaves the waiting set. */
+  private aheadCache = new Map<number, number>();
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
 
@@ -174,6 +182,13 @@ export class QueueRoom extends DurableObject<Env> {
       return { visitorId: request.visitorId, status: "left" };
     }
 
+    if (visitor.status === "waiting") {
+      this.bumpDepth(-1, 0);
+      this.aheadCache.clear();
+    } else if (visitor.status === "admitted") {
+      this.bumpDepth(0, -1);
+    }
+
     this.ctx.storage.sql.exec(
       `UPDATE visitors SET status = 'left' WHERE id = ? AND status IN ('waiting', 'admitted')`,
       request.visitorId,
@@ -213,11 +228,22 @@ export class QueueRoom extends DurableObject<Env> {
     this.rememberConfig(request.config);
     this.sweep(request.config, now, false);
 
+    const waiting = this.countByStatus("waiting");
+    const admitted = this.countByStatus("admitted");
+    const entered = this.countEntered();
+    const waitStats = this.waitingWaitStats(now);
+    const holding = Math.max(0, admitted - entered);
+
     return buildMetrics({
       queue: this.queueName(),
       config: request.config,
-      waiting: this.countByStatus("waiting"),
-      admitted: this.countByStatus("admitted"),
+      waiting,
+      admitted,
+      entered,
+      holding,
+      openSlots: openSlots(request.config.maxConcurrentUsers, admitted),
+      averageWaitSeconds: waitStats.averageWaitSeconds,
+      oldestWaitSeconds: waitStats.oldestWaitSeconds,
       paused: this.isManualPaused(),
       admissionMode: this.admissionMode(request.config),
       opensAt: this.getOpensAt(),
@@ -238,24 +264,12 @@ export class QueueRoom extends DurableObject<Env> {
     this.rememberConfig(request.config);
     this.sweep(request.config, now, true);
 
-    const admittedIds: string[] = [];
+    let admittedIds: string[] = [];
     if (this.canAdmit(now)) {
       const slots = openSlots(request.config.maxConcurrentUsers, this.countByStatus("admitted"));
       const toAdmit = Math.min(slots, count);
       if (toAdmit > 0) {
-        const entered = this.admitEntered(request.config);
-        for (const row of this.selectWaiting(toAdmit, request.config)) {
-          this.ctx.storage.sql.exec(
-            `UPDATE visitors
-             SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?
-             WHERE id = ? AND status = 'waiting'`,
-            now,
-            now,
-            entered,
-            row.id,
-          );
-          admittedIds.push(row.id);
-        }
+        admittedIds = this.admitSelected(this.selectWaiting(toAdmit, request.config), request.config, now);
       }
     }
 
@@ -381,6 +395,7 @@ export class QueueRoom extends DurableObject<Env> {
     this.sweep(config, now, true);
     await this.maybeProbeHealth(now);
     this.admitFromBudget(config, now);
+
     await this.ensureAlarm();
   }
 
@@ -392,7 +407,7 @@ export class QueueRoom extends DurableObject<Env> {
       )
     `);
 
-    const version = Number(this.getMeta("schema_version") ?? "0");
+    let version = Number(this.getMeta("schema_version") ?? "0");
     if (version < 1) {
       this.ctx.storage.sql.exec(`
         CREATE TABLE IF NOT EXISTS visitors (
@@ -409,13 +424,22 @@ export class QueueRoom extends DurableObject<Env> {
         CREATE INDEX IF NOT EXISTS idx_visitors_status_sequence
           ON visitors (status, sequence)
       `);
+      version = 2;
       this.setMeta("schema_version", "2");
     } else if (version < 2) {
       this.ctx.storage.sql.exec(`
         ALTER TABLE visitors ADD COLUMN entered INTEGER NOT NULL DEFAULT 1
       `);
+      version = 2;
       this.setMeta("schema_version", "2");
     }
+
+    if (version < 3) {
+      this.reconcileDepth();
+      this.setMeta("schema_version", "3");
+      version = 3;
+    }
+
   }
 
   private sweep(config: QueueConfig, now: number, force: boolean): void {
@@ -431,29 +455,30 @@ export class QueueRoom extends DurableObject<Env> {
     const holdCutoff = now - effective.admitHoldSeconds * 1000;
     const tokenCutoff = now - effective.tokenTTLSeconds * 1000;
 
-    this.ctx.storage.sql.exec(
+    let expired = 0;
+    expired += this.ctx.storage.sql.exec(
       `UPDATE visitors SET status = 'expired'
        WHERE status = 'waiting'
          AND (last_heartbeat_at <= ? OR joined_at <= ?)`,
       heartbeatCutoff,
       stayCutoff,
-    );
-    this.ctx.storage.sql.exec(
+    ).rowsWritten;
+    expired += this.ctx.storage.sql.exec(
       `UPDATE visitors SET status = 'expired'
        WHERE status = 'admitted'
          AND entered = 0
          AND admitted_at IS NOT NULL
          AND admitted_at <= ?`,
       holdCutoff,
-    );
-    this.ctx.storage.sql.exec(
+    ).rowsWritten;
+    expired += this.ctx.storage.sql.exec(
       `UPDATE visitors SET status = 'expired'
        WHERE status = 'admitted'
          AND (entered = 1 OR entered IS NULL)
          AND admitted_at IS NOT NULL
          AND admitted_at <= ?`,
       tokenCutoff,
-    );
+    ).rowsWritten;
 
     // Keep SQLite lean: drop terminal rows older than 1 hour.
     const purgeBefore = now - 60 * 60 * 1000;
@@ -462,6 +487,10 @@ export class QueueRoom extends DurableObject<Env> {
        WHERE status IN ('left', 'expired') AND joined_at < ?`,
       purgeBefore,
     );
+
+    if (expired > 0) {
+      this.reconcileDepth();
+    }
   }
 
   private admitAvailable(config: QueueConfig, now: number): void {
@@ -474,17 +503,7 @@ export class QueueRoom extends DurableObject<Env> {
       return;
     }
 
-    for (const row of this.selectWaiting(slots, config)) {
-      this.ctx.storage.sql.exec(
-        `UPDATE visitors
-         SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?
-         WHERE id = ? AND status = 'waiting'`,
-        now,
-        now,
-        this.admitEntered(config),
-        row.id,
-      );
-    }
+    this.admitSelected(this.selectWaiting(slots, config), config, now);
   }
 
   private admitFromBudget(config: QueueConfig, now: number): void {
@@ -515,22 +534,48 @@ export class QueueRoom extends DurableObject<Env> {
       return;
     }
 
-    for (const row of this.selectWaiting(toAdmit, config)) {
-      this.ctx.storage.sql.exec(
+    this.admitSelected(this.selectWaiting(toAdmit, config), config, now);
+  }
+
+  /**
+   * Promote selected waiters to admitted and keep depth caches coherent.
+   */
+  private admitSelected(
+    rows: Array<{ id: string }>,
+    config: QueueConfig,
+    now: number,
+  ): string[] {
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const entered = this.admitEntered(config);
+    const admittedIds: string[] = [];
+    for (const row of rows) {
+      const result = this.ctx.storage.sql.exec(
         `UPDATE visitors
          SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?
          WHERE id = ? AND status = 'waiting'`,
         now,
         now,
-        this.admitEntered(config),
+        entered,
         row.id,
       );
+      if (result.rowsWritten > 0) {
+        admittedIds.push(row.id);
+      }
     }
+
+    if (admittedIds.length > 0) {
+      this.bumpDepth(-admittedIds.length, admittedIds.length);
+      this.aheadCache.clear();
+    }
+    return admittedIds;
   }
 
   /**
    * Pick waiting visitors for admission.
-   * Queue Mode: oldest sequence first. Lottery Mode: uniform random sample.
+   * Queue Mode: oldest sequence first. Lottery Mode: uniform index samples via OFFSET.
    */
   private selectWaiting(limit: number, config: QueueConfig): Array<{ id: string }> {
     if (limit <= 0) {
@@ -539,15 +584,7 @@ export class QueueRoom extends DurableObject<Env> {
 
     const mode = this.admissionMode(config);
     if (mode === "lottery") {
-      return this.ctx.storage.sql
-        .exec<{ id: string }>(
-          `SELECT id FROM visitors
-           WHERE status = 'waiting'
-           ORDER BY RANDOM()
-           LIMIT ?`,
-          limit,
-        )
-        .toArray();
+      return this.selectWaitingLottery(limit);
     }
 
     return this.ctx.storage.sql
@@ -559,6 +596,69 @@ export class QueueRoom extends DurableObject<Env> {
         limit,
       )
       .toArray();
+  }
+
+  /**
+   * Uniform lottery without `ORDER BY RANDOM()` (full-set sort).
+   * Small batches: distinct random OFFSETs on the status/sequence index.
+   * Large admin batches: fall back to RANDOM() once — rare path.
+   */
+  private selectWaitingLottery(limit: number): Array<{ id: string }> {
+    const waiting = this.countByStatus("waiting");
+    const take = Math.min(limit, waiting);
+    if (take <= 0) {
+      return [];
+    }
+
+    if (take > 32) {
+      return this.ctx.storage.sql
+        .exec<{ id: string }>(
+          `SELECT id FROM visitors
+           WHERE status = 'waiting'
+           ORDER BY RANDOM()
+           LIMIT ?`,
+          take,
+        )
+        .toArray();
+    }
+
+    if (take === waiting) {
+      return this.ctx.storage.sql
+        .exec<{ id: string }>(
+          `SELECT id FROM visitors
+           WHERE status = 'waiting'
+           ORDER BY sequence ASC
+           LIMIT ?`,
+          take,
+        )
+        .toArray();
+    }
+
+    const offsets = new Set<number>();
+    let guard = 0;
+    while (offsets.size < take && guard < take * 8) {
+      offsets.add(Math.floor(Math.random() * waiting));
+      guard += 1;
+    }
+
+    const ids: Array<{ id: string }> = [];
+    const seen = new Set<string>();
+    for (const offset of offsets) {
+      const row = this.ctx.storage.sql
+        .exec<{ id: string }>(
+          `SELECT id FROM visitors
+           WHERE status = 'waiting'
+           ORDER BY sequence ASC
+           LIMIT 1 OFFSET ?`,
+          offset,
+        )
+        .toArray()[0];
+      if (row && !seen.has(row.id)) {
+        seen.add(row.id);
+        ids.push(row);
+      }
+    }
+    return ids;
   }
 
   private admissionMode(config: QueueConfig): AdmissionMode {
@@ -605,6 +705,13 @@ export class QueueRoom extends DurableObject<Env> {
       sequence,
       input.entered ? 1 : 0,
     );
+    if (input.status === "waiting") {
+      this.bumpDepth(1, 0);
+      // New waiters always get a higher sequence than existing ones, so ahead
+      // counts for current waiters stay valid; only depth changes.
+    } else {
+      this.bumpDepth(0, 1);
+    }
   }
 
   private nextSequence(): number {
@@ -626,19 +733,96 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   private countByStatus(status: "waiting" | "admitted"): number {
+    this.ensureDepth();
+    return status === "waiting" ? this.depth!.waiting : this.depth!.admitted;
+  }
+
+  private countEntered(): number {
     return this.ctx.storage.sql
-      .exec<{ count: number }>(`SELECT COUNT(*) AS count FROM visitors WHERE status = ?`, status)
+      .exec<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM visitors WHERE status = 'admitted' AND entered = 1`,
+      )
       .one().count;
   }
 
+  private waitingWaitStats(now: number): {
+    averageWaitSeconds: number;
+    oldestWaitSeconds: number;
+  } {
+    const row = this.ctx.storage.sql
+      .exec<{ avg_ms: number | null; max_ms: number | null }>(
+        `SELECT AVG(? - joined_at) AS avg_ms, MAX(? - joined_at) AS max_ms
+         FROM visitors WHERE status = 'waiting'`,
+        now,
+        now,
+      )
+      .toArray()[0];
+    const avgMs = row?.avg_ms;
+    const maxMs = row?.max_ms;
+    return {
+      averageWaitSeconds:
+        avgMs !== null && avgMs !== undefined && Number.isFinite(avgMs)
+          ? Math.max(0, Math.round(avgMs / 1000))
+          : 0,
+      oldestWaitSeconds:
+        maxMs !== null && maxMs !== undefined && Number.isFinite(maxMs)
+          ? Math.max(0, Math.round(maxMs / 1000))
+          : 0,
+    };
+  }
+
   private waitingAhead(sequence: number): number {
-    return this.ctx.storage.sql
+    const cached = this.aheadCache.get(sequence);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const ahead = this.ctx.storage.sql
       .exec<{ count: number }>(
         `SELECT COUNT(*) AS count FROM visitors
          WHERE status = 'waiting' AND sequence < ?`,
         sequence,
       )
       .one().count;
+    this.aheadCache.set(sequence, ahead);
+    return ahead;
+  }
+
+  private ensureDepth(): void {
+    if (this.depth) {
+      return;
+    }
+    const waitingRaw = this.getMeta("count_waiting");
+    const admittedRaw = this.getMeta("count_admitted");
+    const waiting = waitingRaw !== null ? Number(waitingRaw) : NaN;
+    const admitted = admittedRaw !== null ? Number(admittedRaw) : NaN;
+    if (Number.isFinite(waiting) && Number.isFinite(admitted) && waiting >= 0 && admitted >= 0) {
+      this.depth = { waiting, admitted };
+      return;
+    }
+    this.reconcileDepth();
+  }
+
+  private reconcileDepth(): void {
+    const waiting = this.ctx.storage.sql
+      .exec<{ count: number }>(`SELECT COUNT(*) AS count FROM visitors WHERE status = 'waiting'`)
+      .one().count;
+    const admitted = this.ctx.storage.sql
+      .exec<{ count: number }>(`SELECT COUNT(*) AS count FROM visitors WHERE status = 'admitted'`)
+      .one().count;
+    this.depth = { waiting, admitted };
+    this.setMeta("count_waiting", String(waiting));
+    this.setMeta("count_admitted", String(admitted));
+    this.aheadCache.clear();
+  }
+
+  private bumpDepth(waitingDelta: number, admittedDelta: number): void {
+    this.ensureDepth();
+    this.depth = {
+      waiting: Math.max(0, this.depth!.waiting + waitingDelta),
+      admitted: Math.max(0, this.depth!.admitted + admittedDelta),
+    };
+    this.setMeta("count_waiting", String(this.depth.waiting));
+    this.setMeta("count_admitted", String(this.depth.admitted));
   }
 
   private toView(visitor: VisitorRow, config: QueueConfig, now: number) {
