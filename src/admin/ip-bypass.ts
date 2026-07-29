@@ -2,11 +2,7 @@
  * Mint a normal admission cookie for allowlisted client IPs (no DO / no queue slot).
  */
 
-import {
-  buildAccessCookie,
-  buildAdmissionClaims,
-  signAccessToken,
-} from "../auth";
+import { buildAccessCookie, buildAdmissionClaims, signAccessToken } from "../auth";
 import { clientConnectingIp } from "../auth/client-ip";
 import { requireTokenSecret } from "../auth/operator";
 import { configFromEnv } from "../queue/client";

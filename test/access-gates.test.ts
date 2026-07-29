@@ -51,7 +51,11 @@ async function resetAndSetup(queue = "gates-q"): Promise<string> {
   return cookieFrom(setup);
 }
 
-async function waitForGeoHits(session: string, minHits: number, queue = "gates-q"): Promise<number> {
+async function waitForGeoHits(
+  session: string,
+  minHits: number,
+  queue = "gates-q",
+): Promise<number> {
   const deadline = Date.now() + 2_000;
   while (Date.now() < deadline) {
     const metrics = await exports.default.fetch(

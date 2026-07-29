@@ -6,10 +6,7 @@
 import { clientConnectingIp } from "../auth/client-ip";
 import { clientCountryCode, isCountryBlocked } from "../auth/geo-country";
 import { isIpAllowlisted, readBypassSettings } from "./bypass-store";
-import {
-  effectiveBlockedCountries,
-  readGeoBlockSettings,
-} from "./geo-block-store";
+import { effectiveBlockedCountries, readGeoBlockSettings } from "./geo-block-store";
 import { recordGeoBlockHit } from "./geo-block-stats";
 
 export interface GeoBlockDecision {

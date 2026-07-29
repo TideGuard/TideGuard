@@ -11,12 +11,12 @@ The control room **Analytics** panel charts queue and geo-block activity from th
 
 Charts:
 
-| Chart | Series |
-| --- | --- |
-| Queue depth | Waiting, admitted |
-| Average wait | `averageWaitSeconds` |
+| Chart              | Series                                           |
+| ------------------ | ------------------------------------------------ |
+| Queue depth        | Waiting, admitted                                |
+| Average wait       | `averageWaitSeconds`                             |
 | Country block hits | Per-interval delta of `geoBlock.stats.totalHits` |
-| Blocked countries | Live `byCountry` for the current block window |
+| Blocked countries  | Live `byCountry` for the current block window    |
 
 Leaving the control room closed for a stretch means those intervals are missing from the chart until you open it again.
 

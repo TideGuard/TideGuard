@@ -6,11 +6,11 @@ Staff on a fixed office network can skip the waiting room. TideGuard matches the
 
 Cloudflare sets **`CF-Connecting-IP`** on every request that is **proxied** (orange cloud) to your Worker. There is **no separate zone setting** to “turn on” this header.
 
-| Situation                         | Result                                      |
-| --------------------------------- | ------------------------------------------- |
-| Hostname proxied + Worker route   | `CF-Connecting-IP` present; allowlist works |
-| DNS-only (grey cloud)             | Header missing; allowlist cannot match      |
-| Trusting `X-Forwarded-For`        | **Not used** for bypass (spoofable)         |
+| Situation                       | Result                                      |
+| ------------------------------- | ------------------------------------------- |
+| Hostname proxied + Worker route | `CF-Connecting-IP` present; allowlist works |
+| DNS-only (grey cloud)           | Header missing; allowlist cannot match      |
+| Trusting `X-Forwarded-For`      | **Not used** for bypass (spoofable)         |
 
 In **Admin → IP allowlist**, TideGuard shows your current connecting IP and whether it matches the list.
 

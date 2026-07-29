@@ -183,10 +183,14 @@ async function setIpGeolocation(
   zoneId: string,
   value: "on" | "off",
 ): Promise<void> {
-  await cfFetch(apiToken, `https://api.cloudflare.com/client/v4/zones/${zoneId}/settings/ip_geolocation`, {
-    method: "PATCH",
-    body: JSON.stringify({ value }),
-  });
+  await cfFetch(
+    apiToken,
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}/settings/ip_geolocation`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+    },
+  );
 }
 
 function isSettingOn(value: string | boolean | number | null): boolean {
@@ -216,8 +220,10 @@ async function cfFetch<T>(apiToken: string, url: string, init: RequestInit = {})
 
   if (!response.ok || body.success === false) {
     const message =
-      body.errors?.map((e) => e.message).filter(Boolean).join("; ") ||
-      `Cloudflare API error (${response.status})`;
+      body.errors
+        ?.map((e) => e.message)
+        .filter(Boolean)
+        .join("; ") || `Cloudflare API error (${response.status})`;
     throw new CloudflareApiError(message, response.status);
   }
 

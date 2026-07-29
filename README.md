@@ -24,17 +24,17 @@ Commercial waiting rooms work. They are also expensive, opaque, and hard to stud
 
 TideGuard is the opposite shape:
 
-| You get                            | Why it matters                                                                  |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
-| **Durable Object queue**           | Strong consistency for join / leave / admit. KV is not a queue.                 |
-| **Queue Mode or Lottery Mode**     | Fair FIFO line, or equal-odds random draw among waiters.                        |
-| **HMAC admission tokens**          | Time-limited access without a session database.                                 |
-| **Admin control room**             | Branding, traffic controls, live queue metrics, and analytics with live preview. |
-| **Origin proxy**                   | Sit in front of your site; unauthenticated traffic hits `/wait`, admitted traffic is proxied. |
-| **IP allowlist + Pass queue**      | Staff skip the line from a fixed network, or mint a temporary cookie to smoke-test. |
-| **Temporary country block**        | Event-window geo gate via `CF-IPCountry`, with TTL and allowlist overrides.     |
-| **Cost calculator**                | Ballpark Cloudflare spend before the launch, not after the invoice.             |
-| **One-click deploy**               | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.               |
+| You get                        | Why it matters                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------- |
+| **Durable Object queue**       | Strong consistency for join / leave / admit. KV is not a queue.                               |
+| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.                                      |
+| **HMAC admission tokens**      | Time-limited access without a session database.                                               |
+| **Admin control room**         | Branding, traffic controls, live queue metrics, and analytics with live preview.              |
+| **Origin proxy**               | Sit in front of your site; unauthenticated traffic hits `/wait`, admitted traffic is proxied. |
+| **IP allowlist + Pass queue**  | Staff skip the line from a fixed network, or mint a temporary cookie to smoke-test.           |
+| **Temporary country block**    | Event-window geo gate via `CF-IPCountry`, with TTL and allowlist overrides.                   |
+| **Cost calculator**            | Ballpark Cloudflare spend before the launch, not after the invoice.                           |
+| **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.                             |
 
 ## Try it in three steps
 
@@ -82,15 +82,15 @@ Details: [docs/admin.md](docs/admin.md), [docs/verifying-admission.md](docs/veri
 
 The `/admin` control room is the launch desk:
 
-| Tool | What it does |
-| --- | --- |
-| **Live queue** | Waiting, admitted, open slots, wait times, geo-block hits — refreshed about every 5s |
-| **Analytics** | 5-minute charts for queue depth, average wait, and country-block hits (1h / 12h / 24h) |
-| **IP allowlist** | Office / staff IPs skip the queue without consuming capacity ([docs/ip-allowlist.md](docs/ip-allowlist.md)) |
-| **Pass queue** | Issue an admission cookie for this browser to smoke-test the protected app |
-| **Country block** | Temporary `CF-IPCountry` gate with TTL for event windows ([docs/geo-block.md](docs/geo-block.md)) |
-| **Cloudflare access** | Optional Zone ID + API token to check/fix proxied DNS and IP Geolocation |
-| **Origin proxy** | Gate paths and forward admitted traffic upstream ([docs/protecting-origin.md](docs/protecting-origin.md)) |
+| Tool                  | What it does                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Live queue**        | Waiting, admitted, open slots, wait times, geo-block hits — refreshed about every 5s                        |
+| **Analytics**         | 5-minute charts for queue depth, average wait, and country-block hits (1h / 12h / 24h)                      |
+| **IP allowlist**      | Office / staff IPs skip the queue without consuming capacity ([docs/ip-allowlist.md](docs/ip-allowlist.md)) |
+| **Pass queue**        | Issue an admission cookie for this browser to smoke-test the protected app                                  |
+| **Country block**     | Temporary `CF-IPCountry` gate with TTL for event windows ([docs/geo-block.md](docs/geo-block.md))           |
+| **Cloudflare access** | Optional Zone ID + API token to check/fix proxied DNS and IP Geolocation                                    |
+| **Origin proxy**      | Gate paths and forward admitted traffic upstream ([docs/protecting-origin.md](docs/protecting-origin.md))   |
 
 Analytics chart history is kept in the operator’s browser while the control room is open — no server-side time-series store. Details: [docs/analytics.md](docs/analytics.md).
 

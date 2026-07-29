@@ -9,14 +9,14 @@ Block visitors by Cloudflare’s **`CF-IPCountry`** header for a limited time (T
 
 ## Behaviour
 
-| Request                         | Result                                      |
-| ------------------------------- | ------------------------------------------- |
-| Country on active block list    | `403` branded “Not available in your region” |
-| IP allowlisted                  | Not geo-blocked (office override)           |
-| Admin **Pass queue**            | Not geo-blocked                             |
-| Valid admission cookie          | Allowed through                             |
-| List **expired** (TTL)          | Block inactive — everyone queues normally   |
-| Unknown `XX` / `T1`             | Not blocked unless those codes are listed   |
+| Request                      | Result                                       |
+| ---------------------------- | -------------------------------------------- |
+| Country on active block list | `403` branded “Not available in your region” |
+| IP allowlisted               | Not geo-blocked (office override)            |
+| Admin **Pass queue**         | Not geo-blocked                              |
+| Valid admission cookie       | Allowed through                              |
+| List **expired** (TTL)       | Block inactive — everyone queues normally    |
+| Unknown `XX` / `T1`          | Not blocked unless those codes are listed    |
 
 Checked on protected origin paths, `/wait`, `/demo`, and `POST /join` — before the waiting room / Durable Object.
 
@@ -34,12 +34,12 @@ Hit stats live in KV (`admin:geo-block-stats`) separately from the block list so
 
 ## Clients (full page, widget, API)
 
-| Surface | Behaviour when blocked |
-| --- | --- |
-| Full page `/wait` | `403` HTML “Not available in your region” |
-| Widget `/wait?embed=1` | Same HTML, embed-sized layout |
-| Waiting-room JS (if `/join` 403) | Stops polling; shows region error in-page |
-| Custom API `POST /join` | `403` JSON `{ error: { code: "forbidden", details: { country } } }` |
+| Surface                          | Behaviour when blocked                                              |
+| -------------------------------- | ------------------------------------------------------------------- |
+| Full page `/wait`                | `403` HTML “Not available in your region”                           |
+| Widget `/wait?embed=1`           | Same HTML, embed-sized layout                                       |
+| Waiting-room JS (if `/join` 403) | Stops polling; shows region error in-page                           |
+| Custom API `POST /join`          | `403` JSON `{ error: { code: "forbidden", details: { country } } }` |
 
 Marketing demos at tideguard.dev include a **Simulate geo block** control on full / widget / API pages.
 

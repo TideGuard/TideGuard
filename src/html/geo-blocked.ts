@@ -10,10 +10,7 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function renderGeoBlockedPage(options: {
-  country: string | null;
-  embed?: boolean;
-}): string {
+export function renderGeoBlockedPage(options: { country: string | null; embed?: boolean }): string {
   const country = options.country ? escapeHtml(options.country) : "your region";
   const embed = options.embed === true;
   return `<!DOCTYPE html>

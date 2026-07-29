@@ -269,7 +269,11 @@ export class QueueRoom extends DurableObject<Env> {
       const slots = openSlots(request.config.maxConcurrentUsers, this.countByStatus("admitted"));
       const toAdmit = Math.min(slots, count);
       if (toAdmit > 0) {
-        admittedIds = this.admitSelected(this.selectWaiting(toAdmit, request.config), request.config, now);
+        admittedIds = this.admitSelected(
+          this.selectWaiting(toAdmit, request.config),
+          request.config,
+          now,
+        );
       }
     }
 
@@ -439,7 +443,6 @@ export class QueueRoom extends DurableObject<Env> {
       this.setMeta("schema_version", "3");
       version = 3;
     }
-
   }
 
   private sweep(config: QueueConfig, now: number, force: boolean): void {
@@ -540,11 +543,7 @@ export class QueueRoom extends DurableObject<Env> {
   /**
    * Promote selected waiters to admitted and keep depth caches coherent.
    */
-  private admitSelected(
-    rows: Array<{ id: string }>,
-    config: QueueConfig,
-    now: number,
-  ): string[] {
+  private admitSelected(rows: Array<{ id: string }>, config: QueueConfig, now: number): string[] {
     if (rows.length === 0) {
       return [];
     }

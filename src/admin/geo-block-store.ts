@@ -138,10 +138,7 @@ export async function writeGeoBlockSettings(
 }
 
 /** True when the block list is enabled, not expired, and has countries. */
-export function isGeoBlockActive(
-  settings: GeoBlockSettings,
-  now = Date.now(),
-): boolean {
+export function isGeoBlockActive(settings: GeoBlockSettings, now = Date.now()): boolean {
   if (!settings.enabled || settings.countries.length === 0) {
     return false;
   }
@@ -151,10 +148,7 @@ export function isGeoBlockActive(
   return true;
 }
 
-export function effectiveBlockedCountries(
-  settings: GeoBlockSettings,
-  now = Date.now(),
-): string[] {
+export function effectiveBlockedCountries(settings: GeoBlockSettings, now = Date.now()): string[] {
   return isGeoBlockActive(settings, now) ? settings.countries : [];
 }
 

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isCountryBlocked,
-  parseCountryCodes,
-} from "../src/auth/geo-country";
+import { isCountryBlocked, parseCountryCodes } from "../src/auth/geo-country";
 import {
   effectiveBlockedCountries,
   isGeoBlockActive,

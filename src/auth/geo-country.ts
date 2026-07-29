@@ -42,10 +42,7 @@ export function parseCountryCodes(text: string): { countries: string[]; errors: 
   return { countries, errors };
 }
 
-export function isCountryBlocked(
-  country: string | null,
-  blocked: string[],
-): boolean {
+export function isCountryBlocked(country: string | null, blocked: string[]): boolean {
   if (!country || blocked.length === 0) {
     return false;
   }

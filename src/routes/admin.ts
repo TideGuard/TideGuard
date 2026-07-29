@@ -1,18 +1,10 @@
 import { parseAdmissionMode } from "../core/config";
 import { ApiError, jsonOk } from "../core/errors";
-import {
-  DEFAULT_BRANDING,
-  sanitizeRedirectUrl,
-  type WaitingRoomBranding,
-} from "../core/branding";
+import { DEFAULT_BRANDING, sanitizeRedirectUrl, type WaitingRoomBranding } from "../core/branding";
 import type { AdmissionMode } from "../core/types";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { signAdminSession } from "../auth/admin-session";
-import {
-  buildAccessCookie,
-  buildAdmissionClaims,
-  signAccessToken,
-} from "../auth";
+import { buildAccessCookie, buildAdmissionClaims, signAccessToken } from "../auth";
 import {
   buildAdminSessionCookie,
   clearAdminSessionCookie,
@@ -57,7 +49,11 @@ import {
   resetGeoBlockStatsWindow,
   toGeoBlockStatsPublic,
 } from "../admin/geo-block-stats";
-import { checkHostnameProxy, CloudflareApiError, enableHostnameProxy } from "../admin/cloudflare-api";
+import {
+  checkHostnameProxy,
+  CloudflareApiError,
+  enableHostnameProxy,
+} from "../admin/cloudflare-api";
 import { clientConnectingIp, hasConnectingIpHeader } from "../auth/client-ip";
 import { clientCountryCode, isCountryBlocked } from "../auth/geo-country";
 import { normalizeOriginUrl, parsePathPrefixes } from "../core/origin";
@@ -306,15 +302,18 @@ async function runCloudflareProxyAction(
   const settings = await readBypassSettings(env);
   const body = await readJsonBody(request).catch(() => ({}) as Record<string, unknown>);
 
-  const zoneId =
-    (typeof body.zoneId === "string" && body.zoneId.trim()) || settings.zoneId || "";
+  const zoneId = (typeof body.zoneId === "string" && body.zoneId.trim()) || settings.zoneId || "";
   const hostname =
     (typeof body.hostname === "string" && body.hostname.trim()) ||
     settings.hostname ||
     new URL(request.url).hostname;
 
   if (!zoneId) {
-    throw new ApiError("bad_request", "zoneId is required (from the Cloudflare overview page)", 400);
+    throw new ApiError(
+      "bad_request",
+      "zoneId is required (from the Cloudflare overview page)",
+      400,
+    );
   }
 
   const apiToken = await readCloudflareApiToken(env);
@@ -391,10 +390,8 @@ export async function handleAdminPass(request: Request, env: Env): Promise<Respo
   ]);
   const fallback = branding.redirectUrl || (origin.enabled ? "/" : "/demo");
   const redirectTo =
-    sanitizeRedirectUrl(
-      typeof body.returnTo === "string" ? body.returnTo : "",
-      fallback,
-    ) || fallback;
+    sanitizeRedirectUrl(typeof body.returnTo === "string" ? body.returnTo : "", fallback) ||
+    fallback;
 
   const config = configFromEnv(env);
   const secret = requireTokenSecret(env);
@@ -438,9 +435,7 @@ export async function handleAdminSaveGeoBlock(request: Request, env: Env): Promi
           ? body.expiresAt
           : null,
     });
-    const stats = enabled
-      ? await resetGeoBlockStatsWindow(env)
-      : await readGeoBlockStats(env);
+    const stats = enabled ? await resetGeoBlockStatsWindow(env) : await readGeoBlockStats(env);
     const clientCountry = clientCountryCode(request);
     return jsonOk({
       ok: true,
