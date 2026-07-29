@@ -43,6 +43,7 @@ import {
   handlePause,
   handleStatus,
 } from "./queue";
+import { handleNotificationSound } from "./sounds";
 
 /**
  * Paths that never need origin proxy config (skip KV / cache lookup).
@@ -64,6 +65,7 @@ const STATIC_TIDEGUARD = new Set([
   "/cost",
   "/demo",
   "/api/cost-estimate",
+  "/sounds/notification.mp3",
 ]);
 
 /**
@@ -250,6 +252,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "GET" && url.pathname === "/demo") {
     return await handleDemo(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/sounds/notification.mp3") {
+    return handleNotificationSound();
   }
 
   if (request.method === "POST" && url.pathname === "/join") {

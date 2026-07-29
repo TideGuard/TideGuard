@@ -42,6 +42,7 @@ const RESERVED_EXACT = new Set([
   "/cost",
   "/demo",
   "/api/cost-estimate",
+  "/sounds/notification.mp3",
 ]);
 
 const RESERVED_PREFIXES = ["/api/admin"];

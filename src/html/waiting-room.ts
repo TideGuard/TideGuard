@@ -211,6 +211,20 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         opacity: 0.55;
         cursor: wait;
       }
+      .sound-opt {
+        margin-top: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-size: 0.88rem;
+        color: var(--tg-muted);
+      }
+      .sound-opt[hidden] { display: none; }
+      .sound-opt input {
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--tg-accent);
+      }
     </style>
   </head>
   <body>
@@ -250,6 +264,10 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         <p class="hold" id="hold-text">Your spot is ready. Continue before the timer ends.</p>
         <button type="button" id="enter-btn">${escapeHtml(branding.enterButtonLabel)}</button>
       </div>
+      <label class="sound-opt" id="sound-opt" ${branding.playTurnSound && branding.requireClickToEnter ? "" : "hidden"}>
+        <input type="checkbox" id="sound-toggle" />
+        Play a sound when it’s my turn
+      </label>
     </main>
     <script>
       (() => {
@@ -259,14 +277,19 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         const heartbeatMs = ${JSON.stringify(heartbeatIntervalMs)};
         const showWaitingCount = ${JSON.stringify(showWaitingCount)};
         const requireClickToEnter = ${JSON.stringify(branding.requireClickToEnter)};
+        const playTurnSound = ${JSON.stringify(branding.playTurnSound && branding.requireClickToEnter)};
         const opensAt = ${JSON.stringify(opensAt)};
         const storageKey = "tg_visitor:" + queue;
+        const soundPrefKey = "tg_turn_sound:" + queue;
+        const turnSoundUrl = "/sounds/notification.mp3";
         let visitorId = ${JSON.stringify(initialVisitorId)} || localStorage.getItem(storageKey) || "";
         let timer = null;
         let heartbeatTimer = null;
         let holdTimer = null;
         let openTimer = null;
         let entering = false;
+        let turnSoundPlayed = false;
+        let turnAudio = null;
 
         const el = {
           stats: document.getElementById("stats"),
@@ -285,7 +308,44 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           enterPanel: document.getElementById("enter-panel"),
           holdText: document.getElementById("hold-text"),
           enterBtn: document.getElementById("enter-btn"),
+          soundToggle: document.getElementById("sound-toggle"),
         };
+
+        if (playTurnSound && el.soundToggle) {
+          el.soundToggle.checked = localStorage.getItem(soundPrefKey) !== "0";
+        }
+
+        function ensureTurnAudio() {
+          if (!turnAudio) {
+            turnAudio = new Audio(turnSoundUrl);
+            turnAudio.preload = "auto";
+          }
+          return turnAudio;
+        }
+
+        function unlockTurnSound() {
+          if (!playTurnSound) return;
+          const audio = ensureTurnAudio();
+          const p = audio.play();
+          if (p && typeof p.then === "function") {
+            p.then(() => {
+              audio.pause();
+              audio.currentTime = 0;
+            }).catch(() => {});
+          }
+        }
+
+        function playTurnSoundOnce() {
+          if (!playTurnSound || turnSoundPlayed) return;
+          if (el.soundToggle && !el.soundToggle.checked) return;
+          turnSoundPlayed = true;
+          try {
+            const audio = ensureTurnAudio();
+            audio.currentTime = 0;
+            const p = audio.play();
+            if (p && typeof p.catch === "function") p.catch(() => {});
+          } catch (_) {}
+        }
 
         function paintOpenCountdown() {
           if (!opensAt || !el.openStatus) return;
@@ -407,9 +467,11 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         }
 
         function showEnterPanel(data) {
+          const firstShow = el.enterPanel.hidden;
           el.enterPanel.hidden = false;
           el.progress.style.setProperty("--progress", "100%");
           setStatus("You’re next — confirm to enter", "ok");
+          if (firstShow) playTurnSoundOnce();
           let remaining = Number.isFinite(data.holdSecondsRemaining)
             ? data.holdSecondsRemaining
             : 0;
@@ -433,6 +495,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
 
         async function forfeitHold() {
           el.enterPanel.hidden = true;
+          turnSoundPlayed = false;
           setStatus("Hold expired. Rejoining the line…", "err");
           try {
             await fetch("/leave", {
@@ -521,6 +584,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           if (!res.ok) {
             if (res.status === 404) {
               el.enterPanel.hidden = true;
+              turnSoundPlayed = false;
               if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
               localStorage.removeItem(storageKey);
               visitorId = "";
@@ -555,6 +619,22 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         }
 
         el.enterBtn.addEventListener("click", () => { confirmEnter(); });
+
+        if (playTurnSound && el.soundToggle) {
+          el.soundToggle.addEventListener("change", () => {
+            localStorage.setItem(soundPrefKey, el.soundToggle.checked ? "1" : "0");
+            if (el.soundToggle.checked) unlockTurnSound();
+          });
+          if (el.soundToggle.checked) {
+            const unlock = () => {
+              unlockTurnSound();
+              window.removeEventListener("pointerdown", unlock);
+              window.removeEventListener("keydown", unlock);
+            };
+            window.addEventListener("pointerdown", unlock, { once: true });
+            window.addEventListener("keydown", unlock, { once: true });
+          }
+        }
 
         (async () => {
           try {

@@ -90,6 +90,7 @@ export function sanitizeBrandingInput(
     requireClickToEnter: Boolean(merged.requireClickToEnter),
     admitHoldSeconds,
     enterButtonLabel: clampText(merged.enterButtonLabel, 40) || DEFAULT_BRANDING.enterButtonLabel,
+    playTurnSound: Boolean(merged.playTurnSound),
   };
 }
 

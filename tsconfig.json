@@ -15,6 +15,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "worker-configuration.d.ts", "src/env.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "worker-configuration.d.ts", "src/env.d.ts"],
   "exclude": ["node_modules", "dist", "test"]
 }

@@ -29,6 +29,11 @@ export interface WaitingRoomBranding {
   admitHoldSeconds: number;
   /** Label on the Continue button when requireClickToEnter is on. */
   enterButtonLabel: string;
+  /**
+   * When true (and click-to-enter is on), the waiting room can play a short
+   * jingle when Continue appears so visitors notice in another tab.
+   */
+  playTurnSound: boolean;
 }
 
 export const DEFAULT_BRANDING: WaitingRoomBranding = {
@@ -46,6 +51,7 @@ export const DEFAULT_BRANDING: WaitingRoomBranding = {
   requireClickToEnter: false,
   admitHoldSeconds: 120,
   enterButtonLabel: "Continue",
+  playTurnSound: false,
 };
 
 export function mergeBranding(

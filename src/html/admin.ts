@@ -425,11 +425,15 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <input id="setup-require-click" type="checkbox" />
             Require click to enter (no auto-redirect)
           </label>
+          <label class="check">
+            <input id="setup-play-turn-sound" type="checkbox" />
+            Play turn notification sound (Continue mode)
+          </label>
           <label>Admit hold (seconds)
             <input id="setup-admit-hold" type="number" min="15" max="900" value="120" />
           </label>
           <p class="muted" style="font-size:0.85rem;margin:0">
-            Redirect is a same-origin path. With click-to-enter, visitors must press Continue within the hold window or lose the spot.
+            Redirect is a same-origin path. With click-to-enter, visitors must press Continue within the hold window or lose the spot. Sound alerts let visitors notice Continue while in another tab (they can mute on the waiting page).
           </p>
         </div>
         <div id="wizard-step-3" hidden>
@@ -563,6 +567,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <label class="check">
               <input id="dash-require-click" type="checkbox" />
               Require click to enter
+            </label>
+            <label class="check">
+              <input id="dash-play-turn-sound" type="checkbox" />
+              Play turn notification sound
             </label>
             <label>Admit hold (seconds)
               <input id="dash-admit-hold" type="number" min="15" max="900" />
@@ -1101,6 +1109,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
             requireClickToEnter: document.getElementById("setup-require-click").checked,
             admitHoldSeconds: Number(document.getElementById("setup-admit-hold").value) || 120,
             enterButtonLabel: "Continue",
+            playTurnSound: document.getElementById("setup-play-turn-sound").checked,
           };
         }
 
@@ -1120,6 +1129,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
             requireClickToEnter: document.getElementById("dash-require-click").checked,
             admitHoldSeconds: Number(document.getElementById("dash-admit-hold").value) || 120,
             enterButtonLabel: document.getElementById("dash-enter-label").value.trim() || "Continue",
+            playTurnSound: document.getElementById("dash-play-turn-sound").checked,
           };
         }
 
@@ -1212,6 +1222,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("dash-require-click").checked = !!data.branding.requireClickToEnter;
           document.getElementById("dash-admit-hold").value = String(data.branding.admitHoldSeconds || 120);
           document.getElementById("dash-enter-label").value = data.branding.enterButtonLabel || "Continue";
+          document.getElementById("dash-play-turn-sound").checked = !!data.branding.playTurnSound;
           state.admissionMode = data.admissionMode;
           setModeButtons(
             document.getElementById("dash-mode-queue"),

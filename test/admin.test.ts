@@ -152,6 +152,8 @@ describe("admin setup wizard and dashboard", () => {
             title: "Updated title",
             message: "Updated message",
             showWaitingCount: false,
+            requireClickToEnter: true,
+            playTurnSound: true,
           },
         }),
       }),
@@ -162,6 +164,16 @@ describe("admin setup wizard and dashboard", () => {
     const html = await wait.text();
     expect(html).toContain("Updated title");
     expect(html).toContain("Updated message");
+    expect(html).toContain("Play a sound when it’s my turn");
+    expect(html).toContain('const playTurnSound = true');
+
+    const sound = await exports.default.fetch(
+      new Request("https://example.com/sounds/notification.mp3"),
+    );
+    expect(sound.status).toBe(200);
+    expect(sound.headers.get("content-type")).toMatch(/audio\/mpeg|mpeg/);
+    const bytes = await sound.arrayBuffer();
+    expect(bytes.byteLength).toBeGreaterThan(1000);
   });
 
   it("rejects admin setup without TOKEN_SECRET bearer", async () => {

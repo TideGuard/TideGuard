@@ -57,6 +57,7 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | Show depth             | Persisted with branding as `showWaitingCount` (no `?showWaiting=` override on `/wait`)         |
 | Default redirect path  | Same-origin path after admission (`redirectUrl`); overridable by `?return=`                    |
 | Require click to enter | Continue button instead of auto-redirect; token issued on `POST /enter`                        |
+| Play turn notification | Short jingle when Continue appears (`/sounds/notification.mp3`); visitors can mute on `/wait`  |
 | Admit hold (seconds)   | Time to click before the admitted spot is released (15–900)                                    |
 | Metrics                | Waiting / admitted / capacity / mode from the DO (also via operator `GET /metrics`)            |
 

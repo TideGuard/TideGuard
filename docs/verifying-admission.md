@@ -57,6 +57,7 @@ In `/admin` branding:
 | **Require click to enter** | Show a Continue button instead of auto-redirect                         |
 | **Admit hold (seconds)**   | How long the admitted spot is kept before release (15–900, default 120) |
 | **Enter button label**     | Button text (default `Continue`)                                        |
+| **Play turn notification** | Play `/sounds/notification.mp3` when Continue appears (visitor-muteable)|
 
 Flow:
 
