@@ -678,23 +678,9 @@ function CloudflarePanel({ state, onSaved }: { state: AdminState; onSaved: () =>
       <Stack>
         <Title order={4}>Cloudflare access</Title>
         <Text size="sm" c="dimmed">
-          TideGuard uses your API token so you can check DNS, SSL, and domains here — without living
-          in the Cloudflare dashboard. Credentials are sealed in KV. Origin URL and queue mode are
-          configured elsewhere in this control room.
+          Connect once with an API token. After that, check DNS, SSL, and domains here — without
+          living in the Cloudflare dashboard.
         </Text>
-        <TextInput
-          label={FIELD_HELP.zoneId.label}
-          description={
-            <>
-              {FIELD_HELP.zoneId.how}{" "}
-              <Anchor href={LINKS.findIds} target="_blank" rel="noreferrer" size="sm">
-                Find Zone ID
-              </Anchor>
-            </>
-          }
-          value={zoneId}
-          onChange={(e) => setZoneId(e.currentTarget.value)}
-        />
         <PasswordInput
           label={FIELD_HELP.apiToken.label}
           description={
@@ -702,7 +688,8 @@ function CloudflarePanel({ state, onSaved }: { state: AdminState; onSaved: () =>
               "Token saved — leave blank to keep"
             ) : (
               <>
-                {FIELD_HELP.apiToken.how}{" "}
+                Create a Custom Token with DNS Edit, Zone Read, Zone Settings Edit, Turnstile Edit,
+                and Workers Scripts Edit.{" "}
                 <Anchor href={LINKS.apiTokens} target="_blank" rel="noreferrer" size="sm">
                   Open API Tokens
                 </Anchor>
@@ -714,20 +701,26 @@ function CloudflarePanel({ state, onSaved }: { state: AdminState; onSaved: () =>
         />
         <TextInput
           label={FIELD_HELP.hostname.label}
-          description={
-            <>
-              {FIELD_HELP.hostname.how}{" "}
-              <Anchor href={LINKS.dnsRecords} target="_blank" rel="noreferrer" size="sm">
-                DNS records
-              </Anchor>
-            </>
-          }
+          description={FIELD_HELP.hostname.hint}
           value={hostname}
           onChange={(e) => setHostname(e.currentTarget.value)}
         />
         <TextInput
+          label={FIELD_HELP.zoneId.label}
+          description={
+            <>
+              {FIELD_HELP.zoneId.hint}{" "}
+              <Anchor href={LINKS.findIds} target="_blank" rel="noreferrer" size="sm">
+                Find Zone ID
+              </Anchor>
+            </>
+          }
+          value={zoneId}
+          onChange={(e) => setZoneId(e.currentTarget.value)}
+        />
+        <TextInput
           label={FIELD_HELP.workerService.label}
-          description={FIELD_HELP.workerService.how}
+          description={FIELD_HELP.workerService.hint}
           value={workerService}
           onChange={(e) => setWorkerService(e.currentTarget.value)}
         />
