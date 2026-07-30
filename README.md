@@ -2,6 +2,7 @@
 
 <p>
   <a href="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml"><img src="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml/badge.svg" alt="CI" height="20" /></a>
+  <a href="#documentation"><img src="https://img.shields.io/badge/coverage-~80%25-brightgreen" alt="Line coverage ~80%" height="20" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" height="20" /></a>
 </p>
 
@@ -34,6 +35,7 @@ TideGuard is the opposite shape:
 | **IP allowlist + Pass queue**  | Staff skip the line from a fixed network, or mint a temporary cookie to smoke-test.           |
 | **Temporary country block**    | Event-window geo gate via `CF-IPCountry`, with TTL and allowlist overrides.                   |
 | **Cost calculator**            | Ballpark Cloudflare spend before the launch, not after the invoice.                           |
+| **Tested Worker logic**        | ≈80% line coverage (`npm run test:coverage`); CI runs format, lint, types, and the suite.     |
 | **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.                             |
 
 ## Try it in three steps
@@ -152,8 +154,9 @@ npm run dev
 | http://localhost:8787/health | Liveness                                             |
 
 ```bash
-npm run ci            # format, lint, typecheck, tests
-npm run test:load     # in-memory scale test (see docs/load-testing.md)
+npm run ci              # format, lint, typecheck, tests
+npm run test:coverage   # Istanbul line coverage (~80% on src/)
+npm run test:load       # in-memory scale test (see docs/load-testing.md)
 ```
 
 ## Configuration
