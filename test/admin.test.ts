@@ -99,12 +99,13 @@ describe("admin setup wizard and dashboard", () => {
 
   it("rejects short Cloudflare API tokens on token-verify", async () => {
     await resetAdmin();
+    const cookie = await claimAdmin();
     const denied = await exports.default.fetch(
       new Request("https://example.com/api/admin/setup/cloudflare/token-verify", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${ADMIN_SECRET}`,
+          cookie,
         },
         body: JSON.stringify({ apiToken: "too-short" }),
       }),
@@ -114,12 +115,15 @@ describe("admin setup wizard and dashboard", () => {
     expect(body.error?.message ?? JSON.stringify(body)).toMatch(/token/i);
   });
 
-  it("requires TOKEN_SECRET bearer for token-verify", async () => {
+  it("requires admin session for token-verify", async () => {
     await resetAdmin();
     const denied = await exports.default.fetch(
       new Request("https://example.com/api/admin/setup/cloudflare/token-verify", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${ADMIN_SECRET}`,
+        },
         body: JSON.stringify({ apiToken: "a".repeat(40) }),
       }),
     );

@@ -71,9 +71,7 @@ Generate a secret first (so you can copy it):
 
 When Deploy prompts for `TOKEN_SECRET`, paste that value (the field starts empty). Keep the same string for the `/admin` Claim step — the Deploy UI masks secrets.
 
-Capacity, admit rate, and timeouts are **not** Deploy fields; the Worker boots with code defaults. Tune admit rate later in `/admin`.
-
-Capacity/timeout vars (`MAX_CONCURRENT_USERS`, `ADMIT_PER_SECOND`, …) may appear with defaults. **Do not** expect Deploy to ask for origin URL, queue name, admission mode, Cloudflare API token, Zone ID, or Turnstile — those are configured in `/admin` after deploy.
+Capacity, admit rate, timeouts, origin URL, queue name, admission mode, Cloudflare API token, Zone ID, and Turnstile are **not** Deploy fields — configure those in `/admin` after deploy (queue knobs boot from code defaults).
 
 ### Option B: Wrangler CLI
 

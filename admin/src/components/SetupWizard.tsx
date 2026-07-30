@@ -17,7 +17,7 @@ import {
   Textarea,
   Title,
 } from "@mantine/core";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import type { BootstrapResponse } from "../lib/types";
 import {
   CF_PHASE_LABELS,
@@ -64,19 +64,32 @@ function ExtLink({ href, children }: { href: string; children: ReactNode }) {
   );
 }
 
+function initialStep(bootstrap: BootstrapResponse): number {
+  if (!bootstrap.claimed) return 1;
+  const pending = bootstrap.setupPending as
+    { cloudflare?: { proxyOk?: boolean }; turnstile?: { verifiedAt?: number } } | null | undefined;
+  if (pending?.turnstile?.verifiedAt && pending.turnstile.verifiedAt > 0) return 4;
+  if (pending?.cloudflare?.proxyOk) return 3;
+  return 2;
+}
+
 export function SetupWizard({
   bootstrap,
   onComplete,
+  onNeedLogin,
 }: {
   bootstrap: BootstrapResponse;
   onComplete: () => Promise<void>;
+  onNeedLogin: () => void;
 }) {
-  const [step, setStep] = useState(1);
+  const claimed = bootstrap.claimed;
+  const [step, setStep] = useState(() => initialStep(bootstrap));
   const [cfPhase, setCfPhase] = useState<CfPhase>("token");
   const [tokenSecret, setTokenSecret] = useState("");
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(bootstrap.claimedUsername ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
+  const [signedInAs, setSignedInAs] = useState(bootstrap.claimedUsername);
   const [cfToken, setCfToken] = useState("");
   const [tokenVerified, setTokenVerified] = useState(false);
   const [zoneId, setZoneId] = useState("");
@@ -116,8 +129,12 @@ export function SetupWizard({
   const pwd = passwordChecks(password, confirmPassword);
   const activeStep = SETUP_STEPS.find((s) => s.id === step);
 
-  function authHeaders(): HeadersInit {
-    return { Authorization: `Bearer ${tokenSecret}` };
+  function handleApiError(e: unknown, fallback: string) {
+    if (e instanceof ApiError && e.status === 401) {
+      onNeedLogin();
+      return;
+    }
+    setStatus(e instanceof Error ? e.message : fallback);
   }
 
   useEffect(() => {
@@ -133,17 +150,44 @@ export function SetupWizard({
     });
   }, [step, tsSitekey]);
 
+  async function claim() {
+    if (!tokenSecret || !username || !isPasswordReady(password, confirmPassword)) {
+      setStatus("Fill claim fields (password policy + match required)");
+      return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      const result = await api<{ username: string }>("/api/admin/claim", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tokenSecret}` },
+        body: JSON.stringify({
+          username,
+          password,
+          confirmPassword,
+          queue: bootstrap.defaultQueue || "default",
+        }),
+      });
+      setSignedInAs(result.username);
+      setTokenSecret("");
+      setPassword("");
+      setConfirm("");
+      setStep(2);
+      setCfPhase("token");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Claim failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function finish() {
     setBusy(true);
     setStatus(null);
     try {
       await api("/api/admin/setup", {
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({
-          username,
-          password,
-          confirmPassword,
           queue,
           admissionMode: mode,
           branding: {
@@ -167,7 +211,7 @@ export function SetupWizard({
       });
       await onComplete();
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Setup failed");
+      handleApiError(e, "Setup failed");
     } finally {
       setBusy(false);
     }
@@ -178,7 +222,6 @@ export function SetupWizard({
     setStatus(null);
     void api<{ ok?: boolean }>("/api/admin/setup/cloudflare/token-verify", {
       method: "POST",
-      headers: authHeaders(),
       body: JSON.stringify({ apiToken: cfToken }),
     })
       .then(() => {
@@ -186,7 +229,7 @@ export function SetupWizard({
         setStatus("API token verified");
         setCfPhase("zone");
       })
-      .catch((e) => setStatus(e instanceof Error ? e.message : "Token verify failed"))
+      .catch((e) => handleApiError(e, "Token verify failed"))
       .finally(() => setBusy(false));
   }
 
@@ -204,7 +247,6 @@ export function SetupWizard({
     setStatus(null);
     void api<VerifyPayload>("/api/admin/setup/cloudflare/verify", {
       method: "POST",
-      headers: authHeaders(),
       body: JSON.stringify({
         apiToken: cfToken,
         zoneId,
@@ -224,7 +266,7 @@ export function SetupWizard({
           );
         }
       })
-      .catch((e) => setStatus(e instanceof Error ? e.message : "Verify failed"))
+      .catch((e) => handleApiError(e, "Verify failed"))
       .finally(() => setBusy(false));
   }
 
@@ -233,7 +275,6 @@ export function SetupWizard({
     setStatus(null);
     void api<VerifyPayload>("/api/admin/setup/cloudflare/fix", {
       method: "POST",
-      headers: authHeaders(),
       body: "{}",
     })
       .then((data) => {
@@ -250,7 +291,7 @@ export function SetupWizard({
           setStatus(check?.summary || "Fix incomplete — check DNS and try again");
         }
       })
-      .catch((e) => setStatus(e instanceof Error ? e.message : "Fix failed"))
+      .catch((e) => handleApiError(e, "Fix failed"))
       .finally(() => setBusy(false));
   }
 
@@ -259,7 +300,6 @@ export function SetupWizard({
     setStatus(null);
     void api("/api/admin/setup/cloudflare/ssl", {
       method: "POST",
-      headers: authHeaders(),
       body: "{}",
     })
       .then(() => {
@@ -267,7 +307,7 @@ export function SetupWizard({
         setStatus("SSL set to Full (strict)");
         setCfPhase("domain");
       })
-      .catch((e) => setStatus(e instanceof Error ? e.message : "SSL update failed"))
+      .catch((e) => handleApiError(e, "SSL update failed"))
       .finally(() => setBusy(false));
   }
 
@@ -276,7 +316,6 @@ export function SetupWizard({
     setStatus(null);
     void api("/api/admin/setup/cloudflare/attach-domain", {
       method: "POST",
-      headers: authHeaders(),
       body: "{}",
     })
       .then(() => {
@@ -284,7 +323,7 @@ export function SetupWizard({
         setStatus("Hostname attached to Worker");
         setStep(3);
       })
-      .catch((e) => setStatus(e instanceof Error ? e.message : "Attach failed"))
+      .catch((e) => handleApiError(e, "Attach failed"))
       .finally(() => setBusy(false));
   }
 
@@ -306,6 +345,7 @@ export function SetupWizard({
         <Title order={3}>First-time setup</Title>
         <Text size="sm" c="dimmed">
           Step {step} of 5{step === 2 ? ` · ${CF_PHASE_LABELS[cfPhase]}` : ""}
+          {signedInAs ? ` · Signed in as ${signedInAs}` : ""}
         </Text>
 
         <Group gap="xs" wrap="wrap">
@@ -329,57 +369,69 @@ export function SetupWizard({
         ) : null}
 
         {step === 1 ? (
-          <>
-            <PasswordInput
-              label="TOKEN_SECRET"
-              description="Same value as the Worker secret from Deploy to Cloudflare or .dev.vars. Required as Bearer so a public Worker cannot be claimed by a stranger."
-              value={tokenSecret}
-              onChange={(e) => setTokenSecret(e.currentTarget.value)}
-            />
-            <TextInput
-              label="Admin username"
-              value={username}
-              onChange={(e) => setUsername(e.currentTarget.value)}
-            />
-            <PasswordInput
-              label="Password"
-              description="8–128 chars, at least one uppercase letter, and a digit or symbol."
-              value={password}
-              onChange={(e) => setPassword(e.currentTarget.value)}
-            />
-            <PasswordInput
-              label="Confirm password"
-              value={confirmPassword}
-              onChange={(e) => setConfirm(e.currentTarget.value)}
-            />
-            <List size="sm" spacing={2} c="dimmed">
-              <List.Item c={pwd.length ? "teal" : undefined}>
-                {pwd.length ? "✓" : "○"} At least 8 characters
-              </List.Item>
-              <List.Item c={pwd.upper ? "teal" : undefined}>
-                {pwd.upper ? "✓" : "○"} One uppercase letter
-              </List.Item>
-              <List.Item c={pwd.digitOrSymbol ? "teal" : undefined}>
-                {pwd.digitOrSymbol ? "✓" : "○"} One digit or symbol
-              </List.Item>
-              <List.Item c={pwd.match ? "teal" : undefined}>
-                {pwd.match ? "✓" : "○"} Passwords match
-              </List.Item>
-            </List>
-            <Button
-              onClick={() => {
-                if (!tokenSecret || !username || !isPasswordReady(password, confirmPassword)) {
-                  setStatus("Fill claim fields (password policy + match required)");
-                  return;
-                }
-                setStatus(null);
-                setStep(2);
-                setCfPhase("token");
-              }}
-            >
-              Continue
-            </Button>
-          </>
+          claimed || signedInAs ? (
+            <>
+              <Text size="sm">
+                Account locked in as <strong>{signedInAs ?? bootstrap.claimedUsername}</strong>.
+                Continue Cloudflare setup, or sign in again if your session expired.
+              </Text>
+              <Group>
+                <Button
+                  onClick={() => {
+                    setStep(2);
+                    setCfPhase("token");
+                  }}
+                >
+                  Continue setup
+                </Button>
+                <Button variant="default" onClick={onNeedLogin}>
+                  Sign in
+                </Button>
+              </Group>
+            </>
+          ) : (
+            <>
+              <PasswordInput
+                label="TOKEN_SECRET"
+                description="Same value as the Worker secret (generate at tideguard.dev/token). Claim locks your admin account immediately."
+                value={tokenSecret}
+                onChange={(e) => setTokenSecret(e.currentTarget.value)}
+              />
+              <TextInput
+                label="Admin username"
+                value={username}
+                onChange={(e) => setUsername(e.currentTarget.value)}
+              />
+              <PasswordInput
+                label="Password"
+                description="8–128 chars, at least one uppercase letter, and a digit or symbol."
+                value={password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+              />
+              <PasswordInput
+                label="Confirm password"
+                value={confirmPassword}
+                onChange={(e) => setConfirm(e.currentTarget.value)}
+              />
+              <List size="sm" spacing={2} c="dimmed">
+                <List.Item c={pwd.length ? "teal" : undefined}>
+                  {pwd.length ? "✓" : "○"} At least 8 characters
+                </List.Item>
+                <List.Item c={pwd.upper ? "teal" : undefined}>
+                  {pwd.upper ? "✓" : "○"} One uppercase letter
+                </List.Item>
+                <List.Item c={pwd.digitOrSymbol ? "teal" : undefined}>
+                  {pwd.digitOrSymbol ? "✓" : "○"} One digit or symbol
+                </List.Item>
+                <List.Item c={pwd.match ? "teal" : undefined}>
+                  {pwd.match ? "✓" : "○"} Passwords match
+                </List.Item>
+              </List>
+              <Button loading={busy} onClick={() => void claim()}>
+                Claim & continue
+              </Button>
+            </>
+          )
         ) : null}
 
         {step === 2 && cfPhase === "token" ? (
@@ -609,14 +661,13 @@ export function SetupWizard({
                   setStatus(null);
                   void api<{ sitekey?: string }>("/api/admin/setup/turnstile/provision", {
                     method: "POST",
-                    headers: authHeaders(),
                     body: "{}",
                   })
                     .then((data) => {
                       setTsSitekey(data.sitekey ?? null);
                       setStatus("Widget ready — complete the challenge");
                     })
-                    .catch((e) => setStatus(e instanceof Error ? e.message : "Provision failed"))
+                    .catch((e) => handleApiError(e, "Provision failed"))
                     .finally(() => setBusy(false));
                 }}
               >
@@ -630,7 +681,6 @@ export function SetupWizard({
                   setStatus(null);
                   void api("/api/admin/setup/turnstile/verify", {
                     method: "POST",
-                    headers: authHeaders(),
                     body: JSON.stringify({ turnstileToken: tsToken }),
                   })
                     .then(() => {
@@ -638,7 +688,7 @@ export function SetupWizard({
                       setStatus("Turnstile verified");
                       setStep(4);
                     })
-                    .catch((e) => setStatus(e instanceof Error ? e.message : "Verify failed"))
+                    .catch((e) => handleApiError(e, "Verify failed"))
                     .finally(() => setBusy(false));
                 }}
               >
