@@ -678,8 +678,9 @@ function CloudflarePanel({ state, onSaved }: { state: AdminState; onSaved: () =>
       <Stack>
         <Title order={4}>Cloudflare access</Title>
         <Text size="sm" c="dimmed">
-          Credentials are sealed in KV. Origin URL and queue mode are configured elsewhere in this
-          control room — not at deploy time.
+          TideGuard uses your API token so you can check DNS, SSL, and domains here — without living
+          in the Cloudflare dashboard. Credentials are sealed in KV. Origin URL and queue mode are
+          configured elsewhere in this control room.
         </Text>
         <TextInput
           label={FIELD_HELP.zoneId.label}
@@ -726,14 +727,7 @@ function CloudflarePanel({ state, onSaved }: { state: AdminState; onSaved: () =>
         />
         <TextInput
           label={FIELD_HELP.workerService.label}
-          description={
-            <>
-              {FIELD_HELP.workerService.how}{" "}
-              <Anchor href={LINKS.workersAndPages} target="_blank" rel="noreferrer" size="sm">
-                Workers & Pages
-              </Anchor>
-            </>
-          }
+          description={FIELD_HELP.workerService.how}
           value={workerService}
           onChange={(e) => setWorkerService(e.currentTarget.value)}
         />

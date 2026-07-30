@@ -500,8 +500,6 @@ export function SetupWizard({
                 <FieldGuide
                   why={FIELD_HELP.workerService.why}
                   how={FIELD_HELP.workerService.how}
-                  link={LINKS.workersAndPages}
-                  linkLabel="Workers & Pages"
                 />
               }
               value={workerService}
@@ -544,11 +542,9 @@ export function SetupWizard({
         {step === 2 && cfPhase === "ssl" ? (
           <>
             <Text size="sm" c="dimmed">
-              Full (strict) SSL requires a valid certificate on your origin. Skip for now if the
-              origin is not ready — you can set it later in the Cloudflare panel.
-            </Text>
-            <Text size="xs" c="dimmed">
-              Dashboard: <ExtLink href={LINKS.sslTls}>SSL/TLS settings</ExtLink>
+              Full (strict) SSL requires a valid certificate on your origin. TideGuard sets this via
+              the Cloudflare API — you do not need to open the Cloudflare dashboard. Skip for now if
+              the origin is not ready; you can set it later under Admin → Cloudflare access.
             </Text>
             <Group>
               <Button
@@ -585,12 +581,9 @@ export function SetupWizard({
         {step === 2 && cfPhase === "domain" ? (
           <>
             <Text size="sm" c="dimmed">
-              Attach this hostname to the TideGuard Worker (Domains & Routes) so traffic hits the
-              waiting room. Skip if you already attached it in the dashboard.
-            </Text>
-            <Text size="xs" c="dimmed">
-              <ExtLink href={LINKS.workersAndPages}>Workers & Pages</ExtLink> → your service →
-              Domains & Routes
+              Attach this hostname to the TideGuard Worker so traffic hits the waiting room.
+              TideGuard does this via the API — no need to open Cloudflare. Skip if the hostname is
+              already attached; you can attach or detach later under Admin → Cloudflare access.
             </Text>
             <Group>
               <Button

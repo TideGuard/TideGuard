@@ -58,7 +58,7 @@ export const FIELD_HELP = {
   workerService: {
     label: "Worker service",
     why: "The Workers script name used when attaching a custom domain (Wrangler name).",
-    how: "Default tideguard matches Deploy to Cloudflare. Confirm under Workers & Pages if you renamed the Worker.",
+    how: "Default tideguard matches Deploy to Cloudflare. Change only if you renamed the Worker.",
   },
 } as const;
 
