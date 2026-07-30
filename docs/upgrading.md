@@ -100,10 +100,17 @@ Breaking changes (renamed bindings, removed KV keys, token format, DO class rena
 
 - [ ] `/health` returns 200 and the expected `version`
 - [ ] `/admin` login still works (same password); wizard does **not** reappear
+- [ ] If this release adds **required Turnstile** for login: complete Cloudflare + Turnstile in `/admin` (or emergency `POST /api/admin/reset` + re-run wizard on a non-prod Worker first)
 - [ ] Live queue / metrics respond for your default queue
 - [ ] If you use origin proxy: unauthenticated path → `/wait`; admitted → origin
 - [ ] If CHANGELOG lists new `vars`, decide whether to adopt upstream defaults or keep your tuned values, then redeploy
 - [ ] Smoke-test `/wait` join → admit once before a real launch
+
+## Upgrade notes (Unreleased → Cloudflare + Turnstile setup)
+
+Existing deploys that already finished the old 3-step wizard keep working for **session cookies already issued**. New logins and invite accepts expect Turnstile once `admin:turnstile` is configured. Fresh Workers (or after `POST /api/admin/reset`) must complete the **5-step** wizard: Account → Cloudflare verify → Turnstile → Queue → Branding.
+
+Token permissions for the in-admin Cloudflare flow: Zone DNS Edit, Zone Read, Zone Settings Edit, Account Turnstile Edit, Workers Scripts Write. See [admin.md](admin.md) and [ip-allowlist.md](ip-allowlist.md).
 
 ## Rollback
 

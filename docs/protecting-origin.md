@@ -91,12 +91,21 @@ Hop-by-hop and Cloudflare edge headers are stripped before the upstream fetch.
 
 ## Lock down the origin
 
-TideGuard is only as strong as origin exposure:
+TideGuard is only as strong as origin exposure. Without locking the origin, someone who knows your upstream URL can bypass the waiting room.
 
-1. Prefer an origin that is **not** publicly reachable except through Cloudflare (tunnel, private origin, or firewall allowlist of Cloudflare IP ranges).
-2. Reject requests that lack Cloudflare / TideGuard markers if you terminate elsewhere.
-3. Do not place secrets in query strings that TideGuard would proxy unchanged.
-4. Origin URLs must be public hosts — loopback and RFC1918 addresses are rejected (SSRF guard).
+### Lock the origin to Cloudflare (required for production)
+
+1. **SSL/TLS mode: Full (strict)** — Cloudflare verifies a valid certificate on the origin.
+2. **Authenticated Origin Pulls (AOP)** — Cloudflare presents a client certificate on every connection to your origin. Configure your origin (or load balancer) to **require** that client certificate and reject other TLS clients.
+   - Dashboard: SSL/TLS → Origin Server → Authenticated Origin Pulls (or per-hostname / per-zone API).
+   - Docs: [Authenticated Origin Pulls](https://developers.cloudflare.com/ssl/origin-configuration/authenticated-origin-pull/)
+3. Prefer an origin that is **not** publicly reachable except through Cloudflare (Tunnel, private network, or firewall allowlist of Cloudflare IP ranges).
+4. Do not place secrets in query strings that TideGuard would proxy unchanged.
+5. Origin URLs must be public hosts — loopback and RFC1918 addresses are rejected (SSRF guard).
+
+Without AOP (or equivalent mutual TLS / private networking), a leaked `ORIGIN_URL` can be hit directly and skip TideGuard.
+
+**Later:** Custom Origin Trust Store and post-quantum (ML-DSA) certificates can harden the same Cloudflare↔origin hop further — see [Cloudflare’s PQ origin auth announcement](https://blog.cloudflare.com/post-quantum-authentication-to-origins/).
 
 ## Patterns
 
@@ -121,6 +130,7 @@ Keep marketing on another host; iframe `/wait?embed=1&return=/checkout` on the g
 | Worker on hostname                 | `/health` OK                                         |
 | `/admin` setup done                | You can sign in                                      |
 | Origin proxy saved                 | Admin shows enabled + URL                            |
+| Full (strict) + AOP                | Origin rejects non-Cloudflare TLS clients            |
 | Unauthenticated `/` or `/checkout` | Redirects to `/wait`                                 |
 | After wait                         | Proxied origin content loads with `tg_access` cookie |
 

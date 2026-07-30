@@ -5,9 +5,11 @@ Use this before pointing production traffic at TideGuard.
 ## Secrets and admin
 
 - [ ] `TOKEN_SECRET` set via Wrangler secret / Deploy-to-Cloudflare (`openssl rand -hex 32`)
-- [ ] `/admin` setup completed with **Bearer TOKEN_SECRET** (wizard asks for it) so nobody else can claim the Worker
-- [ ] Strong admin password stored offline; session cookie is HttpOnly
+- [ ] `/admin` setup completed: Bearer TOKEN_SECRET + username/password + **Cloudflare verify** + **Turnstile verify**
+- [ ] Strong per-admin passwords stored offline; session cookie is HttpOnly; login protected by Turnstile
 - [ ] Confirmed `POST /api/admin/reset` only works with `Authorization: Bearer <TOKEN_SECRET>`
+- [ ] Extra operators invited via Team panel (72h links), not by sharing one password
+- [ ] Cloudflare panel: DNS proxied, IP Geolocation as needed, SSL Full (strict) if origin is ready, custom domain attached
 
 ## Capacity
 
@@ -30,7 +32,7 @@ Use `/cost` for Cloudflare Workers paid-plan estimates.
 ## Origin proxy
 
 - [ ] Origin URL is a **public** `https://` host (loopback / private IPs are rejected)
-- [ ] Origin only accepts traffic from Cloudflare (or only via TideGuard) — see [protecting-origin.md](protecting-origin.md)
+- [ ] Origin only accepts traffic from Cloudflare — **Full (strict)** SSL + **Authenticated Origin Pulls** (see [protecting-origin.md](protecting-origin.md))
 - [ ] Protected path smoke-test: unauthenticated → `/wait`; admitted → origin content
 - [ ] Confirmed TideGuard cookies (`tg_*`) are **not** forwarded upstream
 

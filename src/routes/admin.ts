@@ -13,14 +13,28 @@ import {
 } from "../auth/operator";
 import { rateLimitOrThrow, withSecurityHeaders } from "../auth";
 import {
+  addAdminUser,
   clearAdminConfig,
+  findUserByUsername,
   isAdminSetupComplete,
+  newAdminUserId,
   readAdminConfig,
   readBranding,
   sanitizeBrandingInput,
   writeAdminConfig,
   writeBranding,
 } from "../admin/store";
+import { appendAuditEvent, clearAuditLog, readAuditEvents } from "../admin/audit-store";
+import {
+  InviteError,
+  clearAllInvites,
+  consumeInvite,
+  createInvite,
+  listInvites,
+  revokeInvite,
+  toPublicInvite,
+} from "../admin/invite-store";
+import { validateUsername } from "../admin/types";
 import {
   clearOriginOverride,
   resolveOriginConfig,
@@ -50,10 +64,40 @@ import {
   toGeoBlockStatsPublic,
 } from "../admin/geo-block-stats";
 import {
+  attachWorkerDomain,
   checkHostnameProxy,
   CloudflareApiError,
+  createTurnstileWidget,
+  detachWorkerDomain,
   enableHostnameProxy,
+  findZoneIdByHostname,
+  getIpGeolocation,
+  listWorkerDomains,
+  setIpGeolocation,
+  setSslMode,
+  turnstileDomainsForHostname,
+  verifyCloudflareAccess,
+  verifyTurnstileToken,
 } from "../admin/cloudflare-api";
+import {
+  clearSetupPending,
+  isSetupPendingReady,
+  markSetupPendingTurnstileVerified,
+  openSetupPendingApiToken,
+  openSetupPendingTurnstileSecret,
+  readSetupPending,
+  toSetupPendingPublic,
+  writeSetupPendingCloudflare,
+  writeSetupPendingTurnstile,
+  SetupPendingError,
+} from "../admin/setup-pending-store";
+import {
+  clearTurnstileSettings,
+  readTurnstileSecret,
+  readTurnstileSettings,
+  toTurnstilePublicView,
+  writeTurnstileSettings,
+} from "../admin/turnstile-store";
 import { clientConnectingIp, hasConnectingIpHeader } from "../auth/client-ip";
 import { clientCountryCode, isCountryBlocked } from "../auth/geo-country";
 import { normalizeOriginUrl, parsePathPrefixes } from "../core/origin";
@@ -82,10 +126,15 @@ export async function handleAdminPage(_request: Request, env: Env): Promise<Resp
 }
 
 export async function handleAdminBootstrap(_request: Request, env: Env): Promise<Response> {
+  const setupComplete = await isAdminSetupComplete(env);
+  const turnstile = await readTurnstileSettings(env);
+  const pending = setupComplete ? null : await readSetupPending(env);
   return jsonOk({
-    setupComplete: await isAdminSetupComplete(env),
+    setupComplete,
     defaultQueue: env.DEFAULT_QUEUE || "default",
     version: VERSION,
+    turnstileSitekey: turnstile?.sitekey ?? pending?.turnstile?.sitekey ?? null,
+    setupPending: pending ? toSetupPendingPublic(pending) : null,
   });
 }
 
@@ -100,6 +149,16 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
   requireSetupBearer(request, env);
 
   const body = await readJsonBody(request);
+  let username: string;
+  try {
+    username = validateUsername(typeof body.username === "string" ? body.username : "");
+  } catch (error) {
+    throw new ApiError(
+      "bad_request",
+      error instanceof Error ? error.message : "Invalid username",
+      400,
+    );
+  }
   const password = parsePassword(body.password);
   const confirm = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
   if (password !== confirm) {
@@ -118,15 +177,53 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
       : undefined,
   );
 
+  const pending = await readSetupPending(env);
+  if (!isSetupPendingReady(pending) || !pending.cloudflare || !pending.turnstile) {
+    throw new ApiError(
+      "bad_request",
+      "Complete Cloudflare verify and Turnstile verify before finishing setup",
+      400,
+    );
+  }
+
+  const apiToken = await openSetupPendingApiToken(env);
+  const turnstileSecret = await openSetupPendingTurnstileSecret(env);
+  if (!apiToken || !turnstileSecret) {
+    throw new ApiError("bad_request", "Setup pending secrets are missing; re-verify Cloudflare", 400);
+  }
+
   const { hash, salt } = await hashPassword(password);
+  const userId = newAdminUserId();
+  const now = Date.now();
   await writeAdminConfig(env, {
     setupComplete: true,
-    passwordHash: hash,
-    passwordSalt: salt,
-    createdAt: Date.now(),
+    users: [
+      {
+        id: userId,
+        username,
+        passwordHash: hash,
+        passwordSalt: salt,
+        createdAt: now,
+      },
+    ],
+    createdAt: now,
     defaultQueue: queue,
   });
   await writeBranding(env, queue, branding);
+  await writeCloudflareLink(env, {
+    zoneId: pending.cloudflare.zoneId,
+    hostname: pending.cloudflare.hostname,
+    apiToken,
+    accountId: pending.cloudflare.accountId,
+    workerService: pending.cloudflare.workerService,
+  });
+  await writeTurnstileSettings(env, {
+    sitekey: pending.turnstile.sitekey,
+    secret: turnstileSecret,
+    accountId: pending.turnstile.accountId,
+    domains: pending.turnstile.domains,
+  });
+  await clearSetupPending(env);
 
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
@@ -139,9 +236,17 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
     showWaitingCount: branding.showWaitingCount,
   });
 
-  const session = await signAdminSession(requireTokenSecret(env));
+  const actor = { id: userId, username };
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "setup.complete",
+    summary: `First admin “${username}” claimed the Worker`,
+  });
+
+  const session = await signAdminSession(requireTokenSecret(env), actor);
   return withCookie(
-    jsonOk({ ok: true, queue, admissionMode: mode }),
+    jsonOk({ ok: true, queue, admissionMode: mode, username }),
     buildAdminSessionCookie(session, request),
   );
 }
@@ -155,15 +260,25 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
   }
 
   const body = await readJsonBody(request);
+  await requireTurnstileResponse(request, env, body);
+
+  const usernameRaw = typeof body.username === "string" ? body.username : "";
+  // Legacy installs / UI may omit username → treat as "admin".
+  const username = usernameRaw.trim() ? usernameRaw : "admin";
+  const user = findUserByUsername(admin, username);
+  if (!user) {
+    throw new ApiError("unauthorized", "Invalid username or password", 401);
+  }
   const password = parsePassword(body.password);
-  const ok = await verifyPassword(password, admin.passwordHash, admin.passwordSalt);
+  const ok = await verifyPassword(password, user.passwordHash, user.passwordSalt);
   if (!ok) {
-    throw new ApiError("unauthorized", "Invalid password", 401);
+    throw new ApiError("unauthorized", "Invalid username or password", 401);
   }
 
-  const session = await signAdminSession(requireTokenSecret(env));
+  const actor = { id: user.id, username: user.username };
+  const session = await signAdminSession(requireTokenSecret(env), actor);
   return withCookie(
-    jsonOk({ ok: true, queue: admin.defaultQueue }),
+    jsonOk({ ok: true, queue: admin.defaultQueue, username: user.username }),
     buildAdminSessionCookie(session, request),
   );
 }
@@ -173,7 +288,7 @@ export async function handleAdminLogout(request: Request, _env: Env): Promise<Re
 }
 
 export async function handleAdminState(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -185,16 +300,27 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
   );
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
-  const [branding, metrics, origin, health, bypassSettings, geoSettings, geoStats] =
-    await Promise.all([
-      readBranding(env, queue),
-      room.metrics({ queue, config }),
-      resolveOriginConfig(env),
-      room.getHealth(),
-      readBypassSettings(env),
-      readGeoBlockSettings(env),
-      readGeoBlockStats(env),
-    ]);
+  const [
+    branding,
+    metrics,
+    origin,
+    health,
+    bypassSettings,
+    geoSettings,
+    geoStats,
+    invites,
+    turnstile,
+  ] = await Promise.all([
+    readBranding(env, queue),
+    room.metrics({ queue, config }),
+    resolveOriginConfig(env),
+    room.getHealth(),
+    readBypassSettings(env),
+    readGeoBlockSettings(env),
+    readGeoBlockStats(env),
+    listInvites(env),
+    readTurnstileSettings(env),
+  ]);
 
   const clientIp = clientConnectingIp(request);
   const clientCountry = clientCountryCode(request);
@@ -214,6 +340,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
       clientBlocked: isCountryBlocked(clientCountry, blockedCountries),
       stats: toGeoBlockStatsPublic(geoStats),
     }),
+    turnstile: toTurnstilePublicView(turnstile),
     traffic: {
       opensAt: metrics.opensAt,
       paused: metrics.paused,
@@ -222,6 +349,15 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
       healthConfig: health.config,
     },
     version: VERSION,
+    me: { id: actor.id, username: actor.username },
+    team: {
+      users: admin.users.map((u) => ({
+        id: u.id,
+        username: u.username,
+        createdAt: u.createdAt,
+      })),
+      invites: invites.map(toPublicInvite),
+    },
   });
 }
 
@@ -234,8 +370,131 @@ export async function handleAdminUpdates(request: Request, env: Env): Promise<Re
   return jsonOk(result);
 }
 
-export async function handleAdminSaveBypass(request: Request, env: Env): Promise<Response> {
+export async function handleAdminAudit(request: Request, env: Env): Promise<Response> {
   await requireAdminSession(request, env);
+  const events = await readAuditEvents(env);
+  return jsonOk({ events });
+}
+
+export async function handleAdminListInvites(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const invites = await listInvites(env);
+  return jsonOk({ invites: invites.map(toPublicInvite) });
+}
+
+export async function handleAdminCreateInvite(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  rateLimitOrThrow(clientKey(request, "invite-create"), { limit: 20, windowMs: 60_000 });
+  const { invite, token, acceptPath } = await createInvite(env, actor);
+  const acceptUrl = new URL(acceptPath, request.url).toString();
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "invite.create",
+    summary: `Created admin invite (expires ${new Date(invite.expiresAt).toISOString()})`,
+    meta: { inviteId: invite.id },
+  });
+  return jsonOk({
+    ok: true,
+    invite: toPublicInvite(invite),
+    token: `${invite.id}.${token}`,
+    acceptUrl,
+  });
+}
+
+export async function handleAdminRevokeInvite(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const id = new URL(request.url).pathname.split("/").pop() || "";
+  if (!id || id === "invites") {
+    throw new ApiError("bad_request", "Invite id required", 400);
+  }
+  const removed = await revokeInvite(env, id);
+  if (!removed) {
+    throw new ApiError("not_found", "Invite not found", 404);
+  }
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "invite.revoke",
+    summary: `Revoked admin invite ${id}`,
+    meta: { inviteId: id },
+  });
+  return jsonOk({ ok: true });
+}
+
+export async function handleAdminAcceptInvite(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "invite-accept"), { limit: 20, windowMs: 60_000 });
+
+  if (!(await isAdminSetupComplete(env))) {
+    throw new ApiError("bad_request", "Finish first-time setup before accepting invites", 400);
+  }
+
+  const body = await readJsonBody(request);
+  await requireTurnstileResponse(request, env, body);
+  const rawToken = typeof body.token === "string" ? body.token : "";
+  let username: string;
+  try {
+    username = validateUsername(typeof body.username === "string" ? body.username : "");
+  } catch (error) {
+    throw new ApiError(
+      "bad_request",
+      error instanceof Error ? error.message : "Invalid username",
+      400,
+    );
+  }
+  const password = parsePassword(body.password);
+  const confirm = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+  if (password !== confirm) {
+    throw new ApiError("bad_request", "Passwords do not match", 400);
+  }
+
+  let invite;
+  try {
+    invite = await consumeInvite(env, rawToken);
+  } catch (error) {
+    if (error instanceof InviteError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+
+  const { hash, salt } = await hashPassword(password);
+  const userId = newAdminUserId();
+  try {
+    await addAdminUser(env, {
+      id: userId,
+      username,
+      passwordHash: hash,
+      passwordSalt: salt,
+      createdAt: Date.now(),
+    });
+  } catch (error) {
+    throw new ApiError(
+      "bad_request",
+      error instanceof Error ? error.message : "Could not add user",
+      400,
+    );
+  }
+
+  const actor = { id: userId, username };
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "invite.accept",
+    summary: `“${username}” joined via invite from ${invite.createdByUsername}`,
+    meta: { inviteId: invite.id },
+  });
+
+  const admin = await readAdminConfig(env);
+  const session = await signAdminSession(requireTokenSecret(env), actor);
+  return withCookie(
+    jsonOk({ ok: true, username, queue: admin?.defaultQueue ?? "default" }),
+    buildAdminSessionCookie(session, request),
+  );
+}
+
+export async function handleAdminSaveBypass(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
   const body = await readJsonBody(request);
   const text =
     typeof body.allowlistText === "string"
@@ -247,6 +506,12 @@ export async function handleAdminSaveBypass(request: Request, env: Env): Promise
   try {
     const settings = await writeAllowlist(env, text);
     const clientIp = clientConnectingIp(request);
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: "bypass.allowlist",
+      summary: "Updated IP allowlist",
+    });
     return jsonOk({
       ok: true,
       bypass: toBypassPublicView(settings, {
@@ -263,7 +528,7 @@ export async function handleAdminSaveBypass(request: Request, env: Env): Promise
 }
 
 export async function handleAdminSaveCloudflare(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const body = await readJsonBody(request);
 
   try {
@@ -272,17 +537,51 @@ export async function handleAdminSaveCloudflare(request: Request, env: Env): Pro
       hostname: string | null;
       apiToken?: string | null;
       clearApiToken?: boolean;
+      accountId?: string | null;
+      workerService?: string | null;
     } = {
       zoneId: typeof body.zoneId === "string" ? body.zoneId : null,
       hostname: typeof body.hostname === "string" ? body.hostname : null,
     };
+    if (typeof body.workerService === "string") {
+      payload.workerService = body.workerService;
+    }
     if (body.clearApiToken === true) {
       payload.clearApiToken = true;
-    } else if (typeof body.apiToken === "string") {
+    } else if (typeof body.apiToken === "string" && body.apiToken.trim()) {
       payload.apiToken = body.apiToken;
+      let zoneId = (payload.zoneId || "").trim();
+      const hostname =
+        (payload.hostname || "").trim() || new URL(request.url).hostname;
+      if (!zoneId && hostname) {
+        const found = await findZoneIdByHostname(body.apiToken.trim(), hostname);
+        if (found) {
+          zoneId = found;
+          payload.zoneId = found;
+        }
+      }
+      if (!zoneId) {
+        throw new BypassConfigError("zoneId is required to verify the API token");
+      }
+      const verified = await verifyCloudflareAccess({
+        apiToken: body.apiToken.trim(),
+        zoneId,
+        hostname,
+        ...(typeof body.workerService === "string" ? { workerService: body.workerService } : {}),
+      });
+      payload.accountId = verified.zone.accountId;
+      payload.zoneId = verified.zone.zoneId;
     }
     const settings = await writeCloudflareLink(env, payload);
     const clientIp = clientConnectingIp(request);
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: payload.clearApiToken ? "cloudflare.token_clear" : "cloudflare.link",
+      summary: payload.clearApiToken
+        ? "Cleared Cloudflare API token"
+        : "Updated Cloudflare zone access settings",
+    });
     return jsonOk({
       ok: true,
       bypass: toBypassPublicView(settings, {
@@ -292,6 +591,9 @@ export async function handleAdminSaveCloudflare(request: Request, env: Env): Pro
     });
   } catch (error) {
     if (error instanceof BypassConfigError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    if (error instanceof CloudflareApiError) {
       throw new ApiError("bad_request", error.message, 400);
     }
     throw error;
@@ -304,8 +606,15 @@ export async function handleAdminCloudflareCheck(request: Request, env: Env): Pr
 }
 
 export async function handleAdminCloudflareFixProxy(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
-  return runCloudflareProxyAction(request, env, "fix");
+  const actor = await requireAdminSession(request, env);
+  const response = await runCloudflareProxyAction(request, env, "fix");
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "cloudflare.fix_proxy",
+    summary: "Ran Cloudflare Fix setup (proxy + IP Geolocation)",
+  });
+  return response;
 }
 
 async function runCloudflareProxyAction(
@@ -390,7 +699,7 @@ export async function handleAdminMetrics(request: Request, env: Env): Promise<Re
  * Does not join the Durable Object queue or consume a concurrent slot.
  */
 export async function handleAdminPass(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -419,6 +728,14 @@ export async function handleAdminPass(request: Request, env: Env): Promise<Respo
     secret,
   );
 
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "pass.issue",
+    summary: `Issued Pass queue admission for queue “${queue}”`,
+    meta: { queue },
+  });
+
   return withCookie(
     jsonOk({ ok: true, redirectTo, visitorId, queue }),
     buildAccessCookie(accessToken, request, config.tokenTTLSeconds),
@@ -426,7 +743,7 @@ export async function handleAdminPass(request: Request, env: Env): Promise<Respo
 }
 
 export async function handleAdminSaveGeoBlock(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const body = await readJsonBody(request);
   const enabled = body.enabled === true || body.enabled === "true";
   const countriesText =
@@ -451,6 +768,12 @@ export async function handleAdminSaveGeoBlock(request: Request, env: Env): Promi
     });
     const stats = enabled ? await resetGeoBlockStatsWindow(env) : await readGeoBlockStats(env);
     const clientCountry = clientCountryCode(request);
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: enabled ? "geo.enable" : "geo.disable",
+      summary: enabled ? "Enabled country block" : "Disabled country block",
+    });
     return jsonOk({
       ok: true,
       geoBlock: toGeoBlockPublicView(settings, {
@@ -497,7 +820,7 @@ export async function handleAdminSaveBranding(request: Request, env: Env): Promi
 }
 
 export async function handleAdminSaveOrigin(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -534,11 +857,19 @@ export async function handleAdminSaveOrigin(request: Request, env: Env): Promise
     queue,
   });
 
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: enabled ? "origin.enable" : "origin.disable",
+    summary: enabled ? "Enabled origin proxy" : "Disabled origin proxy",
+    meta: { enabled, protectAll },
+  });
+
   return jsonOk({ ok: true, origin });
 }
 
 export async function handleAdminSetMode(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -553,11 +884,19 @@ export async function handleAdminSetMode(request: Request, env: Env): Promise<Re
 
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
-  return jsonOk(await room.setMode({ queue, config, mode }));
+  const result = await room.setMode({ queue, config, mode });
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "mode.set",
+    summary: `Set admission mode to ${mode}`,
+    meta: { queue, mode },
+  });
+  return jsonOk(result);
 }
 
 export async function handleAdminPause(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -567,11 +906,19 @@ export async function handleAdminPause(request: Request, env: Env): Promise<Resp
   const queue = parseQueueName(body.queue, admin.defaultQueue);
   const paused = body.paused === true || body.paused === "true";
   const room = getQueueRoom(env, queue);
-  return jsonOk(await room.setPaused(paused));
+  const result = await room.setPaused(paused);
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: paused ? "pause.on" : "pause.off",
+    summary: paused ? "Enabled silent pause" : "Cleared silent pause",
+    meta: { queue },
+  });
+  return jsonOk(result);
 }
 
 export async function handleAdminSchedule(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -595,11 +942,19 @@ export async function handleAdminSchedule(request: Request, env: Env): Promise<R
   }
 
   const room = getQueueRoom(env, queue);
-  return jsonOk(await room.setOpensAt(opensAt));
+  const result = await room.setOpensAt(opensAt);
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: opensAt === null ? "schedule.clear" : "schedule.set",
+    summary: opensAt === null ? "Opened the room now" : "Set opening time",
+    meta: { queue, opensAt },
+  });
+  return jsonOk(result);
 }
 
 export async function handleAdminHealth(request: Request, env: Env): Promise<Response> {
-  await requireAdminSession(request, env);
+  const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
     throw new ApiError("not_found", "Admin setup has not been completed", 404);
@@ -615,11 +970,27 @@ export async function handleAdminHealth(request: Request, env: Env): Promise<Res
     if (!Number.isFinite(minutes) || minutes < 1) {
       throw new ApiError("bad_request", "overrideMinutes must be >= 1", 400);
     }
-    return jsonOk(await room.overrideHealth(minutes));
+    const result = await room.overrideHealth(minutes);
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: "health.override",
+      summary: `Ignored origin health for ${minutes}m`,
+      meta: { queue, minutes },
+    });
+    return jsonOk(result);
   }
 
   if (body.clearOverride === true) {
-    return jsonOk(await room.clearHealthOverride());
+    const result = await room.clearHealthOverride();
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: "health.override_clear",
+      summary: "Cleared origin health override",
+      meta: { queue },
+    });
+    return jsonOk(result);
   }
 
   const healthInput =
@@ -627,23 +998,32 @@ export async function handleAdminHealth(request: Request, env: Env): Promise<Res
       ? (body.health as Record<string, unknown>)
       : body;
 
-  return jsonOk(
-    await room.setHealthConfig({
-      queue,
-      config,
-      health: {
-        enabled: healthInput.enabled === true || healthInput.enabled === "true",
-        url: typeof healthInput.url === "string" ? healthInput.url : null,
-        intervalSeconds: Number(healthInput.intervalSeconds),
-        timeoutMs: Number(healthInput.timeoutMs),
-        maxLatencyMs: Number(healthInput.maxLatencyMs),
-        expectStatus: Number(healthInput.expectStatus),
-        failThreshold: Number(healthInput.failThreshold),
-        recoverThreshold: Number(healthInput.recoverThreshold),
-        slowRateMultiplier: Number(healthInput.slowRateMultiplier),
-      },
-    }),
-  );
+  const enabled = healthInput.enabled === true || healthInput.enabled === "true";
+  const result = await room.setHealthConfig({
+    queue,
+    config,
+    health: {
+      enabled,
+      url: typeof healthInput.url === "string" ? healthInput.url : null,
+      intervalSeconds: Number(healthInput.intervalSeconds),
+      timeoutMs: Number(healthInput.timeoutMs),
+      maxLatencyMs: Number(healthInput.maxLatencyMs),
+      expectStatus: Number(healthInput.expectStatus),
+      failThreshold: Number(healthInput.failThreshold),
+      recoverThreshold: Number(healthInput.recoverThreshold),
+      slowRateMultiplier: Number(healthInput.slowRateMultiplier),
+    },
+  });
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "health.config",
+    summary: enabled
+      ? "Updated origin health throttle (enabled)"
+      : "Updated origin health throttle (disabled)",
+    meta: { queue },
+  });
+  return jsonOk(result);
 }
 
 /** Emergency reset: TOKEN_SECRET bearer only (not session). Clears admin + origin override. */
@@ -656,8 +1036,461 @@ export async function handleAdminReset(request: Request, env: Env): Promise<Resp
   await clearBypassSettings(env);
   await clearGeoBlockSettings(env);
   await clearGeoBlockStats(env);
+  await clearAllInvites(env);
+  await clearAuditLog(env);
+  await clearTurnstileSettings(env);
+  await clearSetupPending(env);
   await env.CONFIG_KV.delete(UPDATE_CHECK_CACHE_KEY);
   return jsonOk({ ok: true, setupComplete: false });
+}
+
+export async function handleAdminSetupCloudflareVerify(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup-cf-verify"), { limit: 20, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const body = await readJsonBody(request);
+  const apiToken = typeof body.apiToken === "string" ? body.apiToken.trim() : "";
+  let zoneId = typeof body.zoneId === "string" ? body.zoneId.trim() : "";
+  const hostname =
+    (typeof body.hostname === "string" && body.hostname.trim()) ||
+    new URL(request.url).hostname;
+  const workerService =
+    typeof body.workerService === "string" && body.workerService.trim()
+      ? body.workerService.trim()
+      : "tideguard";
+
+  if (apiToken.length < 20) {
+    throw new ApiError("bad_request", "Cloudflare API token looks too short", 400);
+  }
+
+  try {
+    if (!zoneId) {
+      const found = await findZoneIdByHostname(apiToken, hostname);
+      if (!found) {
+        throw new ApiError(
+          "bad_request",
+          "Could not resolve Zone ID from hostname — paste Zone ID from the Cloudflare overview",
+          400,
+        );
+      }
+      zoneId = found;
+    }
+
+    const verified = await verifyCloudflareAccess({
+      apiToken,
+      zoneId,
+      hostname,
+      workerService,
+    });
+
+    const pending = await writeSetupPendingCloudflare(env, {
+      zoneId: verified.zone.zoneId,
+      hostname,
+      accountId: verified.zone.accountId,
+      workerService,
+      apiToken,
+      proxyOk: verified.proxy.ok,
+      sslMode: verified.ssl.mode,
+      sslIsStrict: verified.ssl.isStrict,
+      hostnameAttached: verified.domains.hostnameAttached,
+    });
+
+    return jsonOk({
+      ok: verified.proxy.ok,
+      verify: verified,
+      pending: toSetupPendingPublic(pending),
+    });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminSetupCloudflareFix(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup-cf-fix"), { limit: 20, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const pending = await readSetupPending(env);
+  const apiToken = await openSetupPendingApiToken(env);
+  if (!pending.cloudflare || !apiToken) {
+    throw new ApiError("bad_request", "Verify Cloudflare access first", 400);
+  }
+
+  try {
+    const check = await enableHostnameProxy({
+      apiToken,
+      zoneId: pending.cloudflare.zoneId,
+      hostname: pending.cloudflare.hostname,
+    });
+    const domains = await listWorkerDomains({
+      apiToken,
+      accountId: pending.cloudflare.accountId,
+      service: pending.cloudflare.workerService,
+    }).catch(() => []);
+    const hostnameAttached = domains.some(
+      (d) => d.hostname.toLowerCase() === pending.cloudflare!.hostname.toLowerCase(),
+    );
+    const next = await writeSetupPendingCloudflare(env, {
+      zoneId: pending.cloudflare.zoneId,
+      hostname: pending.cloudflare.hostname,
+      accountId: pending.cloudflare.accountId,
+      workerService: pending.cloudflare.workerService,
+      apiToken,
+      proxyOk: check.ok,
+      sslMode: pending.cloudflare.sslMode,
+      sslIsStrict: pending.cloudflare.sslIsStrict,
+      hostnameAttached,
+    });
+    return jsonOk({ ok: check.ok, check, pending: toSetupPendingPublic(next) });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminSetupTurnstileProvision(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup-ts-provision"), { limit: 10, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const pending = await readSetupPending(env);
+  const apiToken = await openSetupPendingApiToken(env);
+  if (!pending.cloudflare?.proxyOk || !apiToken) {
+    throw new ApiError(
+      "bad_request",
+      "Verify Cloudflare access and fix proxy/geo before Turnstile",
+      400,
+    );
+  }
+
+  // Reuse existing pending widget if already provisioned.
+  if (pending.turnstile?.sitekey) {
+    return jsonOk({
+      ok: true,
+      sitekey: pending.turnstile.sitekey,
+      pending: toSetupPendingPublic(pending),
+    });
+  }
+
+  const domains = turnstileDomainsForHostname(pending.cloudflare.hostname);
+  try {
+    const widget = await createTurnstileWidget({
+      apiToken,
+      accountId: pending.cloudflare.accountId,
+      name: "TideGuard Admin",
+      domains,
+      mode: "managed",
+    });
+    const next = await writeSetupPendingTurnstile(env, {
+      sitekey: widget.sitekey,
+      secret: widget.secret,
+      domains: widget.domains.length > 0 ? widget.domains : domains,
+      accountId: pending.cloudflare.accountId,
+      verified: false,
+    });
+    return jsonOk({
+      ok: true,
+      sitekey: widget.sitekey,
+      pending: toSetupPendingPublic(next),
+    });
+  } catch (error) {
+    if (error instanceof CloudflareApiError || error instanceof SetupPendingError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminSetupTurnstileVerify(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup-ts-verify"), { limit: 20, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const body = await readJsonBody(request);
+  const token =
+    typeof body.turnstileToken === "string"
+      ? body.turnstileToken
+      : typeof body["cf-turnstile-response"] === "string"
+        ? body["cf-turnstile-response"]
+        : "";
+  const secret = await openSetupPendingTurnstileSecret(env);
+  const pending = await readSetupPending(env);
+  if (!secret || !pending.turnstile) {
+    throw new ApiError("bad_request", "Provision Turnstile before verifying", 400);
+  }
+
+  const result = await verifyTurnstileToken({
+    secret,
+    token,
+    remoteip: clientConnectingIp(request),
+  });
+  if (!result.success) {
+    throw new ApiError("bad_request", "Turnstile verification failed", 400);
+  }
+
+  const next = await markSetupPendingTurnstileVerified(env);
+  return jsonOk({ ok: true, pending: toSetupPendingPublic(next) });
+}
+
+export async function handleAdminCloudflareIpGeolocation(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+  const enabled = body.enabled === true;
+  const { apiToken, zoneId } = await requireSavedCloudflare(env);
+
+  try {
+    await setIpGeolocation(apiToken, zoneId, enabled ? "on" : "off");
+    if (!enabled) {
+      await clearGeoBlockSettings(env);
+    }
+    const setting = await getIpGeolocation(apiToken, zoneId);
+    const on = setting.value === true || setting.value === "on";
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: "cloudflare.ip_geolocation",
+      summary: on
+        ? "Enabled IP Geolocation (CF-IPCountry)"
+        : "Disabled IP Geolocation and cleared country block",
+      meta: { enabled: on },
+    });
+    return jsonOk({ ok: true, ipGeolocation: { on } });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminCloudflareSsl(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const { apiToken, zoneId } = await requireSavedCloudflare(env);
+
+  try {
+    const ssl = await setSslMode(apiToken, zoneId, "strict");
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: "cloudflare.ssl",
+      summary: "Set SSL/TLS encryption mode to Full (strict)",
+    });
+    return jsonOk({ ok: true, ssl });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminCloudflareDomains(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const settings = await readBypassSettings(env);
+  const { apiToken, zoneId, accountId, workerService } = await requireSavedCloudflare(env, {
+    needAccount: true,
+  });
+
+  if (request.method === "GET") {
+    try {
+      const domains = await listWorkerDomains({
+        apiToken,
+        accountId: accountId!,
+        service: workerService,
+      });
+      return jsonOk({ ok: true, domains, workerService });
+    } catch (error) {
+      if (error instanceof CloudflareApiError) {
+        throw new ApiError("bad_request", error.message, 400);
+      }
+      throw error;
+    }
+  }
+
+  if (request.method === "PUT") {
+    const body = await readJsonBody(request);
+    const hostname =
+      (typeof body.hostname === "string" && body.hostname.trim()) ||
+      settings.hostname ||
+      "";
+    if (!hostname) {
+      throw new ApiError("bad_request", "hostname is required", 400);
+    }
+    try {
+      const domain = await attachWorkerDomain({
+        apiToken,
+        accountId: accountId!,
+        hostname,
+        service: workerService,
+        zoneId,
+      });
+      if (!settings.hostname) {
+        await writeCloudflareLink(env, {
+          zoneId: settings.zoneId,
+          hostname,
+          accountId,
+          workerService,
+        });
+      }
+      await appendAuditEvent(env, {
+        actorId: actor.id,
+        actorUsername: actor.username,
+        action: "cloudflare.domain_attach",
+        summary: `Attached custom domain ${hostname}`,
+        meta: { hostname },
+      });
+      return jsonOk({ ok: true, domain });
+    } catch (error) {
+      if (error instanceof CloudflareApiError) {
+        throw new ApiError("bad_request", error.message, 400);
+      }
+      throw error;
+    }
+  }
+
+  if (request.method === "DELETE") {
+    const body = await readJsonBody(request);
+    const domainId = typeof body.domainId === "string" ? body.domainId.trim() : "";
+    if (!domainId) {
+      throw new ApiError("bad_request", "domainId is required", 400);
+    }
+    try {
+      await detachWorkerDomain({
+        apiToken,
+        accountId: accountId!,
+        domainId,
+      });
+      await appendAuditEvent(env, {
+        actorId: actor.id,
+        actorUsername: actor.username,
+        action: "cloudflare.domain_detach",
+        summary: `Detached custom domain ${domainId}`,
+        meta: { domainId },
+      });
+      return jsonOk({ ok: true });
+    } catch (error) {
+      if (error instanceof CloudflareApiError) {
+        throw new ApiError("bad_request", error.message, 400);
+      }
+      throw error;
+    }
+  }
+
+  throw new ApiError("bad_request", "Method not allowed", 405);
+}
+
+export async function handleAdminSetupCloudflareAttachDomain(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup-cf-domain"), { limit: 10, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const pending = await readSetupPending(env);
+  const apiToken = await openSetupPendingApiToken(env);
+  if (!pending.cloudflare || !apiToken) {
+    throw new ApiError("bad_request", "Verify Cloudflare access first", 400);
+  }
+
+  try {
+    await attachWorkerDomain({
+      apiToken,
+      accountId: pending.cloudflare.accountId,
+      hostname: pending.cloudflare.hostname,
+      service: pending.cloudflare.workerService,
+      zoneId: pending.cloudflare.zoneId,
+    });
+    const next = await writeSetupPendingCloudflare(env, {
+      zoneId: pending.cloudflare.zoneId,
+      hostname: pending.cloudflare.hostname,
+      accountId: pending.cloudflare.accountId,
+      workerService: pending.cloudflare.workerService,
+      apiToken,
+      proxyOk: pending.cloudflare.proxyOk,
+      sslMode: pending.cloudflare.sslMode,
+      sslIsStrict: pending.cloudflare.sslIsStrict,
+      hostnameAttached: true,
+    });
+    return jsonOk({ ok: true, pending: toSetupPendingPublic(next) });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
+}
+
+export async function handleAdminSetupCloudflareSsl(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup-cf-ssl"), { limit: 10, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const pending = await readSetupPending(env);
+  const apiToken = await openSetupPendingApiToken(env);
+  if (!pending.cloudflare || !apiToken) {
+    throw new ApiError("bad_request", "Verify Cloudflare access first", 400);
+  }
+
+  try {
+    const ssl = await setSslMode(apiToken, pending.cloudflare.zoneId, "strict");
+    const next = await writeSetupPendingCloudflare(env, {
+      zoneId: pending.cloudflare.zoneId,
+      hostname: pending.cloudflare.hostname,
+      accountId: pending.cloudflare.accountId,
+      workerService: pending.cloudflare.workerService,
+      apiToken,
+      proxyOk: pending.cloudflare.proxyOk,
+      sslMode: ssl.mode,
+      sslIsStrict: ssl.isStrict,
+      hostnameAttached: pending.cloudflare.hostnameAttached,
+    });
+    return jsonOk({ ok: true, ssl, pending: toSetupPendingPublic(next) });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", error.message, 400);
+    }
+    throw error;
+  }
 }
 
 function requireSetupBearer(request: Request, env: Env): void {
@@ -671,6 +1504,67 @@ function requireSetupBearer(request: Request, env: Env): void {
       401,
     );
   }
+}
+
+async function requireTurnstileResponse(
+  request: Request,
+  env: Env,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const settings = await readTurnstileSettings(env);
+  if (!settings) {
+    return;
+  }
+  const secret = await readTurnstileSecret(env);
+  if (!secret) {
+    throw new ApiError("unauthorized", "Turnstile is misconfigured", 401);
+  }
+  const token =
+    typeof body.turnstileToken === "string"
+      ? body.turnstileToken
+      : typeof body["cf-turnstile-response"] === "string"
+        ? body["cf-turnstile-response"]
+        : "";
+  const result = await verifyTurnstileToken({
+    secret,
+    token,
+    remoteip: clientConnectingIp(request),
+  });
+  if (!result.success) {
+    throw new ApiError("unauthorized", "Turnstile verification failed", 401);
+  }
+}
+
+async function requireSavedCloudflare(
+  env: Env,
+  options?: { needAccount?: boolean },
+): Promise<{
+  apiToken: string;
+  zoneId: string;
+  accountId: string | null;
+  workerService: string;
+}> {
+  const settings = await readBypassSettings(env);
+  const apiToken = await readCloudflareApiToken(env);
+  if (!apiToken) {
+    throw new ApiError("bad_request", "Save a Cloudflare API token first", 400);
+  }
+  if (!settings.zoneId) {
+    throw new ApiError("bad_request", "zoneId is required", 400);
+  }
+  if (options?.needAccount && !settings.accountId) {
+    throw new ApiError(
+      "bad_request",
+      "Account id missing — re-save Cloudflare access to refresh zone metadata",
+      400,
+    );
+  }
+  return {
+    apiToken,
+    zoneId: settings.zoneId,
+    accountId: settings.accountId,
+    workerService: settings.workerService || "tideguard",
+  };
 }
 
 function clientKey(request: Request, action: string): string {

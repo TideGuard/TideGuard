@@ -10,6 +10,8 @@
   <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/TideGuard/TideGuard"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36" /></a>
 </p>
 
+## What TideGuard does
+
 **An open-source waiting room for Cloudflare Workers.**  
 Hold the flood at the edge. Admit people at a rate your origin can survive.
 
@@ -19,85 +21,45 @@ When a launch, drop, or ticket sale spikes traffic, TideGuard puts visitors in a
 Spike hits → waiting room → controlled admit → signed token → protected page
 ```
 
-## Why TideGuard
+Commercial waiting rooms work. They are also expensive, opaque, and hard to study. TideGuard is the opposite shape: open source, edge-native, and designed so you can read the queue logic.
 
-Commercial waiting rooms work. They are also expensive, opaque, and hard to study.
+## Basic features
 
-TideGuard is the opposite shape:
+| Feature                        | Why it matters                                                             |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| **Durable Object queue**       | Strong consistency for join / leave / admit. KV is not a queue.            |
+| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.                   |
+| **HMAC admission tokens**      | Time-limited access without a session database.                            |
+| **Waiting room (`/wait`)**     | Branded hold page with heartbeats, optional depth, redirect after admit.   |
+| **Admin control room**         | Named admins, guided 5-step setup, branding preview, live queue metrics.   |
+| **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.          |
+| **Tested Worker logic**        | ≈80% line coverage (`npm run test:coverage`); CI runs format, lint, types. |
 
-| You get                        | Why it matters                                                                                |
-| ------------------------------ | --------------------------------------------------------------------------------------------- |
-| **Durable Object queue**       | Strong consistency for join / leave / admit. KV is not a queue.                               |
-| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.                                      |
-| **HMAC admission tokens**      | Time-limited access without a session database.                                               |
-| **Admin control room**         | Branding, traffic controls, live queue metrics, and analytics with live preview.              |
-| **Origin proxy**               | Sit in front of your site; unauthenticated traffic hits `/wait`, admitted traffic is proxied. |
-| **IP allowlist + Pass queue**  | Staff skip the line from a fixed network, or mint a temporary cookie to smoke-test.           |
-| **Temporary country block**    | Event-window geo gate via `CF-IPCountry`, with TTL and allowlist overrides.                   |
-| **Cost calculator**            | Ballpark Cloudflare spend before the launch, not after the invoice.                           |
-| **Tested Worker logic**        | ≈80% line coverage (`npm run test:coverage`); CI runs format, lint, types, and the suite.     |
-| **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.                             |
+Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/cost`.
+
+## Extended features
+
+| Feature                     | Why it matters                                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| **Origin proxy**            | Sit in front of your site; unauthenticated traffic hits `/wait`, admitted traffic is proxied. |
+| **Traffic controls**        | Opening schedule, silent pause, origin health throttle.                                       |
+| **IP allowlist + Pass**     | Staff skip the line; mint a temporary cookie to smoke-test.                                   |
+| **Temporary country block** | Event-window geo gate via `CF-IPCountry`.                                                     |
+| **Cloudflare from admin**   | Verify API token, fix proxied DNS, toggle IP Geolocation, set Full (strict), manage domains.  |
+| **Turnstile on admin auth** | Setup provisions a widget; login and invites require siteverify (not rate limits alone).      |
+| **Analytics**               | Control-room charts for queue depth, wait, and geo hits.                                      |
+| **Cost calculator**         | Ballpark Cloudflare spend before the launch.                                                  |
+| **Updates check**           | Compare running version to GitHub Releases from admin.                                        |
+| **Team invites**            | 72-hour invite links for additional admins (no email).                                        |
+| **Activity audit log**      | Who turned what on or off in the control room.                                                |
+
+Deep guides: [protecting origin](docs/protecting-origin.md) (including Authenticated Origin Pulls), [admin](docs/admin.md), [upgrading](docs/upgrading.md).
 
 ## Try it in three steps
 
 1. **Deploy** with the button above (or `npm run deploy`).
 2. Set the `TOKEN_SECRET` secret (`openssl rand -hex 32`).
-3. Open `/admin`, finish the setup wizard, then hit `/demo`.
-
-Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/cost`.
-
-## What visitors see
-
-- **Queue Mode:** position, estimated wait, optional ahead / behind counts
-- **Lottery Mode:** odds in the pool, optional pool size
-- Heartbeats so abandoned tabs leave the line
-- Soft branding (colors, title, message) without rewriting the waiting-room layout
-- Configurable **redirect path** after admission (or `?return=` on `/wait`)
-- Optional **click-to-enter**: a Continue button plus a hold timer before the spot is released
-
-Depth stats are off by default. Turn them on in admin (`showWaitingCount`).
-
-## Traffic controls
-
-Operators pace launches from `/admin` (Traffic panel) and the operator API:
-
-| Control           | Visitors see                              | Operators see              |
-| ----------------- | ----------------------------------------- | -------------------------- |
-| **Opening time**  | Countdown on `/wait` only                 | Schedule panel             |
-| **Silent pause**  | Normal waiting UI; admissions stop        | Pause toggle + metrics     |
-| **Origin health** | Normal waiting UI; rate cut or auto-pause | Health status + last probe |
-
-Admission rule (shared by join, alarm, and force-admit):
-
-```text
-canAdmit = !manualPause && !autoPause && now >= opensAt
-admitRate = baseAdmitPerSecond × healthMultiplier   // 1.0 | slowFactor | 0
-```
-
-**Same browser, multiple tabs:** one seat — `POST /join` resumes the existing `tg_ticket` visitor and ignores a conflicting body `visitorId`.
-
-**Different browsers / devices:** each profile can take its own seat. TideGuard paces capacity; it is not a bot or identity system. Operators who need stronger limits can lower capacity, use Lottery Mode, put Cloudflare Bot Fight/WAF in front, or require login before `/wait`.
-
-Details: [docs/admin.md](docs/admin.md), [docs/verifying-admission.md](docs/verifying-admission.md).
-
-## Operator tools
-
-The `/admin` control room is the launch desk:
-
-| Tool                  | What it does                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Live queue**        | Waiting, admitted, open slots, wait times, geo-block hits — refreshed about every 5s                        |
-| **Analytics**         | 5-minute charts for queue depth, average wait, and country-block hits (1h / 12h / 24h)                      |
-| **IP allowlist**      | Office / staff IPs skip the queue without consuming capacity ([docs/ip-allowlist.md](docs/ip-allowlist.md)) |
-| **Pass queue**        | Issue an admission cookie for this browser to smoke-test the protected app                                  |
-| **Country block**     | Temporary `CF-IPCountry` gate with TTL for event windows ([docs/geo-block.md](docs/geo-block.md))           |
-| **Cloudflare access** | Optional Zone ID + API token to check/fix proxied DNS and IP Geolocation                                    |
-| **Updates**           | Shows running version; checks GitHub Releases for a newer tag ([docs/upgrading.md](docs/upgrading.md))      |
-| **Origin proxy**      | Gate paths and forward admitted traffic upstream ([docs/protecting-origin.md](docs/protecting-origin.md))   |
-
-Analytics chart history is kept in the operator’s browser while the control room is open — no server-side time-series store. Details: [docs/analytics.md](docs/analytics.md).
-
-How your origin trusts admitted visitors: [docs/verifying-admission.md](docs/verifying-admission.md).
+3. Open the site — unfinished setups redirect to `/admin`. Finish the wizard (account → **Cloudflare verify** → **Turnstile** → queue → branding) then hit `/demo`.
 
 ## Architecture (short version)
 
@@ -108,7 +70,7 @@ Browser
 Worker          routing · tokens · HTML · geo/IP gates · validation
   │
   ├─► QueueRoom (Durable Object)   authoritative waiting pool
-  └─► CONFIG_KV                    branding · admin · allowlist · geo block
+  └─► CONFIG_KV                    branding · admins · allowlist · geo · audit
 ```
 
 One Durable Object instance per queue name. One alarm per active queue for rate-limited admission and expiry. **No KV writes on join, status, or heartbeat.** That is the cost discipline.
@@ -122,11 +84,11 @@ Deep dive: [docs/architecture.md](docs/architecture.md)
 | [Getting started](docs/getting-started.md)         | Clone, run locally, deploy, first `/admin` setup         |
 | [Upgrading](docs/upgrading.md)                     | Update an existing deploy without losing KV / secrets    |
 | [Launch checklist](docs/launch-checklist.md)       | Pre-production go-live review                            |
-| [Protecting a domain](docs/protecting-origin.md)   | Custom domains, routes, Cloudflare in front of origin    |
+| [Protecting a domain](docs/protecting-origin.md)   | Custom domains, AOP, Cloudflare in front of origin       |
 | [Verifying admission](docs/verifying-admission.md) | Redirect URL, click-to-enter, how origins trust tokens   |
 | [Architecture](docs/architecture.md)               | Understand Workers / DO / KV choices and cost rules      |
 | [API](docs/api.md)                                 | Integrate `/join`, `/status`, tokens, operator routes    |
-| [Admin](docs/admin.md)                             | Wizard, login, branding, traffic, live queue, analytics  |
+| [Admin](docs/admin.md)                             | Wizard, team invites, audit log, branding, traffic       |
 | [Analytics](docs/analytics.md)                     | Control-room charts (queue depth, wait, geo hits)        |
 | [IP allowlist](docs/ip-allowlist.md)               | Staff bypass + Pass queue + Cloudflare access helper     |
 | [Country block](docs/geo-block.md)                 | Temporary geo gate via `CF-IPCountry`                    |
@@ -146,7 +108,7 @@ npm run dev
 
 | URL                          | Purpose                                              |
 | ---------------------------- | ---------------------------------------------------- |
-| http://localhost:8787        | Landing                                              |
+| http://localhost:8787        | Landing (redirects to `/admin` until setup)          |
 | http://localhost:8787/wait   | Waiting room                                         |
 | http://localhost:8787/demo   | Protected demo (redirects to `/wait` until admitted) |
 | http://localhost:8787/admin  | Setup wizard / control room                          |
@@ -177,9 +139,9 @@ Defaults live in `wrangler.jsonc` under `vars`:
 | `ORIGIN_PATH_PREFIXES`      | _(empty)_    | Prefixes if protect-all is off |
 | `ENVIRONMENT`               | `production` | Reported by `/health`          |
 
-| Secret         | Purpose                                        |
-| -------------- | ---------------------------------------------- |
-| `TOKEN_SECRET` | HMAC key for visitor tokens and admin sessions |
+| Secret         | Purpose                                                         |
+| -------------- | --------------------------------------------------------------- |
+| `TOKEN_SECRET` | HMAC key for visitor tokens and admin sessions; first-claim key |
 
 Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)
 
@@ -189,7 +151,7 @@ Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)
 src/
   core/             Types, config, ETA, cost model
   auth/             Admission tokens, admin password + session
-  admin/            KV helpers for branding, setup, origin proxy
+  admin/            KV helpers for branding, users, invites, audit
   proxy/            Upstream origin forwarding
   queue/            Pure queue engine + in-memory load simulator
   durable-object/   QueueRoom (SQLite + alarms)
@@ -207,9 +169,12 @@ test/               Vitest + Workers pool tests
 - [x] REST API + HMAC admission tokens
 - [x] Waiting room, demo, embed mode, cost calculator
 - [x] Admin wizard with live branding preview
+- [x] Guided setup: Cloudflare verify + Turnstile for admin login
+- [x] In-admin Cloudflare controls (proxy/geo, SSL Full strict, custom domains)
 - [x] Docs hub (getting started, architecture, API, admin, load testing)
 - [x] Configurable origin proxy (gate + forward to upstream)
 - [x] Opening schedule, silent pause, origin health throttle
+- [x] Multi-admin invites + activity audit log
 - [ ] OpenAPI spec
 - [ ] Richer operator controls in UI (pause / force-admit)
 

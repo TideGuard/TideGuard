@@ -24,13 +24,18 @@ describe("GET /health", () => {
 });
 
 describe("GET /", () => {
-  it("serves the landing page", async () => {
-    const response = await exports.default.fetch(new Request("https://example.com/"));
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("text/html");
-
-    const html = await response.text();
-    expect(html).toContain("TideGuard");
+  it("redirects to /admin when setup is incomplete", async () => {
+    await exports.default.fetch(
+      new Request("https://example.com/api/admin/reset", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-secret-do-not-use-in-production" },
+      }),
+    );
+    const response = await exports.default.fetch(
+      new Request("https://example.com/", { redirect: "manual" }),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("/admin");
   });
 });
 

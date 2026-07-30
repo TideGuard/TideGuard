@@ -4,10 +4,17 @@ import { resolveOriginConfig } from "../admin/origin-store";
 import { requireAdmission, withSecurityHeaders } from "../auth";
 import { proxyToOrigin } from "../proxy/origin-proxy";
 import {
+  handleAdminAcceptInvite,
+  handleAdminAudit,
   handleAdminBootstrap,
   handleAdminCloudflareCheck,
+  handleAdminCloudflareDomains,
   handleAdminCloudflareFixProxy,
+  handleAdminCloudflareIpGeolocation,
+  handleAdminCloudflareSsl,
+  handleAdminCreateInvite,
   handleAdminHealth,
+  handleAdminListInvites,
   handleAdminLogin,
   handleAdminLogout,
   handleAdminMetrics,
@@ -15,6 +22,7 @@ import {
   handleAdminPass,
   handleAdminPause,
   handleAdminReset,
+  handleAdminRevokeInvite,
   handleAdminSaveBranding,
   handleAdminSaveBypass,
   handleAdminSaveCloudflare,
@@ -23,11 +31,18 @@ import {
   handleAdminSchedule,
   handleAdminSetMode,
   handleAdminSetup,
+  handleAdminSetupCloudflareAttachDomain,
+  handleAdminSetupCloudflareFix,
+  handleAdminSetupCloudflareSsl,
+  handleAdminSetupCloudflareVerify,
+  handleAdminSetupTurnstileProvision,
+  handleAdminSetupTurnstileVerify,
   handleAdminState,
   handleAdminUpdates,
 } from "./admin";
 import { maybeAdmitIpBypass } from "../admin/ip-bypass";
 import { evaluateGeoBlock } from "../admin/geo-block";
+import { isAdminSetupComplete } from "../admin/store";
 import { geoBlockedResponse } from "../html/geo-blocked";
 import { appendSetCookies } from "../auth";
 import { handleCostEstimateApi, handleCostPage } from "./cost";
@@ -151,6 +166,9 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
   }
 
   if (request.method === "GET" && url.pathname === "/") {
+    if (!(await isAdminSetupComplete(env))) {
+      return Response.redirect(new URL("/admin", url.origin).toString(), 302);
+    }
     return new Response(landingPage(), {
       headers: {
         "content-type": "text/html; charset=utf-8",
@@ -177,6 +195,30 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "POST" && url.pathname === "/api/admin/setup") {
     return await handleAdminSetup(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup/cloudflare/verify") {
+    return await handleAdminSetupCloudflareVerify(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup/cloudflare/fix") {
+    return await handleAdminSetupCloudflareFix(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup/cloudflare/attach-domain") {
+    return await handleAdminSetupCloudflareAttachDomain(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup/cloudflare/ssl") {
+    return await handleAdminSetupCloudflareSsl(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup/turnstile/provision") {
+    return await handleAdminSetupTurnstileProvision(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup/turnstile/verify") {
+    return await handleAdminSetupTurnstileVerify(request, env);
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/login") {
@@ -227,6 +269,21 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminCloudflareFixProxy(request, env);
   }
 
+  if (request.method === "PUT" && url.pathname === "/api/admin/cloudflare/ip-geolocation") {
+    return await handleAdminCloudflareIpGeolocation(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/cloudflare/ssl") {
+    return await handleAdminCloudflareSsl(request, env);
+  }
+
+  if (
+    (request.method === "GET" || request.method === "PUT" || request.method === "DELETE") &&
+    url.pathname === "/api/admin/cloudflare/domains"
+  ) {
+    return await handleAdminCloudflareDomains(request, env);
+  }
+
   if (request.method === "POST" && url.pathname === "/api/admin/mode") {
     return await handleAdminSetMode(request, env);
   }
@@ -245,6 +302,26 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "GET" && url.pathname === "/api/admin/updates") {
     return await handleAdminUpdates(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/audit") {
+    return await handleAdminAudit(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/invites") {
+    return await handleAdminListInvites(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/invites") {
+    return await handleAdminCreateInvite(request, env);
+  }
+
+  if (request.method === "DELETE" && url.pathname.startsWith("/api/admin/invites/")) {
+    return await handleAdminRevokeInvite(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/invites/accept") {
+    return await handleAdminAcceptInvite(request, env);
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/reset") {

@@ -33,23 +33,26 @@ openssl rand -hex 32
 npm run dev
 ```
 
-| URL                                      | What it is                          |
-| ---------------------------------------- | ----------------------------------- |
-| http://localhost:8787                    | Landing page                        |
-| http://localhost:8787/wait?queue=default | Waiting room                        |
-| http://localhost:8787/demo               | Protected demo (needs admission)    |
-| http://localhost:8787/admin              | First-run wizard, then control room |
-| http://localhost:8787/cost               | Cost calculator                     |
-| http://localhost:8787/health             | Health JSON                         |
+| URL                                      | What it is                                          |
+| ---------------------------------------- | --------------------------------------------------- |
+| http://localhost:8787                    | Landing (redirects to `/admin` until setup is done) |
+| http://localhost:8787/wait?queue=default | Waiting room                                        |
+| http://localhost:8787/demo               | Protected demo (needs admission)                    |
+| http://localhost:8787/admin              | First-run wizard, then control room                 |
+| http://localhost:8787/cost               | Cost calculator                                     |
+| http://localhost:8787/health             | Health JSON                                         |
 
 ### First-run admin
 
-1. Open `/admin`.
-2. Paste your `TOKEN_SECRET` (proves you own the Worker), then set password → queue / mode → branding → Finish.
-3. You are signed in with an HttpOnly session cookie.
-4. Visit `/demo` (or `/wait`) as a visitor to exercise the line.
+1. Open `/` or `/admin` (unfinished setups redirect from `/`).
+2. Paste your `TOKEN_SECRET`, choose a **username** and password.
+3. **Cloudflare:** create an API token (link in the wizard), paste token + Zone ID + hostname → **Click to verify**. Use Fix setup / Set Full (strict) / Attach custom domain as prompted.
+4. **Turnstile:** create the widget, complete the challenge → **Click to verify**.
+5. Choose queue / mode, then branding → Finish setup.
+6. You are signed in with an HttpOnly session cookie. Later logins require Turnstile.
+7. Visit `/demo` (or `/wait`) as a visitor to exercise the line.
 
-Without `Authorization: Bearer <TOKEN_SECRET>`, setup is rejected so a public Workers URL cannot be claimed by a stranger.
+Without `Authorization: Bearer <TOKEN_SECRET>`, setup is rejected so a public Workers URL cannot be claimed by a stranger. Localhost is included on the Turnstile widget domains for `npm run dev`.
 
 Details: [admin.md](admin.md). Before production traffic: [launch-checklist.md](launch-checklist.md).
 
@@ -99,6 +102,7 @@ curl -s "http://localhost:8787/api/cost-estimate?visitors=100000&averageWaitSeco
 | Default admission mode           | `ADMISSION_MODE` var or `/admin` | Live switch via admin or `POST /mode`        |
 | Branding + depth display         | `/admin` → Save branding         | KV write on save only                        |
 | Admin password                   | `/admin` wizard                  | PBKDF2 hash in KV; reset with `TOKEN_SECRET` |
+| Cloudflare API token / Turnstile | `/admin` setup + Cloudflare panel | Required on first claim; seals token + Turnstile secret in KV |
 
 Full var table: [README configuration](../README.md#configuration)  
 API reference: [api.md](api.md)

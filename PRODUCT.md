@@ -36,6 +36,7 @@ The product should feel like controlled water pressure: protective without panic
 3. **Tokens over chrome** — colors and fonts are CSS variables so branding can change without rewriting layout.
 4. **Cost-aware UX** — poll every few seconds; never write KV on heartbeat/status.
 5. **Clear craft** — visuals and architecture should be easy to follow and maintain.
+6. **Stay in TideGuard when possible** — Cloudflare zone checks (proxy, geo, SSL, domains) and Turnstile for admin login are driven from `/admin` after a one-time API token, so operators are not bounced through the Cloudflare dashboard for routine setup.
 
 ## Accessibility & Inclusion
 

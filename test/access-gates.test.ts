@@ -7,7 +7,6 @@ import {
   resetGeoBlockStatsWindow,
 } from "../src/admin/geo-block-stats";
 
-const SECRET = "test-token-secret-do-not-use-in-production";
 const PASSWORD = "access-gates-pass";
 const OFFICE_IP = "203.0.113.40";
 
@@ -25,30 +24,9 @@ function cookieFrom(response: Response): string {
 }
 
 async function resetAndSetup(queue = "gates-q"): Promise<string> {
-  await exports.default.fetch(
-    new Request("https://example.com/api/admin/reset", {
-      method: "POST",
-      headers: { authorization: `Bearer ${SECRET}` },
-    }),
-  );
-
-  const setup = await exports.default.fetch(
-    new Request("https://example.com/api/admin/setup", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${SECRET}`,
-      },
-      body: JSON.stringify({
-        password: PASSWORD,
-        confirmPassword: PASSWORD,
-        queue,
-        admissionMode: "queue",
-      }),
-    }),
-  );
-  expect(setup.status).toBe(200);
-  return cookieFrom(setup);
+  const { resetAdmin, setupAdmin } = await import("./helpers/admin-setup");
+  await resetAdmin();
+  return setupAdmin("ops", PASSWORD, { queue, admissionMode: "queue" });
 }
 
 async function waitForGeoHits(
@@ -388,7 +366,7 @@ describe("Pass queue", () => {
 });
 
 describe("Cloudflare access helper", () => {
-  it("saves zone credentials and rejects check without a token", async () => {
+  it("keeps zone credentials from setup and rejects check without a token", async () => {
     const session = await resetAndSetup();
 
     const saved = await exports.default.fetch(
@@ -398,7 +376,7 @@ describe("Cloudflare access helper", () => {
         body: JSON.stringify({
           zoneId: "0123456789abcdef0123456789abcdef",
           hostname: "shop.example.com",
-          apiToken: "cf-test-token-at-least-20-chars",
+          workerService: "tideguard",
         }),
       }),
     );
@@ -410,22 +388,21 @@ describe("Cloudflare access helper", () => {
     expect(body.bypass.hostname).toBe("shop.example.com");
     expect(body.bypass.hasApiToken).toBe(true);
 
-    // Fresh setup without token → check fails with clear error.
-    const session2 = await resetAndSetup();
     await exports.default.fetch(
       new Request("https://example.com/api/admin/cloudflare", {
         method: "PUT",
-        headers: { "content-type": "application/json", cookie: session2 },
+        headers: { "content-type": "application/json", cookie: session },
         body: JSON.stringify({
           zoneId: "0123456789abcdef0123456789abcdef",
           hostname: "shop.example.com",
+          clearApiToken: true,
         }),
       }),
     );
     const check = await exports.default.fetch(
       new Request("https://example.com/api/admin/cloudflare/check", {
         method: "POST",
-        headers: { "content-type": "application/json", cookie: session2 },
+        headers: { "content-type": "application/json", cookie: session },
         body: "{}",
       }),
     );

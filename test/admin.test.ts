@@ -1,19 +1,16 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-
-const SECRET = "test-token-secret-do-not-use-in-production";
+import {
+  ADMIN_SECRET,
+  cookieFrom,
+  resetAdmin,
+  seedSetupPendingForTests,
+  turnstileBody,
+} from "./helpers/admin-setup";
+import { env } from "cloudflare:workers";
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
-}
-
-function cookieFrom(response: Response): string {
-  const raw = response.headers.getSetCookie?.() ?? [];
-  if (raw.length > 0) {
-    return raw.map((c) => c.split(";")[0]).join("; ");
-  }
-  const single = response.headers.get("set-cookie");
-  return single ? single.split(";")[0]! : "";
 }
 
 describe("admin setup wizard and dashboard", () => {
@@ -24,6 +21,13 @@ describe("admin setup wizard and dashboard", () => {
     expect(html).toContain("TideGuard");
     expect(html).toContain("Setup");
     expect(html).toContain("/api/admin/setup");
+    expect(html).toContain("site-footer");
+    expect(html).toContain("wizard-intro");
+    expect(html).toContain("Claim the Worker");
+    expect(html).toContain("Connect Cloudflare");
+    expect(html).toContain("Protect admin login");
+    expect(html).toContain("2. Cloudflare");
+    expect(html).toContain("3. Turnstile");
     expect(html).toContain("Check for updates");
     expect(html).toContain("/api/admin/updates");
   });
@@ -43,12 +47,7 @@ describe("admin setup wizard and dashboard", () => {
   });
 
   it("reports setup incomplete before wizard finishes", async () => {
-    await exports.default.fetch(
-      new Request("https://example.com/api/admin/reset", {
-        method: "POST",
-        headers: { authorization: `Bearer ${SECRET}` },
-      }),
-    );
+    await resetAdmin();
 
     const response = await exports.default.fetch(
       new Request("https://example.com/api/admin/bootstrap"),
@@ -57,22 +56,39 @@ describe("admin setup wizard and dashboard", () => {
     expect(await json(response)).toMatchObject({ setupComplete: false });
   });
 
-  it("completes setup, persists branding, and requires login afterward", async () => {
-    await exports.default.fetch(
-      new Request("https://example.com/api/admin/reset", {
+  it("rejects finish setup without Cloudflare and Turnstile pending", async () => {
+    await resetAdmin();
+    const denied = await exports.default.fetch(
+      new Request("https://example.com/api/admin/setup", {
         method: "POST",
-        headers: { authorization: `Bearer ${SECRET}` },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${ADMIN_SECRET}`,
+        },
+        body: JSON.stringify({
+          username: "ops",
+          password: "correct-horse",
+          confirmPassword: "correct-horse",
+          queue: "admin-q",
+        }),
       }),
     );
+    expect(denied.status).toBe(400);
+  });
+
+  it("completes setup, persists branding, and requires login afterward", async () => {
+    await resetAdmin();
+    await seedSetupPendingForTests(env);
 
     const setup = await exports.default.fetch(
       new Request("https://example.com/api/admin/setup", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${SECRET}`,
+          authorization: `Bearer ${ADMIN_SECRET}`,
         },
         body: JSON.stringify({
+          username: "ops",
           password: "correct-horse",
           confirmPassword: "correct-horse",
           queue: "admin-q",
@@ -87,8 +103,8 @@ describe("admin setup wizard and dashboard", () => {
       }),
     );
     expect(setup.status).toBe(200);
-    const setupBody = await json<{ ok: boolean; admissionMode: string }>(setup);
-    expect(setupBody).toMatchObject({ ok: true, admissionMode: "lottery" });
+    const setupBody = await json<{ ok: boolean; admissionMode: string; username: string }>(setup);
+    expect(setupBody).toMatchObject({ ok: true, admissionMode: "lottery", username: "ops" });
     const sessionCookie = cookieFrom(setup);
     expect(sessionCookie).toContain("tg_admin=");
 
@@ -101,10 +117,14 @@ describe("admin setup wizard and dashboard", () => {
     const stateBody = await json<{
       branding: { title: string; showWaitingCount: boolean };
       admissionMode: string;
+      me: { username: string };
+      turnstile: { configured: boolean; sitekey: string | null };
     }>(state);
     expect(stateBody.branding.title).toBe("Launch hold");
     expect(stateBody.branding.showWaitingCount).toBe(true);
     expect(stateBody.admissionMode).toBe("lottery");
+    expect(stateBody.me.username).toBe("ops");
+    expect(stateBody.turnstile.configured).toBe(true);
 
     const denied = await exports.default.fetch(
       new Request("https://example.com/api/admin/state?queue=admin-q"),
@@ -116,9 +136,10 @@ describe("admin setup wizard and dashboard", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${SECRET}`,
+          authorization: `Bearer ${ADMIN_SECRET}`,
         },
         body: JSON.stringify({
+          username: "ops2",
           password: "another-password",
           confirmPassword: "another-password",
           queue: "admin-q",
@@ -140,16 +161,33 @@ describe("admin setup wizard and dashboard", () => {
       new Request("https://example.com/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password: "wrong-password" }),
+        body: JSON.stringify({
+          username: "ops",
+          password: "wrong-password",
+          ...turnstileBody(),
+        }),
       }),
     );
     expect(badLogin.status).toBe(401);
+
+    const loginNoTs = await exports.default.fetch(
+      new Request("https://example.com/api/admin/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "ops", password: "correct-horse" }),
+      }),
+    );
+    expect(loginNoTs.status).toBe(401);
 
     const login = await exports.default.fetch(
       new Request("https://example.com/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password: "correct-horse" }),
+        body: JSON.stringify({
+          username: "ops",
+          password: "correct-horse",
+          ...turnstileBody(),
+        }),
       }),
     );
     expect(login.status).toBe(200);
@@ -193,18 +231,14 @@ describe("admin setup wizard and dashboard", () => {
   });
 
   it("rejects admin setup without TOKEN_SECRET bearer", async () => {
-    await exports.default.fetch(
-      new Request("https://example.com/api/admin/reset", {
-        method: "POST",
-        headers: { authorization: `Bearer ${SECRET}` },
-      }),
-    );
+    await resetAdmin();
 
     const denied = await exports.default.fetch(
       new Request("https://example.com/api/admin/setup", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          username: "ops",
           password: "correct-horse",
           confirmPassword: "correct-horse",
           queue: "admin-q",

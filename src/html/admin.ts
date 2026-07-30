@@ -46,6 +46,9 @@ export function renderAdminApp(options: AdminAppOptions): string {
       * { box-sizing: border-box; }
       html, body { margin: 0; min-height: 100%; }
       body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
         font-family: var(--font);
         color: var(--text);
         background:
@@ -55,10 +58,25 @@ export function renderAdminApp(options: AdminAppOptions): string {
       }
       a { color: var(--accent-2); }
       .shell {
+        flex: 1;
         width: min(1120px, calc(100% - 2rem));
         margin: 0 auto;
         padding: 1.5rem 0 3rem;
       }
+      .site-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem 1.1rem;
+        align-items: center;
+        padding: 0.85rem 1rem 1.15rem;
+        margin-top: auto;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .site-footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+      .site-footer a:hover { color: var(--accent-2); }
+      .warn { color: #e0b070; }
       .top {
         display: flex;
         align-items: baseline;
@@ -91,7 +109,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
-        margin: 0 0 1.25rem;
+        margin: 0 0 1rem;
         padding: 0;
         list-style: none;
       }
@@ -102,11 +120,47 @@ export function renderAdminApp(options: AdminAppOptions): string {
         border: 1px solid transparent;
         border-radius: 999px;
       }
+      .steps li[data-done="1"] {
+        color: var(--text);
+        border-color: color-mix(in oklab, var(--ok) 40%, var(--line));
+      }
       .steps li[aria-current="step"] {
         color: var(--text);
         border-color: var(--line);
         background: color-mix(in oklab, var(--accent) 16%, transparent);
       }
+      .wizard-intro {
+        margin: 0 0 1rem;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+      .wizard-step-title {
+        margin: 0 0 0.35rem;
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text);
+      }
+      .wizard-step-why {
+        margin: 0 0 1rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .wizard-guide {
+        margin: 0 0 1rem;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--bg-2) 70%, transparent);
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .wizard-guide strong { color: var(--text); font-weight: 600; }
+      .wizard-guide ol, .wizard-guide ul {
+        margin: 0.45rem 0 0;
+        padding-left: 1.2rem;
+      }
+      .wizard-guide li { margin: 0.25rem 0; }
       .grid {
         display: grid;
         gap: 1.25rem;
@@ -371,6 +425,39 @@ export function renderAdminApp(options: AdminAppOptions): string {
         grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
         gap: 0.65rem;
       }
+      .list {
+        display: grid;
+        gap: 0.5rem;
+      }
+      .list-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--bg-2) 70%, transparent);
+        font-size: 0.9rem;
+      }
+      .list-row .meta {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: color-mix(in oklab, #01090c 72%, transparent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        z-index: 50;
+      }
+      .modal-card {
+        width: min(420px, 100%);
+        max-width: 100%;
+      }
       [hidden] { display: none !important; }
       @media (prefers-reduced-motion: reduce) {
         button { transition: none; }
@@ -391,15 +478,31 @@ export function renderAdminApp(options: AdminAppOptions): string {
       </header>
 
       <section id="view-wizard" class="panel" hidden>
+        <p class="wizard-intro">
+          Five steps to claim this Worker: prove ownership, connect Cloudflare, lock down admin login with Turnstile, then configure how visitors wait and what they see.
+        </p>
         <ol class="steps" aria-label="Setup steps">
-          <li data-step="1" aria-current="step">1. Password</li>
-          <li data-step="2">2. Queue</li>
-          <li data-step="3">3. Branding</li>
+          <li data-step="1" aria-current="step">1. Account</li>
+          <li data-step="2">2. Cloudflare</li>
+          <li data-step="3">3. Turnstile</li>
+          <li data-step="4">4. Queue</li>
+          <li data-step="5">5. Branding</li>
         </ol>
         <div id="wizard-step-1">
-          <p class="muted">Prove you own this Worker with <code>TOKEN_SECRET</code> (from Wrangler secrets), then create an admin password.</p>
+          <h2 class="wizard-step-title">Claim the Worker</h2>
+          <p class="wizard-step-why">Only someone with the Wrangler <code>TOKEN_SECRET</code> can finish setup. That stops a stranger from owning a public <code>*.workers.dev</code> URL.</p>
+          <div class="wizard-guide">
+            <strong>What you’ll do</strong>
+            <ol>
+              <li>Paste the same <code>TOKEN_SECRET</code> you set with Wrangler / Deploy to Cloudflare.</li>
+              <li>Choose the first admin username and a strong password (8+ characters).</li>
+            </ol>
+          </div>
           <label>TOKEN_SECRET
             <input id="setup-token-secret" type="password" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Username
+            <input id="setup-username" type="text" autocomplete="username" placeholder="admin" />
           </label>
           <label>Password
             <input id="setup-password" type="password" autocomplete="new-password" minlength="8" />
@@ -409,7 +512,69 @@ export function renderAdminApp(options: AdminAppOptions): string {
           </label>
         </div>
         <div id="wizard-step-2" hidden>
-          <p class="muted">Choose how visitors are admitted and what the waiting room reveals.</p>
+          <h2 class="wizard-step-title">Connect Cloudflare</h2>
+          <p class="wizard-step-why">TideGuard needs a scoped API token to check proxied DNS (<code>CF-Connecting-IP</code>), IP Geolocation, SSL mode, and custom domains — and to create Turnstile next. Prefer staying in this wizard over the Cloudflare dashboard after the token exists.</p>
+          <div class="wizard-guide">
+            <strong>Create a token</strong>
+            <ol>
+              <li>Open <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">API Tokens</a> → Create Custom Token.</li>
+              <li>Permissions: <code>Zone → DNS → Edit</code>, <code>Zone → Zone → Read</code>, <code>Zone → Zone Settings → Edit</code>, <code>Account → Turnstile → Edit</code>, <code>Account → Workers Scripts → Write</code>.</li>
+              <li>Zone Resources → Include → only this zone. Copy the token once.</li>
+              <li>Paste token, Zone ID (zone Overview), and the hostname that should hit this Worker. Then <strong>Click to verify</strong>.</li>
+            </ol>
+            Use Fix setup / Set Full (strict) / Attach custom domain if verify reports gaps.
+          </div>
+          <label>API token
+            <input id="setup-cf-token" type="password" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Zone ID
+            <input id="setup-cf-zone" type="text" placeholder="32-character id from zone Overview" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>Hostname
+            <input id="setup-cf-hostname" type="text" placeholder="www.example.com" autocomplete="off" />
+          </label>
+          <label>Worker service name
+            <input id="setup-cf-worker" type="text" value="tideguard" autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="actions">
+            <button type="button" class="primary" id="setup-cf-verify">Click to verify</button>
+            <button type="button" class="ghost" id="setup-cf-fix" hidden>Fix setup</button>
+            <button type="button" class="ghost" id="setup-cf-ssl" hidden>Set Full (strict)</button>
+            <button type="button" class="ghost" id="setup-cf-domain" hidden>Attach custom domain</button>
+          </div>
+          <p class="status" id="setup-cf-status" data-tone="ok"></p>
+        </div>
+        <div id="wizard-step-3" hidden>
+          <h2 class="wizard-step-title">Protect admin login</h2>
+          <p class="wizard-step-why">Turnstile is Cloudflare’s bot challenge. Rate limits alone are soft; after this step, login and invite accept require a verified challenge.</p>
+          <div class="wizard-guide">
+            <strong>What you’ll do</strong>
+            <ol>
+              <li><strong>Create Turnstile widget</strong> — TideGuard calls the Cloudflare API with the token from the previous step (includes <code>localhost</code> for local dev).</li>
+              <li>Complete the challenge in the widget below.</li>
+              <li><strong>Click to verify</strong> so the server confirms siteverify before you continue.</li>
+            </ol>
+          </div>
+          <div class="actions">
+            <button type="button" class="primary" id="setup-ts-provision">Create Turnstile widget</button>
+          </div>
+          <div id="setup-ts-widget" style="margin:0.85rem 0"></div>
+          <div class="actions">
+            <button type="button" class="ghost" id="setup-ts-verify">Click to verify</button>
+          </div>
+          <p class="status" id="setup-ts-status" data-tone="ok"></p>
+        </div>
+        <div id="wizard-step-4" hidden>
+          <h2 class="wizard-step-title">Configure the line</h2>
+          <p class="wizard-step-why">This is how visitors are admitted once the waiting room is live — FIFO queue or lottery, what they see while waiting, and where they go after.</p>
+          <div class="wizard-guide">
+            <strong>Defaults that matter</strong>
+            <ul>
+              <li><strong>Queue Mode</strong> — fair FIFO. <strong>Lottery Mode</strong> — equal odds among waiters.</li>
+              <li><strong>Show depth</strong> — pool size / ahead &amp; behind on <code>/wait</code> (optional).</li>
+              <li><strong>Click to enter</strong> — visitors must press Continue within the hold window or lose the spot.</li>
+            </ul>
+          </div>
           <label>Queue name
             <input id="setup-queue" type="text" value="${escapeAttr(options.defaultQueue)}" />
           </label>
@@ -436,10 +601,20 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <input id="setup-admit-hold" type="number" min="15" max="900" value="120" />
           </label>
           <p class="muted" style="font-size:0.85rem;margin:0">
-            Redirect is a same-origin path. With click-to-enter, visitors must press Continue within the hold window or lose the spot. Sound alerts let visitors notice Continue while in another tab (they can mute on the waiting page).
+            Redirect is a same-origin path. You can change all of this later in the control room.
           </p>
         </div>
-        <div id="wizard-step-3" hidden>
+        <div id="wizard-step-5" hidden>
+          <h2 class="wizard-step-title">Brand the waiting room</h2>
+          <p class="wizard-step-why">Copy and colors visitors see on <code>/wait</code>. Preview updates live; nothing is saved until you finish setup.</p>
+          <div class="wizard-guide">
+            <strong>Tips</strong>
+            <ul>
+              <li>Keep the title short; put detail in the message.</li>
+              <li>Choose colors with enough contrast for muted text on the background.</li>
+              <li>You can refine branding anytime from the control room after setup.</li>
+            </ul>
+          </div>
           <div class="grid grid-2">
             <div>
               <label>Title
@@ -481,14 +656,36 @@ export function renderAdminApp(options: AdminAppOptions): string {
       </section>
 
       <section id="view-login" class="panel" hidden>
-        <p class="muted">Sign in with the password from setup.</p>
+        <p class="muted">Sign in with your admin username and password.</p>
+        <label>Username
+          <input id="login-username" type="text" autocomplete="username" placeholder="admin" />
+        </label>
         <label>Password
           <input id="login-password" type="password" autocomplete="current-password" />
         </label>
+        <div id="login-turnstile" style="margin:0.75rem 0"></div>
         <div class="actions">
           <button type="button" class="primary" id="login-btn">Sign in</button>
         </div>
         <p class="status" id="login-status" data-tone="ok"></p>
+      </section>
+
+      <section id="view-invite" class="panel" hidden>
+        <p class="muted">You’ve been invited to help manage this TideGuard Worker. Choose a username and password to finish joining.</p>
+        <label>Username
+          <input id="invite-username" type="text" autocomplete="username" placeholder="e.g. alex" />
+        </label>
+        <label>Password
+          <input id="invite-password" type="password" autocomplete="new-password" minlength="8" />
+        </label>
+        <label>Confirm password
+          <input id="invite-confirm" type="password" autocomplete="new-password" minlength="8" />
+        </label>
+        <div id="invite-turnstile" style="margin:0.75rem 0"></div>
+        <div class="actions">
+          <button type="button" class="primary" id="invite-accept-btn">Join team</button>
+        </div>
+        <p class="status" id="invite-status" data-tone="ok"></p>
       </section>
 
       <section id="view-dashboard" hidden>
@@ -764,6 +961,27 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <button type="button" class="ghost" id="fix-cloudflare-proxy">Fix setup</button>
             <button type="button" class="ghost" id="clear-cloudflare-token">Clear token</button>
           </div>
+          <label>Worker service name
+            <input id="cf-worker-service" type="text" value="tideguard" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="check">
+            <input id="cf-ip-geo" type="checkbox" />
+            IP Geolocation (<code>CF-IPCountry</code>) enabled on this zone
+          </label>
+          <p class="muted" style="font-size:0.85rem;margin:0.35rem 0" id="cf-ssl-status">SSL/TLS: —</p>
+          <div class="actions" style="margin-top:0.35rem">
+            <button type="button" class="ghost" id="cf-ssl-strict">Set Full (strict)</button>
+          </div>
+          <p class="muted" style="margin:0.85rem 0 0.35rem"><strong style="color:var(--text)">Custom domains</strong></p>
+          <div id="cf-domains-list" class="list"></div>
+          <label>Hostname
+            <input id="cf-domain-hostname" type="text" placeholder="www.example.com" autocomplete="off" />
+          </label>
+          <div class="actions">
+            <button type="button" class="ghost" id="cf-domain-add">Add</button>
+            <button type="button" class="ghost" id="cf-domains-refresh">Refresh</button>
+          </div>
+          <p class="muted" style="font-size:0.85rem;margin:0.75rem 0 0" id="cf-turnstile-status">Turnstile: —</p>
           <p class="status" id="cloudflare-status" data-tone="ok"></p>
         </div>
 
@@ -782,8 +1000,63 @@ export function renderAdminApp(options: AdminAppOptions): string {
           </div>
           <p class="status" id="update-status" data-tone="ok"></p>
         </div>
+
+        <div class="panel" style="margin-top:1.25rem" id="team-panel">
+          <p class="muted" style="margin-top:0">
+            <strong style="color:var(--text)">Team</strong> · signed in as
+            <strong style="color:var(--text)" id="team-me">—</strong>
+          </p>
+          <p class="muted" style="font-size:0.85rem;margin:0 0 0.75rem">
+            Invite teammates to help manage this Worker. Invite links expire after 72 hours and can only be used once.
+          </p>
+          <div id="team-users" class="list" style="margin-bottom:0.85rem"></div>
+          <div class="actions">
+            <button type="button" class="primary" id="create-invite">Create invite</button>
+          </div>
+          <div id="team-new-invite" hidden style="margin-top:0.85rem">
+            <label>Invite link (copy now — shown only once)
+              <input id="team-invite-url" type="text" readonly />
+            </label>
+            <div class="actions">
+              <button type="button" class="ghost" id="copy-invite-url">Copy link</button>
+            </div>
+          </div>
+          <p class="muted" style="font-size:0.85rem;margin:0.85rem 0 0.35rem" id="team-invites-label" hidden>Pending invites</p>
+          <div id="team-invites" class="list"></div>
+          <p class="status" id="team-status" data-tone="ok"></p>
+        </div>
+
+        <div class="panel" style="margin-top:1.25rem" id="activity-panel">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
+            <p class="muted" style="margin:0"><strong style="color:var(--text)">Activity</strong> · recent admin actions</p>
+            <button type="button" class="ghost" id="refresh-activity">Refresh</button>
+          </div>
+          <div id="activity-list" class="list" style="margin-top:0.85rem"></div>
+          <p class="status" id="activity-status" data-tone="ok"></p>
+        </div>
       </section>
-    </div>
+
+      <div class="modal-overlay" id="confirm-overlay" hidden>
+        <div class="panel modal-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+          <h2 id="confirm-title" style="margin-top:0"></h2>
+          <p class="muted" id="confirm-body"></p>
+          <div class="actions" style="justify-content:flex-end">
+            <button type="button" class="ghost" id="confirm-cancel">Cancel</button>
+            <button type="button" class="primary" id="confirm-ok">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- shell -->
+    <footer class="site-footer">
+      <span>TideGuard</span>
+      <span>v${versionLabel}</span>
+      <span>© 2026</span>
+      <a href="https://github.com/TideGuard/TideGuard/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a>
+      <a href="https://github.com/TideGuard/TideGuard" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/TideGuard/TideGuard/tree/main/docs" target="_blank" rel="noopener">Docs</a>
+      <a href="/wait">Waiting room</a>
+    </footer>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
     <script>
       (() => {
         const initialSetupComplete = ${setupComplete};
@@ -796,6 +1069,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
           admissionMode: "queue",
           setupComplete: initialSetupComplete,
           updatesChecked: false,
+          cloudflareReady: false,
+          turnstileReady: false,
+          turnstileSitekey: null,
+          turnstileWidgetIds: { login: null, invite: null, setup: null },
         };
         let metricsTimer = null;
         let analyticsRangeHours = 12;
@@ -807,6 +1084,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
           wizard: document.getElementById("view-wizard"),
           login: document.getElementById("view-login"),
           dashboard: document.getElementById("view-dashboard"),
+          invite: document.getElementById("view-invite"),
         };
 
         function setStatus(el, text, tone) {
@@ -1108,10 +1386,72 @@ export function renderAdminApp(options: AdminAppOptions): string {
           views.wizard.hidden = name !== "wizard";
           views.login.hidden = name !== "login";
           views.dashboard.hidden = name !== "dashboard";
+          views.invite.hidden = name !== "invite";
           document.getElementById("logout-btn").hidden = name !== "dashboard";
           document.getElementById("page-title").textContent =
-            name === "wizard" ? "Setup" : name === "login" ? "Sign in" : "Control room";
+            name === "wizard" ? "Setup" :
+            name === "login" ? "Sign in" :
+            name === "invite" ? "Join team" :
+            "Control room";
           if (name !== "dashboard") stopMetricsPoll();
+        }
+
+        function usernameError(username) {
+          if (username.length < 2 || username.length > 32) {
+            return "Username must be 2–32 characters.";
+          }
+          if (!/^[a-z0-9][a-z0-9._-]*$/i.test(username)) {
+            return "Username may use letters, numbers, dots, underscores, and hyphens.";
+          }
+          return null;
+        }
+
+        function confirmAction(title, body) {
+          return new Promise((resolve) => {
+            const overlay = document.getElementById("confirm-overlay");
+            const titleEl = document.getElementById("confirm-title");
+            const bodyEl = document.getElementById("confirm-body");
+            const okBtn = document.getElementById("confirm-ok");
+            const cancelBtn = document.getElementById("confirm-cancel");
+            const previouslyFocused = document.activeElement;
+
+            titleEl.textContent = title;
+            bodyEl.textContent = body;
+            overlay.hidden = false;
+
+            function cleanup(result) {
+              overlay.hidden = true;
+              okBtn.removeEventListener("click", onOk);
+              cancelBtn.removeEventListener("click", onCancel);
+              overlay.removeEventListener("keydown", onKeydown);
+              if (previouslyFocused && typeof previouslyFocused.focus === "function") {
+                previouslyFocused.focus();
+              }
+              resolve(result);
+            }
+            function onOk() {
+              cleanup(true);
+            }
+            function onCancel() {
+              cleanup(false);
+            }
+            function onKeydown(event) {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cleanup(false);
+                return;
+              }
+              if (event.key === "Tab") {
+                event.preventDefault();
+                if (document.activeElement === okBtn) cancelBtn.focus();
+                else okBtn.focus();
+              }
+            }
+            okBtn.addEventListener("click", onOk);
+            cancelBtn.addEventListener("click", onCancel);
+            overlay.addEventListener("keydown", onKeydown);
+            okBtn.focus();
+          });
         }
 
         function wizardBranding() {
@@ -1203,14 +1543,127 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("wizard-step-1").hidden = step !== 1;
           document.getElementById("wizard-step-2").hidden = step !== 2;
           document.getElementById("wizard-step-3").hidden = step !== 3;
+          document.getElementById("wizard-step-4").hidden = step !== 4;
+          document.getElementById("wizard-step-5").hidden = step !== 5;
           document.getElementById("wizard-back").hidden = step === 1;
-          document.getElementById("wizard-next").textContent = step === 3 ? "Finish setup" : "Continue";
+          const nextBtn = document.getElementById("wizard-next");
+          nextBtn.textContent = step === 5 ? "Finish setup" : "Continue";
+          if (step === 2) {
+            nextBtn.disabled = !state.cloudflareReady;
+          } else if (step === 3) {
+            nextBtn.disabled = !state.turnstileReady;
+          } else {
+            nextBtn.disabled = false;
+          }
           document.querySelectorAll(".steps li").forEach((li) => {
             const n = Number(li.dataset.step);
-            if (n === step) li.setAttribute("aria-current", "step");
-            else li.removeAttribute("aria-current");
+            if (n === step) {
+              li.setAttribute("aria-current", "step");
+              li.removeAttribute("data-done");
+            } else {
+              li.removeAttribute("aria-current");
+              if (n < step) li.setAttribute("data-done", "1");
+              else li.removeAttribute("data-done");
+            }
           });
-          if (step === 3) paintPreview("preview", wizardBranding(), state.admissionMode);
+          if (step === 5) paintPreview("preview", wizardBranding(), state.admissionMode);
+          if (step === 3 && state.turnstileSitekey) {
+            renderTurnstile("setup-ts-widget", state.turnstileSitekey, "setup");
+          }
+        }
+
+        function setupBearerHeaders() {
+          const tokenSecret = document.getElementById("setup-token-secret").value.trim();
+          return { authorization: "Bearer " + tokenSecret };
+        }
+
+        function waitForTurnstile(timeoutMs) {
+          return new Promise((resolve, reject) => {
+            if (window.turnstile && typeof window.turnstile.render === "function") {
+              resolve(window.turnstile);
+              return;
+            }
+            const started = Date.now();
+            const timer = setInterval(() => {
+              if (window.turnstile && typeof window.turnstile.render === "function") {
+                clearInterval(timer);
+                resolve(window.turnstile);
+              } else if (Date.now() - started > (timeoutMs || 10000)) {
+                clearInterval(timer);
+                reject(new Error("Turnstile script did not load"));
+              }
+            }, 50);
+          });
+        }
+
+        function renderTurnstile(containerId, sitekey, slot) {
+          if (!sitekey) return;
+          const el = document.getElementById(containerId);
+          if (!el) return;
+          waitForTurnstile().then((ts) => {
+            if (state.turnstileWidgetIds[slot] != null) {
+              try { ts.remove(state.turnstileWidgetIds[slot]); } catch (_) {}
+              state.turnstileWidgetIds[slot] = null;
+            }
+            el.innerHTML = "";
+            state.turnstileWidgetIds[slot] = ts.render(el, {
+              sitekey: sitekey,
+              theme: "dark",
+            });
+          }).catch(() => {});
+        }
+
+        function getTurnstileToken(slot) {
+          const id = state.turnstileWidgetIds[slot];
+          if (id == null || !window.turnstile) return "";
+          try {
+            return window.turnstile.getResponse(id) || "";
+          } catch (_) {
+            return "";
+          }
+        }
+
+        function resetTurnstile(slot) {
+          const id = state.turnstileWidgetIds[slot];
+          if (id == null || !window.turnstile) return;
+          try { window.turnstile.reset(id); } catch (_) {}
+        }
+
+        function paintSetupCloudflareUi(verify, pending) {
+          const status = document.getElementById("setup-cf-status");
+          const proxyOk = pending
+            ? !!pending.proxyOk
+            : !!(verify && verify.proxy && verify.proxy.ok);
+          const sslStrict = pending
+            ? !!pending.sslIsStrict
+            : !!(verify && verify.ssl && verify.ssl.isStrict);
+          const domainOk = pending
+            ? !!pending.hostnameAttached
+            : !!(verify && verify.domains && verify.domains.hostnameAttached);
+          const summary =
+            (verify && verify.proxy && verify.proxy.summary) ||
+            (proxyOk ? "Cloudflare access verified." : "Cloudflare needs attention.");
+          const bits = [summary];
+          if (verify && verify.ssl) {
+            bits.push("SSL " + (verify.ssl.mode || "unknown") + (verify.ssl.isStrict ? " (strict)" : ""));
+          } else if (pending && pending.sslMode) {
+            bits.push("SSL " + pending.sslMode + (pending.sslIsStrict ? " (strict)" : ""));
+          }
+          if (!domainOk) bits.push("custom domain not attached");
+          setStatus(status, bits.join(" · "), proxyOk ? "ok" : "err");
+          document.getElementById("setup-cf-fix").hidden = proxyOk;
+          document.getElementById("setup-cf-ssl").hidden = sslStrict;
+          document.getElementById("setup-cf-domain").hidden = domainOk;
+          if (pending) {
+            state.cloudflareReady = !!pending.cloudflareReady;
+            if (pending.turnstileReady != null) state.turnstileReady = !!pending.turnstileReady;
+            if (pending.turnstileSitekey) state.turnstileSitekey = pending.turnstileSitekey;
+          } else {
+            state.cloudflareReady = proxyOk;
+          }
+          if (state.step === 2) {
+            document.getElementById("wizard-next").disabled = !state.cloudflareReady;
+          }
         }
 
         function setModeButtons(queueBtn, lotteryBtn, mode) {
@@ -1265,6 +1718,11 @@ export function renderAdminApp(options: AdminAppOptions): string {
             document.getElementById("origin-prefixes").value = (data.origin.pathPrefixes || []).join(",");
           }
           paintBypass(data.bypass);
+          paintTurnstileStatus(data.turnstile);
+          if (data.turnstile && data.turnstile.sitekey) {
+            state.turnstileSitekey = data.turnstile.sitekey;
+          }
+          refreshCfDomains().catch(() => {});
           if (data.traffic) {
             const opens = data.traffic.opensAt;
             const opensInput = document.getElementById("traffic-opens-at");
@@ -1295,8 +1753,10 @@ export function renderAdminApp(options: AdminAppOptions): string {
                 ? (" · effective rate " + data.traffic.effectiveAdmitPerSecond + "/s")
                 : "");
           }
+          paintTeam(data.team, data.me);
           showView("dashboard");
           startMetricsPoll();
+          loadActivity().catch(() => {});
           if (!state.updatesChecked) {
             state.updatesChecked = true;
             refreshUpdates(false).catch(() => {});
@@ -1308,6 +1768,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("bypass-allowlist").value = bypass.allowlistText || "";
           document.getElementById("cf-zone-id").value = bypass.zoneId || "";
           document.getElementById("cf-hostname").value = bypass.hostname || "";
+          document.getElementById("cf-worker-service").value = bypass.workerService || "tideguard";
           document.getElementById("cf-token-state").textContent = bypass.hasApiToken
             ? "(saved · encrypted)"
             : "(not saved)";
@@ -1323,6 +1784,87 @@ export function renderAdminApp(options: AdminAppOptions): string {
               (bypass.allowlist && bypass.allowlist.length
                 ? " · not on allowlist"
                 : " · allowlist empty");
+          }
+        }
+
+        function paintTurnstileStatus(turnstile) {
+          const el = document.getElementById("cf-turnstile-status");
+          if (!el) return;
+          if (turnstile && turnstile.configured) {
+            el.textContent =
+              "Turnstile: configured" +
+              (turnstile.sitekey ? " · sitekey " + turnstile.sitekey.slice(0, 8) + "…" : "");
+          } else {
+            el.textContent = "Turnstile: not configured";
+          }
+        }
+
+        function paintCloudflareCheck(check) {
+          if (!check) return;
+          const geoEl = document.getElementById("cf-ip-geo");
+          if (geoEl && check.ipGeolocation != null) {
+            geoEl.checked = !!check.ipGeolocation.on;
+          }
+          const sslEl = document.getElementById("cf-ssl-status");
+          if (sslEl && check.ssl) {
+            sslEl.textContent =
+              "SSL/TLS: " +
+              (check.ssl.mode || "unknown") +
+              (check.ssl.isStrict ? " (Full strict)" : "");
+            if (!check.ssl.isStrict) sslEl.classList.add("warn");
+            else sslEl.classList.remove("warn");
+          }
+        }
+
+        async function refreshCfDomains() {
+          const root = document.getElementById("cf-domains-list");
+          const status = document.getElementById("cloudflare-status");
+          try {
+            const data = await api("/api/admin/cloudflare/domains");
+            const domains = data.domains || [];
+            root.innerHTML =
+              domains
+                .map((d) => {
+                  return (
+                    '<div class="list-row"><span>' +
+                    escapeHtml(d.hostname || d.id) +
+                    ' <span class="meta">' +
+                    escapeHtml(d.id || "") +
+                    '</span></span><button type="button" class="ghost" data-domain-id="' +
+                    escapeHtml(d.id) +
+                    '">Remove</button></div>'
+                  );
+                })
+                .join("") ||
+              '<p class="muted" style="margin:0;font-size:0.85rem">No custom domains attached.</p>';
+            root.querySelectorAll("[data-domain-id]").forEach((btn) => {
+              btn.addEventListener("click", async () => {
+                const domainId = btn.getAttribute("data-domain-id");
+                if (
+                  !(await confirmAction(
+                    "Remove custom domain?",
+                    "This detaches the hostname from the Worker service in Cloudflare.",
+                  ))
+                ) {
+                  return;
+                }
+                try {
+                  await api("/api/admin/cloudflare/domains", {
+                    method: "DELETE",
+                    body: JSON.stringify({ domainId }),
+                  });
+                  setStatus(status, "Domain removed.", "ok");
+                  await refreshCfDomains();
+                } catch (err) {
+                  setStatus(status, err.message, "err");
+                }
+              });
+            });
+          } catch (err) {
+            root.innerHTML =
+              '<p class="muted" style="margin:0;font-size:0.85rem">' +
+              escapeHtml(err.message || "Could not load domains") +
+              "</p>";
           }
         }
 
@@ -1372,13 +1914,174 @@ export function renderAdminApp(options: AdminAppOptions): string {
           paintGeoHits(geo);
         }
 
+        function paintTeam(team, me) {
+          const meEl = document.getElementById("team-me");
+          if (meEl) meEl.textContent = (me && me.username) || "—";
+
+          const users = (team && team.users) || [];
+          const usersRoot = document.getElementById("team-users");
+          if (usersRoot) {
+            usersRoot.innerHTML =
+              users
+                .map((u) => {
+                  const isMe = me && u.id === me.id;
+                  return (
+                    '<div class="list-row"><span>' +
+                    escapeHtml(u.username) +
+                    (isMe ? ' <span class="meta">(you)</span>' : "") +
+                    '</span><span class="meta">Added ' +
+                    new Date(u.createdAt).toLocaleDateString() +
+                    "</span></div>"
+                  );
+                })
+                .join("") ||
+              '<p class="muted" style="margin:0;font-size:0.85rem">No teammates yet.</p>';
+          }
+
+          const invites = (team && team.invites) || [];
+          const invitesLabel = document.getElementById("team-invites-label");
+          if (invitesLabel) invitesLabel.hidden = invites.length === 0;
+          const invitesRoot = document.getElementById("team-invites");
+          if (invitesRoot) {
+            invitesRoot.innerHTML = invites
+              .map((inv) => {
+                return (
+                  '<div class="list-row"><span>Invited by ' +
+                  escapeHtml(inv.createdByUsername) +
+                  ' <span class="meta">expires ' +
+                  new Date(inv.expiresAt).toLocaleString() +
+                  '</span></span><button type="button" class="ghost" data-revoke-invite="' +
+                  escapeHtml(inv.id) +
+                  '">Revoke</button></div>'
+                );
+              })
+              .join("");
+            invitesRoot.querySelectorAll("[data-revoke-invite]").forEach((btn) => {
+              btn.addEventListener("click", () => {
+                revokeInviteById(btn.getAttribute("data-revoke-invite"));
+              });
+            });
+          }
+        }
+
+        async function revokeInviteById(id) {
+          if (!id) return;
+          const status = document.getElementById("team-status");
+          if (!(await confirmAction("Revoke invite?", "This invite link will stop working immediately."))) {
+            return;
+          }
+          try {
+            await api("/api/admin/invites/" + encodeURIComponent(id), { method: "DELETE" });
+            setStatus(status, "Invite revoked.", "ok");
+            await loadDashboard();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        }
+
+        function paintActivity(events) {
+          const root = document.getElementById("activity-list");
+          if (!root) return;
+          const rows = events || [];
+          if (rows.length === 0) {
+            root.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem">No activity recorded yet.</p>';
+            return;
+          }
+          root.innerHTML = rows
+            .map((e) => {
+              return (
+                '<div class="list-row"><span>' +
+                escapeHtml(e.summary) +
+                '</span><span class="meta">' +
+                escapeHtml(e.actorUsername) +
+                " · " +
+                new Date(e.at).toLocaleString() +
+                "</span></div>"
+              );
+            })
+            .join("");
+        }
+
+        async function loadActivity() {
+          const status = document.getElementById("activity-status");
+          try {
+            const data = await api("/api/admin/audit");
+            paintActivity(data.events);
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        }
+
+        document.getElementById("refresh-activity").addEventListener("click", () => {
+          loadActivity().catch(() => {});
+        });
+
+        document.getElementById("create-invite").addEventListener("click", async () => {
+          const status = document.getElementById("team-status");
+          const btn = document.getElementById("create-invite");
+          try {
+            btn.disabled = true;
+            const data = await api("/api/admin/invites", { method: "POST", body: "{}" });
+            const urlInput = document.getElementById("team-invite-url");
+            const wrap = document.getElementById("team-new-invite");
+            if (urlInput && wrap) {
+              urlInput.value = data.acceptUrl || "";
+              wrap.hidden = false;
+            }
+            setStatus(status, "Invite created — copy the link below (shown once).", "ok");
+            await loadDashboard();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
+        document.getElementById("copy-invite-url").addEventListener("click", async () => {
+          const status = document.getElementById("team-status");
+          const urlInput = document.getElementById("team-invite-url");
+          try {
+            await navigator.clipboard.writeText(urlInput.value);
+            setStatus(status, "Invite link copied.", "ok");
+          } catch {
+            urlInput.select();
+            setStatus(status, "Select and copy the link above.", "ok");
+          }
+        });
+
         async function boot() {
           fillBrandingInputs("b-", defaults);
           document.getElementById("setup-queue").value = defaultQueue;
           document.getElementById("dash-queue").value = defaultQueue;
-          const boot = await api("/api/admin/bootstrap");
-          state.setupComplete = boot.setupComplete;
-          if (!boot.setupComplete) {
+
+          const params = new URLSearchParams(window.location.search);
+          const bootData = await api("/api/admin/bootstrap");
+          state.setupComplete = bootData.setupComplete;
+          state.turnstileSitekey = bootData.turnstileSitekey || null;
+          if (!bootData.setupComplete && bootData.setupPending) {
+            state.cloudflareReady = !!bootData.setupPending.cloudflareReady;
+            state.turnstileReady = !!bootData.setupPending.turnstileReady;
+            if (bootData.setupPending.turnstileSitekey) {
+              state.turnstileSitekey = bootData.setupPending.turnstileSitekey;
+            }
+            if (bootData.setupPending.zoneId) {
+              document.getElementById("setup-cf-zone").value = bootData.setupPending.zoneId;
+            }
+            if (bootData.setupPending.hostname) {
+              document.getElementById("setup-cf-hostname").value = bootData.setupPending.hostname;
+            }
+            paintSetupCloudflareUi(null, bootData.setupPending);
+          }
+
+          if (params.get("invite")) {
+            showView("invite");
+            if (state.turnstileSitekey) {
+              renderTurnstile("invite-turnstile", state.turnstileSitekey, "invite");
+            }
+            return;
+          }
+
+          if (!bootData.setupComplete) {
             showView("wizard");
             setWizardStep(1);
             return;
@@ -1386,8 +2089,12 @@ export function renderAdminApp(options: AdminAppOptions): string {
           try {
             await loadDashboard();
           } catch (err) {
-            if (err.status === 401) showView("login");
-            else setStatus(document.getElementById("login-status"), err.message, "err");
+            if (err.status === 401) {
+              showView("login");
+              if (state.turnstileSitekey) {
+                renderTurnstile("login-turnstile", state.turnstileSitekey, "login");
+              }
+            } else setStatus(document.getElementById("login-status"), err.message, "err");
           }
         }
 
@@ -1419,10 +2126,16 @@ export function renderAdminApp(options: AdminAppOptions): string {
           setStatus(status, "", "ok");
           if (state.step === 1) {
             const tokenSecret = document.getElementById("setup-token-secret").value.trim();
+            const username = document.getElementById("setup-username").value.trim();
             const password = document.getElementById("setup-password").value;
             const confirm = document.getElementById("setup-confirm").value;
             if (tokenSecret.length < 16) {
               setStatus(status, "TOKEN_SECRET must be at least 16 characters.", "err");
+              return;
+            }
+            const usernameProblem = usernameError(username);
+            if (usernameProblem) {
+              setStatus(status, usernameProblem, "err");
               return;
             }
             if (password.length < 8) {
@@ -1437,7 +2150,23 @@ export function renderAdminApp(options: AdminAppOptions): string {
             return;
           }
           if (state.step === 2) {
+            if (!state.cloudflareReady) {
+              setStatus(status, "Click to verify Cloudflare access before continuing.", "err");
+              return;
+            }
             setWizardStep(3);
+            return;
+          }
+          if (state.step === 3) {
+            if (!state.turnstileReady) {
+              setStatus(status, "Verify Turnstile before continuing.", "err");
+              return;
+            }
+            setWizardStep(4);
+            return;
+          }
+          if (state.step === 4) {
+            setWizardStep(5);
             return;
           }
           try {
@@ -1447,6 +2176,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
               method: "POST",
               headers: { authorization: "Bearer " + tokenSecret },
               body: JSON.stringify({
+                username: document.getElementById("setup-username").value.trim(),
                 password: document.getElementById("setup-password").value,
                 confirmPassword: document.getElementById("setup-confirm").value,
                 queue: document.getElementById("setup-queue").value,
@@ -1464,16 +2194,208 @@ export function renderAdminApp(options: AdminAppOptions): string {
           }
         });
 
+        document.getElementById("setup-cf-verify").addEventListener("click", async () => {
+          const status = document.getElementById("setup-cf-status");
+          const btn = document.getElementById("setup-cf-verify");
+          try {
+            btn.disabled = true;
+            setStatus(status, "Verifying…", "ok");
+            const data = await api("/api/admin/setup/cloudflare/verify", {
+              method: "POST",
+              headers: setupBearerHeaders(),
+              body: JSON.stringify({
+                apiToken: document.getElementById("setup-cf-token").value.trim(),
+                zoneId: document.getElementById("setup-cf-zone").value.trim(),
+                hostname: document.getElementById("setup-cf-hostname").value.trim(),
+                workerService: document.getElementById("setup-cf-worker").value.trim() || "tideguard",
+              }),
+            });
+            if (data.verify && data.verify.zone && data.verify.zone.zoneId) {
+              document.getElementById("setup-cf-zone").value = data.verify.zone.zoneId;
+            }
+            paintSetupCloudflareUi(data.verify, data.pending);
+          } catch (err) {
+            state.cloudflareReady = false;
+            document.getElementById("wizard-next").disabled = true;
+            setStatus(status, err.message, "err");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
+        document.getElementById("setup-cf-fix").addEventListener("click", async () => {
+          const status = document.getElementById("setup-cf-status");
+          try {
+            setStatus(status, "Fixing…", "ok");
+            const data = await api("/api/admin/setup/cloudflare/fix", {
+              method: "POST",
+              headers: setupBearerHeaders(),
+              body: "{}",
+            });
+            paintSetupCloudflareUi(data.check ? { proxy: data.check, ssl: null, domains: null } : null, data.pending);
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("setup-cf-ssl").addEventListener("click", async () => {
+          const status = document.getElementById("setup-cf-status");
+          if (
+            !(await confirmAction(
+              "Set SSL to Full (strict)?",
+              "Full (strict) requires a valid certificate on your origin. Wrong mode can cause Error 526 for visitors.",
+            ))
+          ) {
+            return;
+          }
+          try {
+            const data = await api("/api/admin/setup/cloudflare/ssl", {
+              method: "POST",
+              headers: setupBearerHeaders(),
+              body: "{}",
+            });
+            paintSetupCloudflareUi(
+              data.ssl ? { proxy: { ok: data.pending && data.pending.proxyOk, summary: "SSL updated" }, ssl: data.ssl, domains: { hostnameAttached: data.pending && data.pending.hostnameAttached } } : null,
+              data.pending,
+            );
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("setup-cf-domain").addEventListener("click", async () => {
+          const status = document.getElementById("setup-cf-status");
+          try {
+            setStatus(status, "Attaching domain…", "ok");
+            const data = await api("/api/admin/setup/cloudflare/attach-domain", {
+              method: "POST",
+              headers: setupBearerHeaders(),
+              body: "{}",
+            });
+            paintSetupCloudflareUi(null, data.pending);
+            setStatus(status, "Custom domain attached.", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("setup-ts-provision").addEventListener("click", async () => {
+          const status = document.getElementById("setup-ts-status");
+          const btn = document.getElementById("setup-ts-provision");
+          try {
+            btn.disabled = true;
+            setStatus(status, "Creating widget…", "ok");
+            const data = await api("/api/admin/setup/turnstile/provision", {
+              method: "POST",
+              headers: setupBearerHeaders(),
+              body: "{}",
+            });
+            state.turnstileSitekey = data.sitekey || (data.pending && data.pending.turnstileSitekey) || null;
+            if (data.pending && data.pending.turnstileReady != null) {
+              state.turnstileReady = !!data.pending.turnstileReady;
+            }
+            if (state.turnstileSitekey) {
+              renderTurnstile("setup-ts-widget", state.turnstileSitekey, "setup");
+              setStatus(status, "Widget ready — complete the challenge, then Click to verify.", "ok");
+            } else {
+              setStatus(status, "Provision succeeded but no sitekey returned.", "err");
+            }
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
+        document.getElementById("setup-ts-verify").addEventListener("click", async () => {
+          const status = document.getElementById("setup-ts-status");
+          const btn = document.getElementById("setup-ts-verify");
+          const turnstileToken = getTurnstileToken("setup");
+          if (!turnstileToken) {
+            setStatus(status, "Complete the Turnstile challenge first.", "err");
+            return;
+          }
+          try {
+            btn.disabled = true;
+            const data = await api("/api/admin/setup/turnstile/verify", {
+              method: "POST",
+              headers: setupBearerHeaders(),
+              body: JSON.stringify({ turnstileToken }),
+            });
+            state.turnstileReady = !!(data.pending && data.pending.turnstileReady) || !!data.ok;
+            if (state.step === 3) {
+              document.getElementById("wizard-next").disabled = !state.turnstileReady;
+            }
+            setStatus(status, state.turnstileReady ? "Turnstile verified." : "Verification incomplete.", state.turnstileReady ? "ok" : "err");
+            resetTurnstile("setup");
+          } catch (err) {
+            state.turnstileReady = false;
+            resetTurnstile("setup");
+            setStatus(status, err.message, "err");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
         document.getElementById("login-btn").addEventListener("click", async () => {
           const status = document.getElementById("login-status");
           try {
             await api("/api/admin/login", {
               method: "POST",
-              body: JSON.stringify({ password: document.getElementById("login-password").value }),
+              body: JSON.stringify({
+                username: document.getElementById("login-username").value.trim(),
+                password: document.getElementById("login-password").value,
+                turnstileToken: getTurnstileToken("login"),
+              }),
             });
             await loadDashboard();
           } catch (err) {
+            resetTurnstile("login");
             setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("invite-accept-btn").addEventListener("click", async () => {
+          const status = document.getElementById("invite-status");
+          setStatus(status, "", "ok");
+          const params = new URLSearchParams(window.location.search);
+          const token = params.get("invite") || "";
+          const username = document.getElementById("invite-username").value.trim();
+          const password = document.getElementById("invite-password").value;
+          const confirm = document.getElementById("invite-confirm").value;
+          const usernameProblem = usernameError(username);
+          if (usernameProblem) {
+            setStatus(status, usernameProblem, "err");
+            return;
+          }
+          if (password.length < 8) {
+            setStatus(status, "Password must be at least 8 characters.", "err");
+            return;
+          }
+          if (password !== confirm) {
+            setStatus(status, "Passwords do not match.", "err");
+            return;
+          }
+          const btn = document.getElementById("invite-accept-btn");
+          try {
+            btn.disabled = true;
+            await api("/api/admin/invites/accept", {
+              method: "POST",
+              body: JSON.stringify({
+                token,
+                username,
+                password,
+                confirmPassword: confirm,
+                turnstileToken: getTurnstileToken("invite"),
+              }),
+            });
+            window.history.replaceState({}, "", window.location.pathname);
+            await loadDashboard();
+          } catch (err) {
+            resetTurnstile("invite");
+            setStatus(status, err.message, "err");
+          } finally {
+            btn.disabled = false;
           }
         });
 
@@ -1481,6 +2403,9 @@ export function renderAdminApp(options: AdminAppOptions): string {
           stopMetricsPoll();
           await api("/api/admin/logout", { method: "POST", body: "{}" });
           showView("login");
+          if (state.turnstileSitekey) {
+            renderTurnstile("login-turnstile", state.turnstileSitekey, "login");
+          }
         });
 
         document.getElementById("dash-queue").addEventListener("change", () => {
@@ -1506,6 +2431,15 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("save-mode").addEventListener("click", async () => {
           const status = document.getElementById("dash-status");
+          const modeLabel = state.admissionMode === "lottery" ? "Lottery" : "Queue";
+          if (
+            !(await confirmAction(
+              "Apply mode change?",
+              "Switch admission mode to " + modeLabel + " mode. This takes effect immediately for waiting visitors.",
+            ))
+          ) {
+            return;
+          }
           try {
             await api("/api/admin/mode", {
               method: "POST",
@@ -1523,6 +2457,17 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("save-origin").addEventListener("click", async () => {
           const status = document.getElementById("origin-status");
+          const willEnable = document.getElementById("origin-enabled").checked;
+          if (
+            !(await confirmAction(
+              willEnable ? "Enable origin proxy?" : "Disable origin proxy?",
+              willEnable
+                ? "Protected paths will be proxied to your origin URL immediately."
+                : "Origin proxying will stop immediately for protected paths.",
+            ))
+          ) {
+            return;
+          }
           try {
             const data = await api("/api/admin/origin", {
               method: "PUT",
@@ -1564,6 +2509,14 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("pass-queue").addEventListener("click", async () => {
           const status = document.getElementById("bypass-status");
+          if (
+            !(await confirmAction(
+              "Pass the queue?",
+              "This issues an admission cookie for this browser and skips the waiting room entirely.",
+            ))
+          ) {
+            return;
+          }
           try {
             const data = await api("/api/admin/pass", {
               method: "POST",
@@ -1581,6 +2534,17 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("save-geo-block").addEventListener("click", async () => {
           const status = document.getElementById("geo-status");
+          const willEnable = document.getElementById("geo-enabled").checked;
+          if (
+            !(await confirmAction(
+              willEnable ? "Enable country block?" : "Save country block settings?",
+              willEnable
+                ? "Visitors from the listed countries will be blocked immediately."
+                : "Country block will be saved but remain inactive.",
+            ))
+          ) {
+            return;
+          }
           try {
             const data = await api("/api/admin/geo-block", {
               method: "PUT",
@@ -1605,6 +2569,11 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("clear-geo-block").addEventListener("click", async () => {
           const status = document.getElementById("geo-status");
+          if (
+            !(await confirmAction("Disable country block?", "This immediately stops blocking any countries."))
+          ) {
+            return;
+          }
           try {
             const data = await api("/api/admin/geo-block", {
               method: "PUT",
@@ -1630,6 +2599,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
               body: JSON.stringify({
                 zoneId: document.getElementById("cf-zone-id").value,
                 hostname: document.getElementById("cf-hostname").value,
+                workerService: document.getElementById("cf-worker-service").value.trim() || "tideguard",
                 ...(token ? { apiToken: token } : {}),
               }),
             });
@@ -1643,12 +2613,21 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("clear-cloudflare-token").addEventListener("click", async () => {
           const status = document.getElementById("cloudflare-status");
+          if (
+            !(await confirmAction(
+              "Clear API token?",
+              "The saved Cloudflare API token will be removed. Paste it again to use Check/Fix setup.",
+            ))
+          ) {
+            return;
+          }
           try {
             const data = await api("/api/admin/cloudflare", {
               method: "PUT",
               body: JSON.stringify({
                 zoneId: document.getElementById("cf-zone-id").value,
                 hostname: document.getElementById("cf-hostname").value,
+                workerService: document.getElementById("cf-worker-service").value.trim() || "tideguard",
                 clearApiToken: true,
               }),
             });
@@ -1670,6 +2649,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
               }),
             });
             const check = data.check || {};
+            paintCloudflareCheck(check);
             const geo =
               check.ipGeolocation == null
                 ? ""
@@ -1688,8 +2668,91 @@ export function renderAdminApp(options: AdminAppOptions): string {
         document.getElementById("check-cloudflare").addEventListener("click", () => {
           runCloudflareAction("/api/admin/cloudflare/check", "Check complete");
         });
-        document.getElementById("fix-cloudflare-proxy").addEventListener("click", () => {
+        document.getElementById("fix-cloudflare-proxy").addEventListener("click", async () => {
+          if (
+            !(await confirmAction(
+              "Fix Cloudflare setup?",
+              "This will change DNS proxy status and IP Geolocation settings for this hostname on Cloudflare.",
+            ))
+          ) {
+            return;
+          }
           runCloudflareAction("/api/admin/cloudflare/fix-proxy", "Setup updated");
+        });
+
+        document.getElementById("cf-ip-geo").addEventListener("change", async () => {
+          const status = document.getElementById("cloudflare-status");
+          const enabled = document.getElementById("cf-ip-geo").checked;
+          if (!enabled) {
+            if (
+              !(await confirmAction(
+                "Disable IP Geolocation?",
+                "Country block needs CF-IPCountry. Disabling geolocation will also clear any active country block.",
+              ))
+            ) {
+              document.getElementById("cf-ip-geo").checked = true;
+              return;
+            }
+          }
+          try {
+            const data = await api("/api/admin/cloudflare/ip-geolocation", {
+              method: "PUT",
+              body: JSON.stringify({ enabled }),
+            });
+            const on = !!(data.ipGeolocation && data.ipGeolocation.on);
+            document.getElementById("cf-ip-geo").checked = on;
+            setStatus(status, on ? "IP Geolocation enabled." : "IP Geolocation disabled.", "ok");
+          } catch (err) {
+            document.getElementById("cf-ip-geo").checked = !enabled;
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("cf-ssl-strict").addEventListener("click", async () => {
+          const status = document.getElementById("cloudflare-status");
+          if (
+            !(await confirmAction(
+              "Set SSL to Full (strict)?",
+              "Full (strict) requires a valid certificate on your origin. Wrong mode can cause Error 526 for visitors.",
+            ))
+          ) {
+            return;
+          }
+          try {
+            const data = await api("/api/admin/cloudflare/ssl", { method: "PUT", body: "{}" });
+            const ssl = data.ssl || {};
+            const sslEl = document.getElementById("cf-ssl-status");
+            sslEl.textContent =
+              "SSL/TLS: " + (ssl.mode || "strict") + (ssl.isStrict ? " (Full strict)" : "");
+            sslEl.classList.toggle("warn", !ssl.isStrict);
+            setStatus(status, "SSL set to Full (strict).", "ok");
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
+        });
+
+        document.getElementById("cf-domains-refresh").addEventListener("click", () => {
+          refreshCfDomains();
+        });
+
+        document.getElementById("cf-domain-add").addEventListener("click", async () => {
+          const status = document.getElementById("cloudflare-status");
+          const hostname = document.getElementById("cf-domain-hostname").value.trim();
+          if (!hostname) {
+            setStatus(status, "Enter a hostname to attach.", "err");
+            return;
+          }
+          try {
+            await api("/api/admin/cloudflare/domains", {
+              method: "PUT",
+              body: JSON.stringify({ hostname }),
+            });
+            document.getElementById("cf-domain-hostname").value = "";
+            setStatus(status, "Custom domain attached.", "ok");
+            await refreshCfDomains();
+          } catch (err) {
+            setStatus(status, err.message, "err");
+          }
         });
 
         document.getElementById("save-schedule").addEventListener("click", async () => {
@@ -1711,6 +2774,14 @@ export function renderAdminApp(options: AdminAppOptions): string {
         });
         document.getElementById("clear-schedule").addEventListener("click", async () => {
           const status = document.getElementById("traffic-status");
+          if (
+            !(await confirmAction(
+              "Open the room now?",
+              "This clears the scheduled opening time and opens the waiting room immediately.",
+            ))
+          ) {
+            return;
+          }
           try {
             await api("/api/admin/schedule", {
               method: "PUT",
@@ -1728,6 +2799,17 @@ export function renderAdminApp(options: AdminAppOptions): string {
         });
         document.getElementById("save-pause").addEventListener("click", async () => {
           const status = document.getElementById("traffic-status");
+          const willPause = document.getElementById("traffic-paused").checked;
+          if (
+            !(await confirmAction(
+              willPause ? "Pause admissions?" : "Resume admissions?",
+              willPause
+                ? "Visitors stop being admitted immediately. This is silent — they are not told."
+                : "Admissions resume immediately.",
+            ))
+          ) {
+            return;
+          }
           try {
             await api("/api/admin/pause", {
               method: "POST",

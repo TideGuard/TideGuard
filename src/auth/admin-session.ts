@@ -9,17 +9,27 @@ export const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 12;
 
 export interface AdminSessionClaims {
   role: "admin";
+  sub: string;
+  username: string;
   iat: number;
   exp: number;
 }
 
+export interface AdminActor {
+  id: string;
+  username: string;
+}
+
 export async function signAdminSession(
   secret: string,
+  actor: AdminActor,
   ttlSeconds = ADMIN_SESSION_TTL_SECONDS,
   nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<string> {
   const claims: AdminSessionClaims = {
     role: "admin",
+    sub: actor.id,
+    username: actor.username,
     iat: nowSeconds,
     exp: nowSeconds + ttlSeconds,
   };
@@ -51,7 +61,15 @@ export async function verifyAdminSession(
     throw new TokenError("invalid_token", "Invalid admin session payload");
   }
 
-  if (claims.role !== "admin" || typeof claims.exp !== "number" || typeof claims.iat !== "number") {
+  if (
+    claims.role !== "admin" ||
+    typeof claims.exp !== "number" ||
+    typeof claims.iat !== "number" ||
+    typeof claims.sub !== "string" ||
+    typeof claims.username !== "string" ||
+    claims.sub.length === 0 ||
+    claims.username.length === 0
+  ) {
     throw new TokenError("invalid_token", "Invalid admin session claims");
   }
 

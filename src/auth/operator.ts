@@ -1,6 +1,7 @@
 import { ApiError } from "../core/errors";
 import { TokenError } from "./token";
 import {
+  type AdminActor,
   buildAdminSessionCookie,
   clearAdminSessionCookie,
   readAdminSessionCookie,
@@ -37,14 +38,15 @@ export async function requireOperator(request: Request, env: Env): Promise<void>
   }
 }
 
-export async function requireAdminSession(request: Request, env: Env): Promise<void> {
+export async function requireAdminSession(request: Request, env: Env): Promise<AdminActor> {
   const secret = requireTokenSecret(env);
   const session = readAdminSessionCookie(request);
   if (!session) {
     throw new ApiError("unauthorized", "Admin session required", 401);
   }
   try {
-    await verifyAdminSession(session, secret);
+    const claims = await verifyAdminSession(session, secret);
+    return { id: claims.sub, username: claims.username };
   } catch (error) {
     if (error instanceof TokenError) {
       throw new ApiError("unauthorized", error.message, 401, { reason: error.code });
@@ -66,6 +68,7 @@ export function requireTokenSecret(env: Env): string {
 }
 
 export { buildAdminSessionCookie, clearAdminSessionCookie, readAdminSessionCookie };
+export type { AdminActor };
 
 async function timingSafeStringEqual(a: string, b: string): Promise<boolean> {
   const encoder = new TextEncoder();

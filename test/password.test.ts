@@ -15,14 +15,16 @@ describe("admin session tokens", () => {
   const secret = "test-token-secret-do-not-use-in-production";
 
   it("signs and verifies a session", async () => {
-    const token = await signAdminSession(secret, 60, 1_000);
+    const token = await signAdminSession(secret, { id: "u1", username: "alice" }, 60, 1_000);
     const claims = await verifyAdminSession(token, secret, 1_010);
     expect(claims.role).toBe("admin");
+    expect(claims.sub).toBe("u1");
+    expect(claims.username).toBe("alice");
     expect(claims.exp).toBe(1_060);
   });
 
   it("rejects expired sessions", async () => {
-    const token = await signAdminSession(secret, 10, 1_000);
+    const token = await signAdminSession(secret, { id: "u1", username: "alice" }, 10, 1_000);
     await expect(verifyAdminSession(token, secret, 1_020)).rejects.toBeInstanceOf(TokenError);
   });
 });

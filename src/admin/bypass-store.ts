@@ -21,6 +21,10 @@ export interface BypassSettings {
   hostname: string | null;
   /** Encrypted API token blob, or null. */
   apiTokenSealed: string | null;
+  /** Cloudflare account id (for Turnstile / Workers Domains). */
+  accountId: string | null;
+  /** Worker service name for custom domains (default tideguard). */
+  workerService: string | null;
 }
 
 export interface BypassPublicView {
@@ -29,6 +33,8 @@ export interface BypassPublicView {
   zoneId: string | null;
   hostname: string | null;
   hasApiToken: boolean;
+  accountId: string | null;
+  workerService: string | null;
   clientIp: string | null;
   clientIpMatched: boolean;
   connectingIpPresent: boolean;
@@ -39,6 +45,8 @@ const EMPTY: BypassSettings = {
   zoneId: null,
   hostname: null,
   apiTokenSealed: null,
+  accountId: null,
+  workerService: null,
 };
 
 export function invalidateBypassCache(): void {
@@ -85,6 +93,8 @@ export async function writeCloudflareLink(
     hostname: string | null;
     apiToken?: string | null;
     clearApiToken?: boolean;
+    accountId?: string | null;
+    workerService?: string | null;
   },
 ): Promise<BypassSettings> {
   const current = await readBypassSettings(env);
@@ -102,12 +112,20 @@ export async function writeCloudflareLink(
 
   const zoneId = normalizeOptional(input.zoneId);
   const hostname = normalizeHostname(input.hostname);
+  const accountId =
+    input.accountId !== undefined ? normalizeOptional(input.accountId) : current.accountId;
+  const workerService =
+    input.workerService !== undefined
+      ? normalizeOptional(input.workerService) || "tideguard"
+      : current.workerService;
 
   const next: BypassSettings = {
     ...current,
     zoneId,
     hostname,
     apiTokenSealed,
+    accountId,
+    workerService,
   };
   await env.CONFIG_KV.put(BYPASS_SETTINGS_KEY, JSON.stringify(next));
   invalidateBypassCache();
@@ -144,6 +162,8 @@ export function toBypassPublicView(
     zoneId: settings.zoneId,
     hostname: settings.hostname,
     hasApiToken: Boolean(settings.apiTokenSealed),
+    accountId: settings.accountId,
+    workerService: settings.workerService ?? "tideguard",
     clientIp: requestMeta.clientIp,
     clientIpMatched: isIpAllowlisted(requestMeta.clientIp, settings),
     connectingIpPresent: requestMeta.connectingIpPresent,
@@ -175,6 +195,12 @@ function sanitizeSettings(raw: unknown): BypassSettings {
     apiTokenSealed:
       typeof obj.apiTokenSealed === "string" && obj.apiTokenSealed.length > 0
         ? obj.apiTokenSealed
+        : null,
+    accountId:
+      typeof obj.accountId === "string" && obj.accountId.trim() ? obj.accountId.trim() : null,
+    workerService:
+      typeof obj.workerService === "string" && obj.workerService.trim()
+        ? obj.workerService.trim()
         : null,
   };
 }

@@ -113,6 +113,8 @@ Cloudflare bills for Worker requests, Durable Object requests/duration, KV opera
 | Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle           |
 | Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side        |
 | Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `TOKEN_SECRET` |
+| Admin users                     | Named accounts in `admin:config.users[]`; invites hashed with 72h TTL         |
+| Activity audit                  | KV ring `admin:audit` (~200 events); no secrets                               |
 | Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV           |
 | Status polling                  | Necessary for consistency; keep intervals at **~15s** in the waiting UI       |
 

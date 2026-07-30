@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Guided 5-step `/admin` setup** — Account → Cloudflare verify → Turnstile → Queue → Branding (with in-wizard roadmap and per-step guides)
+- **Required Cloudflare API verify** during setup (token + zone); Fix proxied DNS / IP Geolocation; optional Full (strict) SSL and custom-domain attach
+- **Turnstile for admin auth** — wizard provisions a widget via Cloudflare API; login and invite accept require siteverify (plus existing rate limits)
+- **Cloudflare control plane in admin** — IP Geolocation toggle (off clears country block), Set Full (strict), list/add/remove Workers custom domains; verify-on-save for new API tokens
+- Sticky admin footer (TideGuard · version · © 2026 · MIT · docs / GitHub / waiting room)
+- Multi-admin accounts (username + PBKDF2 password), 72h hashed invite links, Activity audit log, and confirm dialogs for consequential toggles
+- First-run `GET /` → `/admin` redirect until setup is complete
+- Docs: Authenticated Origin Pulls + Full (strict) as required origin lock-down
+- README restructured into What / Basic features / Extended features
 - Admin **Updates** panel + `GET /api/admin/updates` — compare running `0.1.0` to GitHub `releases/latest` (KV-cached)
 - Istanbul coverage via `npm run test:coverage` (~80% lines on `src/`); README badge + sales row
 - Operator [upgrading guide](docs/upgrading.md) for Deploy-to-Cloudflare forks and CLI redeploys (preserve KV IDs, secrets, queue state)
@@ -30,7 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IP allowlist** — staff bypass via `CF-Connecting-IP` without consuming queue capacity
 - **Pass queue** — admin-issued admission cookie for this browser (`POST /api/admin/pass`)
 - **Country block** — temporary `CF-IPCountry` gate with TTL, hit counters, and allowlist/Pass overrides
-- Optional **Cloudflare access** helper (Zone ID + API token) to check/fix proxied DNS and IP Geolocation
 - Operator auth accepts admin session cookie or `TOKEN_SECRET` bearer
 - Protected demo (`/demo`) gated by admission token cookie
 - Configurable in-memory load tests (100 → 100k users) plus optional DO load suite
@@ -40,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Cloudflare access is no longer “optional Check/Fix later only” — required in first-run setup; dashboard panel expanded into zone controls
+- Admin login / invite accept fail closed when Turnstile is configured
 - Initial project scaffold for Cloudflare Workers
 - Typed configuration validation and simple ETA calculator
 - `GET /health` and landing page

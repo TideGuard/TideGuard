@@ -25,7 +25,12 @@ describe("cost calculator surfaces", () => {
   });
 
   it("links the calculator from the landing page", async () => {
+    const { resetAdmin, setupAdmin } = await import("./helpers/admin-setup");
+    await resetAdmin();
+    await setupAdmin();
+
     const response = await exports.default.fetch(new Request("https://example.com/"));
+    expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain('href="/cost"');
   });

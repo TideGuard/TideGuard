@@ -1,137 +1,110 @@
 # Admin
 
-The admin surface lives at `/admin`. It has three jobs, in order:
+The admin surface lives at `/admin`. It has four jobs:
 
-1. **First-run setup** (wizard)
-2. **Sign in**
-3. **Control room** (branding, mode, metrics)
+1. **First-run setup** (wizard) — claim with `TOKEN_SECRET`, verify Cloudflare, provision Turnstile, then queue + branding
+2. **Sign in** — username + password + Turnstile
+3. **Control room** — branding, traffic, origin, Cloudflare zone controls, team, activity
+4. **Accept invite** — `/admin?invite=…` for additional admins (Turnstile required)
 
-Visitor pages never write KV. Admin does, and only on explicit Save / Finish setup.
+Visitor pages never write KV. Admin does, and only on explicit Save / Finish setup / invite actions.
 
 ## Setup wizard
 
-Shown when `admin:config` is missing from KV.
+Shown when `admin:config` is missing from KV. Until then, `GET /` redirects to `/admin`.
 
-| Step        | You set                                                       | Stored when                                     |
-| ----------- | ------------------------------------------------------------- | ----------------------------------------------- |
-| 1. Password | `TOKEN_SECRET` + admin password (8–128 chars)                 | Finish setup                                    |
-| 2. Queue    | Queue name, mode, depth, redirect path, click-to-enter / hold | Finish setup                                    |
-| 3. Branding | Title, message, colors                                        | Finish setup (live preview is client-side only) |
+| Step           | You set                                                                                         | Stored when                                     |
+| -------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1. Account     | `TOKEN_SECRET` + username + admin password (8–128 chars)                                        | Finish setup                                    |
+| 2. Cloudflare  | API token + Zone ID + hostname → **Click to verify**; Fix proxy/geo; optional SSL / domain attach | Finish setup (credentials sealed in KV)         |
+| 3. Turnstile   | Create widget → complete challenge → **Click to verify**                                        | Finish setup (sitekey + sealed secret in KV)    |
+| 4. Queue       | Queue name, mode, depth, redirect path, click-to-enter / hold                                   | Finish setup                                    |
+| 5. Branding    | Title, message, colors                                                                          | Finish setup (live preview is client-side only) |
 
 On finish, TideGuard:
 
 - Requires `Authorization: Bearer <TOKEN_SECRET>` so a stranger cannot claim a public Worker
-- Writes a PBKDF2 password hash + salt to KV (`admin:config`)
+- Requires completed Cloudflare verify + Turnstile verify (pending KV promoted on finish)
+- Writes a PBKDF2 password hash + salt for the first user in KV (`admin:config` → `users[]`)
 - Writes branding to KV (`branding:<queue>`)
+- Seals Cloudflare API token + account/zone metadata; stores Turnstile sitekey + sealed secret
 - Sets admission mode on the queue Durable Object
-- Issues an admin session cookie (`tg_admin`)
+- Issues an admin session cookie (`tg_admin`) with `sub` + `username`
 
-`TOKEN_SECRET` remains a Wrangler secret. It signs visitor tickets, admission tokens, and admin session cookies. The wizard does **not** replace it — it only proves you know the secret.
+`TOKEN_SECRET` remains a Wrangler secret. It signs visitor tickets, admission tokens, and admin session cookies. Daily login uses username + password **plus Turnstile**.
+
+Legacy installs with a single top-level password hash migrate to `users[{ username: "admin", … }]` on first read.
 
 ## Login
 
-After setup, `/admin` asks for the password. Success sets `tg_admin` (HttpOnly, `SameSite=Lax`, 12h TTL).
+After setup, `/admin` asks for **username**, password, and a **Turnstile** challenge. Success sets `tg_admin` (HttpOnly, `SameSite=Lax`, 12h TTL). Rate limits still apply; Turnstile is the primary brute-force control.
+
+## Team invites
+
+Admins can create invite links from the **Team** panel:
+
+1. **Create invite** → one-time URL (`/admin?invite=<id>.<token>`) shown once
+2. Share the link however you like (chat, password manager, etc.) — TideGuard does not send email
+3. Invitee sets their own username + password within **72 hours**
+4. Unused or revoked invites expire; create a new one if needed
+
+Raw invite tokens are never stored — only a SHA-256 hash in KV with `expirationTtl`. There is no password-reset flow; emergency wipe is still `POST /api/admin/reset` with Bearer `TOKEN_SECRET`.
+
+## Activity audit log
+
+Consequential control-room actions append to a KV ring (`admin:audit`, ~200 events): who, what, when. The **Activity** panel lists them. Secrets are never logged.
+
+## Confirmations
+
+Toggles that change visitor-visible or security-sensitive behavior (pause, mode, origin proxy, geo block, Pass queue, Cloudflare Fix, invite revoke, open-now) ask **Are you sure?** in the UI before calling the API.
 
 ## Control room
 
-Dark teal single-page UI (Source Sans). Two columns on desktop:
+Dark teal single-page UI (Source Sans). Includes live queue, analytics, traffic, origin proxy, allowlist, geo block, **Cloudflare control plane** (IP Geolocation switch, SSL Full strict, custom domains), team, activity, and updates.
 
-| Left                                          | Right                               |
-| --------------------------------------------- | ----------------------------------- |
-| Metrics: waiting, admitted, capacity, mode    | Live waiting-room preview           |
-| Queue name, Queue / Lottery toggle            | Updates as you edit colors and copy |
-| “Show depth” checkbox                         |                                     |
-| Title, message, color pickers                 |                                     |
-| **Traffic controls** (opening, pause, health) |                                     |
-| **Origin proxy**                              |                                     |
-| **IP allowlist** + Cloudflare DNS check       |                                     |
-| **Save branding** / **Apply mode**            |                                     |
-
-Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). The control room includes a **Live queue** panel (5s refresh) and an **Analytics** panel with queue / wait / geo-block charts ([analytics.md](analytics.md)).
-
-| Control                | Effect                                                                                         |
-| ---------------------- | ---------------------------------------------------------------------------------------------- |
-| Live preview           | Updates as you edit; no KV write                                                               |
-| Save branding          | One KV put for `branding:<queue>` (+ syncs click-to-enter hold + `showWaitingCount` to the DO) |
-| Apply mode             | `queue` or `lottery` on the Durable Object                                                     |
-| Show depth             | Persisted with branding as `showWaitingCount` (no `?showWaiting=` override on `/wait`)         |
-| Default redirect path  | Same-origin path after admission (`redirectUrl`); overridable by `?return=`                    |
-| Require click to enter | Continue button instead of auto-redirect; token issued on `POST /enter`                        |
-| Play turn notification | Short jingle when Continue appears (`/sounds/notification.mp3`); visitors can mute on `/wait`  |
-| Admit hold (seconds)   | Time to click before the admitted spot is released (15–900)                                    |
-| Metrics                | Waiting / admitted / capacity / mode from the DO (also via operator `GET /metrics`)            |
-
-### Traffic controls
-
-First-class panel on the dashboard:
-
-| Control       | Visitors see                       | Operators do                                 |
-| ------------- | ---------------------------------- | -------------------------------------------- |
-| Opening time  | Countdown on `/wait` HTML only     | Set datetime (UTC) or clear = open now       |
-| Silent pause  | Normal waiting UI; admissions stop | Toggle pause — visitors are **not** told     |
-| Origin health | Silent rate cut → auto-pause       | URL, latency/status thresholds, override 15m |
-
-```text
-canAdmit = !manualPause && !autoPause && now >= opensAt
-admitRate = baseAdmitPerSecond × healthMultiplier
-```
-
-**Multi-tab:** one browser profile = one seat via `tg_ticket`. Extra devices can still take extra seats — TideGuard paces capacity; it is not a bot/identity system. Mitigations: lower capacity, Lottery Mode, Cloudflare Bot Fight/WAF, or require login before `/wait`.
-
-Waiting-room depth UI (only when Show depth is on):
-
-- **Lottery:** In pool
-- **Queue:** Ahead and Behind
-
-How origins verify admission and how redirects work: [verifying-admission.md](verifying-admission.md).
-
-### Origin proxy
-
-The control room includes an **Origin proxy** panel:
-
-| Field         | Meaning                                 |
-| ------------- | --------------------------------------- |
-| Enable        | Gate + proxy non-TideGuard paths        |
-| Origin URL    | Upstream `https://…`                    |
-| Protect all   | Every non-reserved path needs admission |
-| Path prefixes | Used when protect-all is off            |
-
-Saved via `PUT /api/admin/origin` to KV. Full guide: [protecting-origin.md](protecting-origin.md).
-
-### Updates
-
-The control room shows the running package version (`v0.1.0` and later) and can check
-[GitHub Releases](https://github.com/TideGuard/TideGuard/releases) via `GET /api/admin/updates`.
-Publish a release tag (e.g. `v0.1.0`) so operators see “up to date” or “update available.”
-Upgrade steps: [upgrading.md](upgrading.md).
+Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). Charts: [analytics.md](analytics.md). Origin lock-down including Authenticated Origin Pulls: [protecting-origin.md](protecting-origin.md).
 
 ## API (admin)
 
-| Method | Path                   | Auth                                        |
-| ------ | ---------------------- | ------------------------------------------- |
-| `GET`  | `/api/admin/bootstrap` | Public (`setupComplete`, `version`)         |
-| `POST` | `/api/admin/setup`     | `Authorization: Bearer <TOKEN_SECRET>` once |
-| `POST` | `/api/admin/login`     | Public (rate-limited)                       |
-| `POST` | `/api/admin/logout`    | Session                                     |
-| `GET`  | `/api/admin/state`     | Session                                     |
-| `GET`  | `/api/admin/updates`   | Session (optional `?refresh=1`)             |
-| `PUT`  | `/api/admin/branding`  | Session                                     |
-| `PUT`  | `/api/admin/origin`    | Session (origin proxy settings)             |
-| `POST` | `/api/admin/mode`      | Session                                     |
-| `PUT`  | `/api/admin/schedule`  | Session (opening time)                      |
-| `POST` | `/api/admin/pause`     | Session (silent pause)                      |
-| `PUT`  | `/api/admin/health`    | Session (origin health / override)          |
-| `POST` | `/api/admin/reset`     | `Authorization: Bearer <TOKEN_SECRET>` only |
+| Method   | Path                                      | Auth                                        |
+| -------- | ----------------------------------------- | ------------------------------------------- |
+| `GET`    | `/api/admin/bootstrap`                    | Public (`setupComplete`, `turnstileSitekey`, `version`) |
+| `POST`   | `/api/admin/setup/cloudflare/verify`      | Bearer `TOKEN_SECRET` (wizard)              |
+| `POST`   | `/api/admin/setup/cloudflare/fix`         | Bearer `TOKEN_SECRET` (wizard)              |
+| `POST`   | `/api/admin/setup/cloudflare/attach-domain` | Bearer `TOKEN_SECRET` (wizard)            |
+| `POST`   | `/api/admin/setup/cloudflare/ssl`         | Bearer `TOKEN_SECRET` (wizard)              |
+| `POST`   | `/api/admin/setup/turnstile/provision`    | Bearer `TOKEN_SECRET` (wizard)              |
+| `POST`   | `/api/admin/setup/turnstile/verify`       | Bearer `TOKEN_SECRET` (wizard)              |
+| `POST`   | `/api/admin/setup`                        | Bearer `TOKEN_SECRET` once; requires pending CF+Turnstile |
+| `POST`   | `/api/admin/login`                        | Public (rate-limited); username + password + Turnstile |
+| `POST`   | `/api/admin/logout`                       | Session                                     |
+| `GET`    | `/api/admin/state`                        | Session (includes `me`, `team`, `turnstile`) |
+| `PUT`    | `/api/admin/cloudflare/ip-geolocation`    | Session                                     |
+| `PUT`    | `/api/admin/cloudflare/ssl`               | Session (set Full strict)                   |
+| `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains` | Session (list / attach / detach)            |
+| `GET`    | `/api/admin/updates`                      | Session (optional `?refresh=1`)             |
+| `GET`    | `/api/admin/audit`                        | Session                                     |
+| `GET`    | `/api/admin/invites`                      | Session                                     |
+| `POST`   | `/api/admin/invites`                      | Session (returns accept URL once)           |
+| `DELETE` | `/api/admin/invites/:id`                  | Session                                     |
+| `POST`   | `/api/admin/invites/accept`               | Public (rate-limited); invite + Turnstile   |
+| `PUT`    | `/api/admin/branding`                     | Session                                     |
+| `PUT`    | `/api/admin/origin`                       | Session                                     |
+| `POST`   | `/api/admin/mode`                         | Session                                     |
+| `PUT`    | `/api/admin/schedule`                     | Session                                     |
+| `POST`   | `/api/admin/pause`                        | Session                                     |
+| `PUT`    | `/api/admin/health`                       | Session                                     |
+| `POST`   | `/api/admin/reset`                        | Bearer `TOKEN_SECRET` only                  |
 
 Operator routes `/admit`, `/mode`, `/pause`, and `/metrics` accept either the admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
 
 ## Emergency reset
 
-If you lose the admin password (local or staging):
+If you lose all admin passwords (local or staging):
 
 ```bash
 curl -X POST https://<host>/api/admin/reset \
   -H "Authorization: Bearer $TOKEN_SECRET"
 ```
 
-Then reopen `/admin` and run the wizard again. This clears `admin:config` and `admin:origin`; branding keys are left as-is unless you overwrite them in the next setup.
+Then reopen `/admin` and run the wizard again. This clears admin users, invites, audit log, origin override, bypass, geo, Turnstile, and setup-pending; branding keys are left as-is unless you overwrite them in the next setup.

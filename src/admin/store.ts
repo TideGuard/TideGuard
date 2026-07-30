@@ -4,8 +4,8 @@ import {
   sanitizeRedirectUrl,
   type WaitingRoomBranding,
 } from "../core/branding";
-import type { AdminConfig } from "./types";
-import { ADMIN_CONFIG_KEY, brandingKey } from "./types";
+import type { AdminConfig, AdminUser } from "./types";
+import { ADMIN_CONFIG_KEY, brandingKey, normalizeUsername } from "./types";
 
 export async function readAdminConfig(env: Env): Promise<AdminConfig | null> {
   try {
@@ -13,29 +13,83 @@ export async function readAdminConfig(env: Env): Promise<AdminConfig | null> {
     if (!raw || typeof raw !== "object") {
       return null;
     }
-    const config = raw as Partial<AdminConfig>;
-    if (
-      config.setupComplete !== true ||
-      typeof config.passwordHash !== "string" ||
-      typeof config.passwordSalt !== "string" ||
-      typeof config.defaultQueue !== "string"
-    ) {
+    const config = raw as Partial<AdminConfig> & {
+      passwordHash?: string;
+      passwordSalt?: string;
+    };
+    if (config.setupComplete !== true || typeof config.defaultQueue !== "string") {
       return null;
     }
-    return {
+
+    const users = normalizeUsers(config);
+    if (users.length === 0) {
+      return null;
+    }
+
+    const normalized: AdminConfig = {
       setupComplete: true,
-      passwordHash: config.passwordHash,
-      passwordSalt: config.passwordSalt,
+      users,
       createdAt: typeof config.createdAt === "number" ? config.createdAt : 0,
       defaultQueue: config.defaultQueue,
     };
+
+    // Persist migration away from legacy top-level password fields.
+    if (config.passwordHash || config.passwordSalt || !Array.isArray(config.users)) {
+      await writeAdminConfig(env, normalized);
+    }
+
+    return normalized;
   } catch {
     return null;
   }
 }
 
+function normalizeUsers(config: Partial<AdminConfig>): AdminUser[] {
+  if (Array.isArray(config.users) && config.users.length > 0) {
+    const out: AdminUser[] = [];
+    for (const user of config.users) {
+      if (
+        user &&
+        typeof user.id === "string" &&
+        typeof user.username === "string" &&
+        typeof user.passwordHash === "string" &&
+        typeof user.passwordSalt === "string"
+      ) {
+        out.push({
+          id: user.id,
+          username: normalizeUsername(user.username),
+          passwordHash: user.passwordHash,
+          passwordSalt: user.passwordSalt,
+          createdAt: typeof user.createdAt === "number" ? user.createdAt : 0,
+        });
+      }
+    }
+    return out;
+  }
+
+  if (typeof config.passwordHash === "string" && typeof config.passwordSalt === "string") {
+    return [
+      {
+        id: "legacy-admin",
+        username: "admin",
+        passwordHash: config.passwordHash,
+        passwordSalt: config.passwordSalt,
+        createdAt: typeof config.createdAt === "number" ? config.createdAt : 0,
+      },
+    ];
+  }
+
+  return [];
+}
+
 export async function writeAdminConfig(env: Env, config: AdminConfig): Promise<void> {
-  await env.CONFIG_KV.put(ADMIN_CONFIG_KEY, JSON.stringify(config));
+  const payload: AdminConfig = {
+    setupComplete: true,
+    users: config.users,
+    createdAt: config.createdAt,
+    defaultQueue: config.defaultQueue,
+  };
+  await env.CONFIG_KV.put(ADMIN_CONFIG_KEY, JSON.stringify(payload));
 }
 
 export async function clearAdminConfig(env: Env): Promise<void> {
@@ -44,6 +98,27 @@ export async function clearAdminConfig(env: Env): Promise<void> {
 
 export async function isAdminSetupComplete(env: Env): Promise<boolean> {
   return (await readAdminConfig(env)) !== null;
+}
+
+export function findUserByUsername(config: AdminConfig, username: string): AdminUser | null {
+  const needle = normalizeUsername(username);
+  return config.users.find((u) => u.username === needle) ?? null;
+}
+
+export async function addAdminUser(env: Env, user: AdminUser): Promise<AdminConfig> {
+  const config = await readAdminConfig(env);
+  if (!config) {
+    throw new Error("Admin setup has not been completed");
+  }
+  if (findUserByUsername(config, user.username)) {
+    throw new Error("Username is already taken");
+  }
+  const next: AdminConfig = {
+    ...config,
+    users: [...config.users, user],
+  };
+  await writeAdminConfig(env, next);
+  return next;
 }
 
 export async function readBranding(env: Env, queue: string): Promise<WaitingRoomBranding> {
@@ -115,4 +190,13 @@ function clampInt(value: number, min: number, max: number, fallback: number): nu
     return fallback;
   }
   return n;
+}
+
+export function newAdminUserId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return bytesToHex(bytes);
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
