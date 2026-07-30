@@ -51,6 +51,8 @@ export interface TrafficResponse {
 
 export interface BootstrapResponse {
   setupComplete: boolean;
+  claimed: boolean;
+  claimedUsername: string | null;
   defaultQueue: string;
   version: string;
   turnstileSitekey: string | null;

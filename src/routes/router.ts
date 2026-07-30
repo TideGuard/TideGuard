@@ -7,6 +7,7 @@ import {
   handleAdminAcceptInvite,
   handleAdminAudit,
   handleAdminBootstrap,
+  handleAdminClaim,
   handleAdminCloudflareCheck,
   handleAdminCloudflareDomains,
   handleAdminCloudflareFixProxy,
@@ -211,6 +212,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "GET" && url.pathname === "/api/admin/bootstrap") {
     return await handleAdminBootstrap(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/claim") {
+    return await handleAdminClaim(request, env);
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/setup") {

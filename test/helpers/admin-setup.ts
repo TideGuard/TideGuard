@@ -25,15 +25,10 @@ export async function resetAdmin(): Promise<void> {
 
 export const ADMIN_PASSWORD = "Correct-horse1";
 
-/** Seeds Cloudflare+Turnstile pending state, then finishes first-run setup. */
-export async function setupAdmin(
-  username = "ops",
-  password = ADMIN_PASSWORD,
-  extras?: Record<string, unknown>,
-): Promise<string> {
-  await seedSetupPendingForTests(env);
-  const setup = await exports.default.fetch(
-    new Request("https://example.com/api/admin/setup", {
+/** Claim the Worker (step 1); returns session cookie. */
+export async function claimAdmin(username = "ops", password = ADMIN_PASSWORD): Promise<string> {
+  const claim = await exports.default.fetch(
+    new Request("https://example.com/api/admin/claim", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -44,13 +39,37 @@ export async function setupAdmin(
         password,
         confirmPassword: password,
         queue: "default",
+      }),
+    }),
+  );
+  expect(claim.status).toBe(200);
+  return cookieFrom(claim);
+}
+
+/** Seeds Cloudflare+Turnstile pending state, claims, then finishes first-run setup. */
+export async function setupAdmin(
+  username = "ops",
+  password = ADMIN_PASSWORD,
+  extras?: Record<string, unknown>,
+): Promise<string> {
+  await seedSetupPendingForTests(env);
+  const sessionCookie = await claimAdmin(username, password);
+  const setup = await exports.default.fetch(
+    new Request("https://example.com/api/admin/setup", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: sessionCookie,
+      },
+      body: JSON.stringify({
+        queue: "default",
         admissionMode: "queue",
         ...extras,
       }),
     }),
   );
   expect(setup.status).toBe(200);
-  return cookieFrom(setup);
+  return sessionCookie;
 }
 
 /** Always-pass test Turnstile token body field (secret short-circuits siteverify). */

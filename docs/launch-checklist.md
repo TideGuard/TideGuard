@@ -4,23 +4,23 @@ Use this before pointing production traffic at TideGuard.
 
 ## Secrets and admin
 
-- [ ] `TOKEN_SECRET` set via Wrangler secret / Deploy-to-Cloudflare (`openssl rand -hex 32`)
-- [ ] `/admin` setup completed: Bearer TOKEN_SECRET + username/password + **Cloudflare verify** + **Turnstile verify**
-- [ ] Strong per-admin passwords stored offline; session cookie is HttpOnly; login protected by Turnstile
+- [ ] `TOKEN_SECRET` set via Wrangler secret / Deploy-to-Cloudflare ([tideguard.dev/token](https://tideguard.dev/token) or `openssl rand -hex 32`)
+- [ ] `/admin` setup completed: Claim (TOKEN_SECRET + username/password) + **Cloudflare verify** + **Turnstile verify** + Finish
+- [ ] Strong per-admin passwords stored offline; session cookie is HttpOnly; login protected by Turnstile after finish
 - [ ] Confirmed `POST /api/admin/reset` only works with `Authorization: Bearer <TOKEN_SECRET>`
 - [ ] Extra operators invited via Team panel (72h links), not by sharing one password
 - [ ] Cloudflare panel: DNS proxied, IP Geolocation as needed, SSL Full (strict) if origin is ready, custom domain attached
 
 ## Capacity
 
-| Setting                | Where                | Guidance                                                              |
-| ---------------------- | -------------------- | --------------------------------------------------------------------- |
-| `MAX_CONCURRENT_USERS` | Worker vars          | Origin concurrent capacity you can actually serve                     |
-| `ADMIT_PER_SECOND`     | Worker vars          | Steady admit rate once the room is full                               |
-| `TOKEN_TTL_SECONDS`    | Worker vars          | How long an admission cookie remains valid                            |
-| Adaptive poll          | Waiting UI (default) | Relative to place in line (`nextPollAfterMs`); status renews liveness |
-| Fixed poll override    | Env (optional)       | `WAITING_ROOM_*_INTERVAL_MS` — not recommended; budgets DO requests   |
-| Heartbeat timeout      | Worker vars (`180`)  | Drop silent waiters; adaptive polls stay under half this window       |
+| Setting                | Where                       | Guidance                                                              |
+| ---------------------- | --------------------------- | --------------------------------------------------------------------- |
+| `MAX_CONCURRENT_USERS` | Code default / optional env | Origin concurrent capacity you can actually serve                     |
+| `ADMIT_PER_SECOND`     | `/admin` traffic (or env)   | Steady admit rate once the room is full                               |
+| `TOKEN_TTL_SECONDS`    | Code default / optional env | How long an admission cookie remains valid                            |
+| Adaptive poll          | Waiting UI (default)        | Relative to place in line (`nextPollAfterMs`); status renews liveness |
+| Fixed poll override    | Env (optional)              | `WAITING_ROOM_*_INTERVAL_MS` — not recommended; budgets DO requests   |
+| Heartbeat timeout      | Worker vars (`180`)         | Drop silent waiters; adaptive polls stay under half this window       |
 
 Rough DO request volume while waiting (adaptive, status-only):
 

@@ -40,18 +40,26 @@ export function App() {
     try {
       const bootData = await api<BootstrapResponse>("/api/admin/bootstrap");
       setBootstrap(bootData);
-      if (!bootData.setupComplete) {
+
+      if (!bootData.claimed) {
         setView("wizard");
         return;
       }
-      if (inviteToken) {
+
+      if (inviteToken && bootData.setupComplete) {
         setView("invite");
         return;
       }
+
       try {
+        // Probe session with state (works once claimed, even if wizard unfinished).
         const dash = await api<AdminState>(
           `/api/admin/state?queue=${encodeURIComponent(bootData.defaultQueue)}`,
         );
+        if (!bootData.setupComplete) {
+          setView("wizard");
+          return;
+        }
         setState(dash);
         setView("dashboard");
       } catch (e) {
@@ -67,6 +75,18 @@ export function App() {
     }
   }
 
+  async function afterAuth(bootData: BootstrapResponse) {
+    if (!bootData.setupComplete) {
+      setView("wizard");
+      return;
+    }
+    const dash = await api<AdminState>(
+      `/api/admin/state?queue=${encodeURIComponent(bootData.defaultQueue)}`,
+    );
+    setState(dash);
+    setView("dashboard");
+  }
+
   if (view === "loading") {
     return (
       <Text c="dimmed" ta="center" py="xl">
@@ -80,12 +100,15 @@ export function App() {
       <SetupWizard
         bootstrap={bootstrap}
         onComplete={async () => {
+          const refreshed = await api<BootstrapResponse>("/api/admin/bootstrap");
+          setBootstrap(refreshed);
           const dash = await api<AdminState>(
-            `/api/admin/state?queue=${encodeURIComponent(bootstrap.defaultQueue)}`,
+            `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
           );
           setState(dash);
           setView("dashboard");
         }}
+        onNeedLogin={() => setView("login")}
       />
     );
   }
@@ -122,12 +145,13 @@ export function App() {
   return (
     <LoginView
       sitekey={bootstrap?.turnstileSitekey ?? null}
+      requireTurnstile={Boolean(bootstrap?.setupComplete && bootstrap.turnstileSitekey)}
       error={error}
+      incompleteSetup={Boolean(bootstrap?.claimed && !bootstrap.setupComplete)}
       onSuccess={async () => {
-        const q = bootstrap?.defaultQueue || "default";
-        const dash = await api<AdminState>(`/api/admin/state?queue=${encodeURIComponent(q)}`);
-        setState(dash);
-        setView("dashboard");
+        const bootData = bootstrap ?? (await api<BootstrapResponse>("/api/admin/bootstrap"));
+        setBootstrap(bootData);
+        await afterAuth(bootData);
       }}
     />
   );
@@ -135,11 +159,15 @@ export function App() {
 
 function LoginView({
   sitekey,
+  requireTurnstile,
   error,
+  incompleteSetup,
   onSuccess,
 }: {
   sitekey: string | null;
+  requireTurnstile: boolean;
   error: string | null;
+  incompleteSetup: boolean;
   onSuccess: () => Promise<void>;
 }) {
   const [username, setUsername] = useState("");
@@ -151,7 +179,7 @@ function LoginView({
   const widgetId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!sitekey || !widgetRef.current) return;
+    if (!requireTurnstile || !sitekey || !widgetRef.current) return;
     ensureTurnstile().then(() => {
       if (!widgetRef.current || !window.turnstile) return;
       if (widgetId.current) window.turnstile.remove(widgetId.current);
@@ -161,7 +189,7 @@ function LoginView({
         "expired-callback": () => setTurnstileToken(null),
       });
     });
-  }, [sitekey]);
+  }, [sitekey, requireTurnstile]);
 
   return (
     <Card
@@ -175,7 +203,9 @@ function LoginView({
       <Stack>
         <Title order={3}>TideGuard Admin</Title>
         <Text size="sm" c="dimmed">
-          Sign in to manage the waiting room.
+          {incompleteSetup
+            ? "Sign in to finish first-time setup."
+            : "Sign in to manage the waiting room."}
         </Text>
         <TextInput
           label="Username"
@@ -189,7 +219,7 @@ function LoginView({
           onChange={(e) => setPassword(e.currentTarget.value)}
           autoComplete="current-password"
         />
-        <div ref={widgetRef} />
+        {requireTurnstile ? <div ref={widgetRef} /> : null}
         {msg ? (
           <Text size="sm" c="red">
             {msg}
@@ -202,7 +232,11 @@ function LoginView({
             setMsg(null);
             void api("/api/admin/login", {
               method: "POST",
-              body: JSON.stringify({ username, password, turnstileToken }),
+              body: JSON.stringify({
+                username,
+                password,
+                ...(requireTurnstile ? { turnstileToken } : {}),
+              }),
             })
               .then(() => onSuccess())
               .catch((e) => {

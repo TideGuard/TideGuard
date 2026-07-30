@@ -39,7 +39,7 @@
   "cloudflare": {
     "bindings": {
       "TOKEN_SECRET": {
-        "description": "HMAC secret used to sign admission tokens. Generate with `openssl rand -hex 32`."
+        "description": "Generate at [tideguard.dev/token](https://tideguard.dev/token) (or `openssl rand -hex 32`), paste here, and keep the same value for the `/admin` Claim step. Deploy UI masks secrets."
       }
     }
   },

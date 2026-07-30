@@ -34,11 +34,8 @@
   // does not prompt for values that are configured dynamically after deploy.
   "vars": {
     "ENVIRONMENT": "production",
-    "MAX_CONCURRENT_USERS": "20",
-    "ADMIT_PER_SECOND": "2",
-    "TOKEN_TTL_SECONDS": "600",
-    "HEARTBEAT_TIMEOUT_SECONDS": "180",
-    "QUEUE_TIMEOUT_SECONDS": "1800",
+    // Queue capacity / rate / timeouts / origin / queue name use code or /admin defaults.
+    // Omit them here so Deploy to Cloudflare only prompts for TOKEN_SECRET.
   },
   "kv_namespaces": [
     {

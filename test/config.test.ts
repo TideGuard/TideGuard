@@ -85,6 +85,10 @@ describe("parseQueueConfig", () => {
       }),
     ).toThrow(ConfigError);
   });
+
+  it("uses DEFAULT_QUEUE_CONFIG when env keys are missing", () => {
+    expect(parseQueueConfig({})).toEqual(DEFAULT_QUEUE_CONFIG);
+  });
 });
 
 describe("SimpleEtaCalculator", () => {

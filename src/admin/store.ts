@@ -7,6 +7,10 @@ import {
 import type { AdminConfig, AdminUser } from "./types";
 import { ADMIN_CONFIG_KEY, brandingKey, normalizeUsername } from "./types";
 
+/**
+ * Read claimed admin config (setup may still be incomplete).
+ * Returns null when no admin has claimed the Worker yet.
+ */
 export async function readAdminConfig(env: Env): Promise<AdminConfig | null> {
   try {
     const raw = await env.CONFIG_KV.get(ADMIN_CONFIG_KEY, "json");
@@ -17,7 +21,7 @@ export async function readAdminConfig(env: Env): Promise<AdminConfig | null> {
       passwordHash?: string;
       passwordSalt?: string;
     };
-    if (config.setupComplete !== true || typeof config.defaultQueue !== "string") {
+    if (typeof config.defaultQueue !== "string") {
       return null;
     }
 
@@ -27,7 +31,7 @@ export async function readAdminConfig(env: Env): Promise<AdminConfig | null> {
     }
 
     const normalized: AdminConfig = {
-      setupComplete: true,
+      setupComplete: config.setupComplete === true,
       users,
       createdAt: typeof config.createdAt === "number" ? config.createdAt : 0,
       defaultQueue: config.defaultQueue,
@@ -84,7 +88,7 @@ function normalizeUsers(config: Partial<AdminConfig>): AdminUser[] {
 
 export async function writeAdminConfig(env: Env, config: AdminConfig): Promise<void> {
   const payload: AdminConfig = {
-    setupComplete: true,
+    setupComplete: config.setupComplete === true,
     users: config.users,
     createdAt: config.createdAt,
     defaultQueue: config.defaultQueue,
@@ -96,8 +100,15 @@ export async function clearAdminConfig(env: Env): Promise<void> {
   await env.CONFIG_KV.delete(ADMIN_CONFIG_KEY);
 }
 
-export async function isAdminSetupComplete(env: Env): Promise<boolean> {
+/** True when an admin has claimed (password locked in), even if wizard is unfinished. */
+export async function isAdminClaimed(env: Env): Promise<boolean> {
   return (await readAdminConfig(env)) !== null;
+}
+
+/** True when claim + Cloudflare + Turnstile + Finish have all completed. */
+export async function isAdminSetupComplete(env: Env): Promise<boolean> {
+  const config = await readAdminConfig(env);
+  return config?.setupComplete === true;
 }
 
 export function findUserByUsername(config: AdminConfig, username: string): AdminUser | null {
@@ -108,7 +119,7 @@ export function findUserByUsername(config: AdminConfig, username: string): Admin
 export async function addAdminUser(env: Env, user: AdminUser): Promise<AdminConfig> {
   const config = await readAdminConfig(env);
   if (!config) {
-    throw new Error("Admin setup has not been completed");
+    throw new Error("Admin has not been claimed");
   }
   if (findUserByUsername(config, user.username)) {
     throw new Error("Username is already taken");

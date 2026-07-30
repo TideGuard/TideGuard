@@ -1,4 +1,4 @@
-import { parseQueueConfig } from "../core/config";
+import { parseQueueConfig, type QueueConfigEnv } from "../core/config";
 import type { QueueConfig } from "../core/types";
 import type { QueueRoom } from "../durable-object/queue-room";
 
@@ -9,5 +9,5 @@ export function getQueueRoom(env: Env, queueName: string): DurableObjectStub<Que
 
 /** Parse Worker env vars into a queue config for DO RPC calls. */
 export function configFromEnv(env: Env): QueueConfig {
-  return parseQueueConfig(env);
+  return parseQueueConfig(env as unknown as QueueConfigEnv);
 }

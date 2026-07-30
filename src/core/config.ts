@@ -12,24 +12,44 @@ export class ConfigError extends Error {
 
 const POSITIVE_INT = Number.isInteger;
 
+export type QueueConfigEnv = {
+  MAX_CONCURRENT_USERS?: string;
+  ADMIT_PER_SECOND?: string;
+  TOKEN_TTL_SECONDS?: string;
+  HEARTBEAT_TIMEOUT_SECONDS?: string;
+  QUEUE_TIMEOUT_SECONDS?: string;
+  ADMISSION_MODE?: string;
+};
+
 /**
  * Parse and validate queue settings from Worker environment variables.
- * Fails fast at the edge so misconfiguration never reaches queue logic.
+ * Missing keys fall back to DEFAULT_QUEUE_CONFIG so Deploy need not prompt for them.
+ * Explicit invalid values still fail fast.
  */
-export function parseQueueConfig(env: {
-  MAX_CONCURRENT_USERS: string;
-  ADMIT_PER_SECOND: string;
-  TOKEN_TTL_SECONDS: string;
-  HEARTBEAT_TIMEOUT_SECONDS: string;
-  QUEUE_TIMEOUT_SECONDS: string;
-  ADMISSION_MODE?: string;
-}): QueueConfig {
-  const maxConcurrentUsers = Number(env.MAX_CONCURRENT_USERS);
-  const admitPerSecond = Number(env.ADMIT_PER_SECOND);
-  const tokenTTLSeconds = Number(env.TOKEN_TTL_SECONDS);
-  const heartbeatTimeoutSeconds = Number(env.HEARTBEAT_TIMEOUT_SECONDS);
-  const queueTimeoutSeconds = Number(env.QUEUE_TIMEOUT_SECONDS);
-  const admissionMode = parseAdmissionMode(env.ADMISSION_MODE ?? "queue");
+export function parseQueueConfig(env: QueueConfigEnv): QueueConfig {
+  const maxConcurrentUsers = envNumberOrDefault(
+    env.MAX_CONCURRENT_USERS,
+    DEFAULT_QUEUE_CONFIG.maxConcurrentUsers,
+  );
+  const admitPerSecond = envNumberOrDefault(
+    env.ADMIT_PER_SECOND,
+    DEFAULT_QUEUE_CONFIG.admitPerSecond,
+  );
+  const tokenTTLSeconds = envNumberOrDefault(
+    env.TOKEN_TTL_SECONDS,
+    DEFAULT_QUEUE_CONFIG.tokenTTLSeconds,
+  );
+  const heartbeatTimeoutSeconds = envNumberOrDefault(
+    env.HEARTBEAT_TIMEOUT_SECONDS,
+    DEFAULT_QUEUE_CONFIG.heartbeatTimeoutSeconds,
+  );
+  const queueTimeoutSeconds = envNumberOrDefault(
+    env.QUEUE_TIMEOUT_SECONDS,
+    DEFAULT_QUEUE_CONFIG.queueTimeoutSeconds,
+  );
+  const admissionMode = parseAdmissionMode(
+    env.ADMISSION_MODE?.trim() ? env.ADMISSION_MODE : DEFAULT_QUEUE_CONFIG.admissionMode,
+  );
 
   const issues: string[] = [];
 
@@ -73,6 +93,13 @@ export function parseQueueConfig(env: {
     requireClickToEnter: false,
     admitHoldSeconds: 120,
   };
+}
+
+function envNumberOrDefault(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw.trim() === "") {
+    return fallback;
+  }
+  return Number(raw);
 }
 
 export function parseAdmissionMode(value: unknown): AdmissionMode | null {

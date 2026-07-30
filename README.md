@@ -55,28 +55,6 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 
 Deep guides: [protecting origin](docs/protecting-origin.md) (including Authenticated Origin Pulls), [admin](docs/admin.md), [upgrading](docs/upgrading.md).
 
-## Try it in three steps
-
-1. **Deploy** with the button above (or `npm run deploy`).
-2. Set the `TOKEN_SECRET` secret (`openssl rand -hex 32`).
-3. Open the site — unfinished setups redirect to `/admin`. Finish the wizard (account → **Cloudflare verify** → **Turnstile** → queue → branding) then hit `/demo`.
-
-## Architecture (short version)
-
-```text
-Browser
-  │
-  ▼
-Worker          routing · tokens · HTML · geo/IP gates · validation
-  │
-  ├─► QueueRoom (Durable Object)   authoritative waiting pool
-  └─► CONFIG_KV                    branding · admins · allowlist · geo · audit
-```
-
-One Durable Object instance per queue name. One alarm per active queue for rate-limited admission and expiry. **No KV writes on join, status, or heartbeat.** That is the cost discipline.
-
-Deep dive: [docs/architecture.md](docs/architecture.md)
-
 ## Documentation
 
 | Guide                                              | Start here if you want to…                               |
@@ -122,7 +100,7 @@ npm run test:load       # in-memory scale test (see docs/load-testing.md)
 
 ## Configuration
 
-Capacity defaults live in `wrangler.jsonc` under `vars` (Deploy to Cloudflare may show these with defaults). Queue name, admission mode, origin proxy, Cloudflare API token, and Turnstile are configured in `/admin` after deploy — not as Deploy prompts.
+Queue capacity, admit rate, and timeouts default in code (`DEFAULT_QUEUE_CONFIG`). Optional wrangler `vars` overrides (not prompted on Deploy-to-Cloudflare). Queue name, admission mode, origin proxy, Cloudflare API token, and Turnstile are configured in `/admin` after deploy.
 
 | Variable                    | Default      | Meaning                        |
 | --------------------------- | ------------ | ------------------------------ |

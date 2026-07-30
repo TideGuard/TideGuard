@@ -11,35 +11,37 @@ Visitor pages never write KV. Admin does, and only on explicit Save / Finish set
 
 ## Setup wizard
 
-Shown when `admin:config` is missing from KV. Until then, `GET /` redirects to `/admin`.
+Shown until first-time setup is finished (`setupComplete`). Until then, `GET /` redirects to `/admin`.
 
-| Step          | You set                                                                                                         | Stored when                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 1. Account    | `TOKEN_SECRET` + username + password (8+, uppercase, digit or symbol; live checklist)                           | Finish setup                                    |
-| 2. Cloudflare | **2a** verify API token → **2b** zone/hostname verify (+ Fix) → **2c** SSL Set/Skip → **2d** domain Attach/Skip | Finish setup (credentials sealed in KV)         |
-| 3. Turnstile  | Create widget → complete challenge → **Click to verify**                                                        | Finish setup (sitekey + sealed secret in KV)    |
-| 4. Queue      | Queue name, mode, depth, redirect path, click-to-enter / hold                                                   | Finish setup                                    |
-| 5. Branding   | Title, message, colors                                                                                          | Finish setup (live preview is client-side only) |
+| Step          | You set                                                                                                         | Stored when                                                          |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 1. Account    | `TOKEN_SECRET` + username + password (8+, uppercase, digit or symbol)                                           | **Immediately on Claim** — locks account + issues `tg_admin` session |
+| 2. Cloudflare | **2a** verify API token → **2b** zone/hostname verify (+ Fix) → **2c** SSL Set/Skip → **2d** domain Attach/Skip | Pending KV; promoted on Finish                                       |
+| 3. Turnstile  | Create widget → complete challenge → **Click to verify**                                                        | Pending KV; promoted on Finish                                       |
+| 4. Queue      | Queue name, mode, depth, redirect path, click-to-enter / hold                                                   | Finish setup                                                         |
+| 5. Branding   | Title, message, colors                                                                                          | Finish setup (live preview is client-side only)                      |
 
-Cloudflare step 2 is progressive: the API token must verify before zone fields; proxied DNS verify is required; SSL Full (strict) and custom domain are optional (Skip for now). After finish, browser Back returns to login/dashboard — not the claim wizard.
+Cloudflare step 2 is progressive: the API token must verify before zone fields; proxied DNS verify is required; SSL Full (strict) and custom domain are optional (Skip for now). After claim, browser Back does **not** reopen create-password. If the session expires mid-wizard, **Sign in** resumes setup.
 
-On finish, TideGuard:
+On **claim**, TideGuard:
 
 - Requires `Authorization: Bearer <TOKEN_SECRET>` so a stranger cannot claim a public Worker
-- Requires completed Cloudflare verify + Turnstile verify (pending KV promoted on finish)
-- Writes a PBKDF2 password hash + salt for the first user in KV (`admin:config` → `users[]`)
-- Writes branding to KV (`branding:<queue>`)
-- Seals Cloudflare API token + account/zone metadata; stores Turnstile sitekey + sealed secret
-- Sets admission mode on the queue Durable Object
+- Writes a PBKDF2 password hash + salt for the first user in KV (`admin:config` → `users[]`, `setupComplete: false`)
 - Issues an admin session cookie (`tg_admin`) with `sub` + `username`
 
-`TOKEN_SECRET` remains a Wrangler secret. It signs visitor tickets, admission tokens, and admin session cookies. Daily login uses username + password **plus Turnstile**.
+On **finish**, TideGuard:
+
+- Requires that admin session (not TOKEN_SECRET / password again)
+- Requires completed Cloudflare verify + Turnstile verify (pending KV promoted)
+- Sets `setupComplete: true`, writes branding, seals Cloudflare + Turnstile secrets, sets admission mode on the queue Durable Object
+
+`TOKEN_SECRET` remains a Wrangler secret. It signs visitor tickets, admission tokens, and admin session cookies. Daily login (after finish) uses username + password **plus Turnstile**.
 
 Legacy installs with a single top-level password hash migrate to `users[{ username: "admin", … }]` on first read.
 
 ## Login
 
-After setup, `/admin` asks for **username**, password, and a **Turnstile** challenge. Success sets `tg_admin` (HttpOnly, `SameSite=Lax`, 12h TTL). Rate limits still apply; Turnstile is the primary brute-force control.
+After the Worker is claimed, `/admin` can show **Sign in** if the session is missing. Until setup is finished, Turnstile may be skipped (widget not saved yet). After finish, login requires **username**, password, and a **Turnstile** challenge. Success sets `tg_admin` (HttpOnly, `SameSite=Lax`, 12h TTL). Rate limits still apply; Turnstile is the primary brute-force control once configured.
 
 ## Team invites
 

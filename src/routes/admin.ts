@@ -17,6 +17,7 @@ import {
   addAdminUser,
   clearAdminConfig,
   findUserByUsername,
+  isAdminClaimed,
   isAdminSetupComplete,
   newAdminUserId,
   readAdminConfig,
@@ -126,26 +127,33 @@ export async function handleAdminPage(_request: Request, _env: Env): Promise<Res
 }
 
 export async function handleAdminBootstrap(_request: Request, env: Env): Promise<Response> {
-  const setupComplete = await isAdminSetupComplete(env);
+  const admin = await readAdminConfig(env);
+  const claimed = admin !== null;
+  const setupComplete = admin?.setupComplete === true;
   const turnstile = await readTurnstileSettings(env);
   const pending = setupComplete ? null : await readSetupPending(env);
   return jsonOk({
     setupComplete,
-    defaultQueue: env.DEFAULT_QUEUE || "default",
+    claimed,
+    claimedUsername: claimed ? (admin.users[0]?.username ?? null) : null,
+    defaultQueue: admin?.defaultQueue || env.DEFAULT_QUEUE || "default",
     version: VERSION,
     turnstileSitekey: turnstile?.sitekey ?? pending?.turnstile?.sitekey ?? null,
     setupPending: pending ? toSetupPendingPublic(pending) : null,
   });
 }
 
-export async function handleAdminSetup(request: Request, env: Env): Promise<Response> {
-  rateLimitOrThrow(clientKey(request, "setup"), { limit: 10, windowMs: 60_000 });
+/**
+ * Step 1: lock in the first admin with TOKEN_SECRET bearer.
+ * Issues a session; wizard continues as that user until Finish.
+ */
+export async function handleAdminClaim(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "claim"), { limit: 10, windowMs: 60_000 });
 
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  if (await isAdminClaimed(env)) {
+    throw new ApiError("conflict", "Admin has already been claimed", 409);
   }
 
-  // First-time setup requires TOKEN_SECRET so a stranger cannot claim the Worker.
   requireSetupBearer(request, env);
 
   const body = await readJsonBody(request);
@@ -170,11 +178,62 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
     );
   }
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
+  const { hash, salt } = await hashPassword(password);
+  const userId = newAdminUserId();
+  const now = Date.now();
+  await writeAdminConfig(env, {
+    setupComplete: false,
+    users: [
+      {
+        id: userId,
+        username,
+        passwordHash: hash,
+        passwordSalt: salt,
+        createdAt: now,
+      },
+    ],
+    createdAt: now,
+    defaultQueue: queue,
+  });
+
+  const actor = { id: userId, username };
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "setup.claim",
+    summary: `First admin “${username}” claimed the Worker`,
+  });
+
+  const session = await signAdminSession(requireTokenSecret(env), actor);
+  return withCookie(
+    jsonOk({ ok: true, claimed: true, username, queue }),
+    buildAdminSessionCookie(session, request),
+  );
+}
+
+/**
+ * Finish wizard: promote pending Cloudflare + Turnstile, branding, and queue mode.
+ * Requires an admin session from claim (not TOKEN_SECRET / password again).
+ */
+export async function handleAdminSetup(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup"), { limit: 10, windowMs: 60_000 });
+
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const actor = await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("bad_request", "Claim the Worker before finishing setup", 400);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
   const mode = parseAdmissionMode(body.admissionMode ?? "queue");
   if (!mode) {
     throw new ApiError("bad_request", 'admissionMode must be "queue" or "lottery"', 400);
   }
-
   const branding = sanitizeBrandingInput(
     body.branding && typeof body.branding === "object"
       ? (body.branding as Partial<WaitingRoomBranding>)
@@ -200,21 +259,9 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
     );
   }
 
-  const { hash, salt } = await hashPassword(password);
-  const userId = newAdminUserId();
-  const now = Date.now();
   await writeAdminConfig(env, {
+    ...admin,
     setupComplete: true,
-    users: [
-      {
-        id: userId,
-        username,
-        passwordHash: hash,
-        passwordSalt: salt,
-        createdAt: now,
-      },
-    ],
-    createdAt: now,
     defaultQueue: queue,
   });
   await writeBranding(env, queue, branding);
@@ -244,19 +291,14 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
     showWaitingCount: branding.showWaitingCount,
   });
 
-  const actor = { id: userId, username };
   await appendAuditEvent(env, {
     actorId: actor.id,
     actorUsername: actor.username,
     action: "setup.complete",
-    summary: `First admin “${username}” claimed the Worker`,
+    summary: `Admin “${actor.username}” finished first-time setup`,
   });
 
-  const session = await signAdminSession(requireTokenSecret(env), actor);
-  return withCookie(
-    jsonOk({ ok: true, queue, admissionMode: mode, username }),
-    buildAdminSessionCookie(session, request),
-  );
+  return jsonOk({ ok: true, queue, admissionMode: mode, username: actor.username });
 }
 
 export async function handleAdminLogin(request: Request, env: Env): Promise<Response> {
@@ -264,7 +306,7 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
 
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -299,7 +341,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const queue = parseQueueName(
@@ -684,7 +726,7 @@ export async function handleAdminMetrics(request: Request, env: Env): Promise<Re
   await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const queue = parseQueueName(
@@ -720,7 +762,7 @@ export async function handleAdminPass(request: Request, env: Env): Promise<Respo
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -812,7 +854,7 @@ export async function handleAdminSaveBranding(request: Request, env: Env): Promi
   await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -841,7 +883,7 @@ export async function handleAdminSaveOrigin(request: Request, env: Env): Promise
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -890,7 +932,7 @@ export async function handleAdminSetMode(request: Request, env: Env): Promise<Re
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -917,7 +959,7 @@ export async function handleAdminPause(request: Request, env: Env): Promise<Resp
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -939,7 +981,7 @@ export async function handleAdminRate(request: Request, env: Env): Promise<Respo
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -970,7 +1012,7 @@ export async function handleAdminClearRate(request: Request, env: Env): Promise<
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const url = new URL(request.url);
@@ -997,7 +1039,7 @@ export async function handleAdminTraffic(request: Request, env: Env): Promise<Re
   await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const url = new URL(request.url);
@@ -1022,7 +1064,7 @@ export async function handleAdminSchedule(request: Request, env: Env): Promise<R
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -1058,7 +1100,7 @@ export async function handleAdminHealth(request: Request, env: Env): Promise<Res
   const actor = await requireAdminSession(request, env);
   const admin = await readAdminConfig(env);
   if (!admin) {
-    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
   }
 
   const body = await readJsonBody(request);
@@ -1150,10 +1192,7 @@ export async function handleAdminSetupCloudflareTokenVerify(
   env: Env,
 ): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-cf-token"), { limit: 20, windowMs: 60_000 });
-  requireSetupBearer(request, env);
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
-  }
+  await requireSetupWizardSession(request, env);
 
   const body = await readJsonBody(request);
   const apiToken = typeof body.apiToken === "string" ? body.apiToken.trim() : "";
@@ -1181,10 +1220,7 @@ export async function handleAdminSetupCloudflareVerify(
   env: Env,
 ): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-cf-verify"), { limit: 20, windowMs: 60_000 });
-  requireSetupBearer(request, env);
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
-  }
+  await requireSetupWizardSession(request, env);
 
   const body = await readJsonBody(request);
   const apiToken = typeof body.apiToken === "string" ? body.apiToken.trim() : "";
@@ -1251,10 +1287,7 @@ export async function handleAdminSetupCloudflareVerify(
 
 export async function handleAdminSetupCloudflareFix(request: Request, env: Env): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-cf-fix"), { limit: 20, windowMs: 60_000 });
-  requireSetupBearer(request, env);
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
-  }
+  await requireSetupWizardSession(request, env);
 
   const pending = await readSetupPending(env);
   const apiToken = await openSetupPendingApiToken(env);
@@ -1301,10 +1334,7 @@ export async function handleAdminSetupTurnstileProvision(
   env: Env,
 ): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-ts-provision"), { limit: 10, windowMs: 60_000 });
-  requireSetupBearer(request, env);
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
-  }
+  await requireSetupWizardSession(request, env);
 
   const pending = await readSetupPending(env);
   const apiToken = await openSetupPendingApiToken(env);
@@ -1362,10 +1392,7 @@ export async function handleAdminSetupTurnstileVerify(
   env: Env,
 ): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-ts-verify"), { limit: 20, windowMs: 60_000 });
-  requireSetupBearer(request, env);
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
-  }
+  await requireSetupWizardSession(request, env);
 
   const body = await readJsonBody(request);
   const token =
@@ -1550,10 +1577,7 @@ export async function handleAdminSetupCloudflareAttachDomain(
   env: Env,
 ): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-cf-domain"), { limit: 10, windowMs: 60_000 });
-  requireSetupBearer(request, env);
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
-  }
+  await requireSetupWizardSession(request, env);
 
   const pending = await readSetupPending(env);
   const apiToken = await openSetupPendingApiToken(env);
@@ -1591,10 +1615,7 @@ export async function handleAdminSetupCloudflareAttachDomain(
 
 export async function handleAdminSetupCloudflareSsl(request: Request, env: Env): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-cf-ssl"), { limit: 10, windowMs: 60_000 });
-  requireSetupBearer(request, env);
-  if (await isAdminSetupComplete(env)) {
-    throw new ApiError("conflict", "Admin setup is already complete", 409);
-  }
+  await requireSetupWizardSession(request, env);
 
   const pending = await readSetupPending(env);
   const apiToken = await openSetupPendingApiToken(env);
@@ -1622,6 +1643,17 @@ export async function handleAdminSetupCloudflareSsl(request: Request, env: Env):
     }
     throw error;
   }
+}
+
+/** Mid-wizard steps after claim: admin session required; reject if already finished. */
+async function requireSetupWizardSession(request: Request, env: Env) {
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+  if (!(await isAdminClaimed(env))) {
+    throw new ApiError("unauthorized", "Claim the Worker before continuing setup", 401);
+  }
+  return requireAdminSession(request, env);
 }
 
 function requireSetupBearer(request: Request, env: Env): void {

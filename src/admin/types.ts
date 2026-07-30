@@ -18,7 +18,8 @@ export interface AdminUser {
 }
 
 export interface AdminConfig {
-  setupComplete: true;
+  /** False after claim until Finish completes CF + Turnstile + queue/branding. */
+  setupComplete: boolean;
   users: AdminUser[];
   createdAt: number;
   defaultQueue: string;
