@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  Anchor,
   Button,
   Card,
   Checkbox,
@@ -20,6 +21,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import { api, ApiError } from "../lib/api";
 import type { AdminState, QueueMetrics } from "../lib/types";
+import { FIELD_HELP, LINKS } from "../lib/setup-guidance";
 import { TrafficPanel } from "./TrafficPanel";
 
 function notifyError(err: unknown) {
@@ -675,24 +677,63 @@ function CloudflarePanel({ state, onSaved }: { state: AdminState; onSaved: () =>
     <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
       <Stack>
         <Title order={4}>Cloudflare access</Title>
+        <Text size="sm" c="dimmed">
+          Credentials are sealed in KV. Origin URL and queue mode are configured elsewhere in this
+          control room — not at deploy time.
+        </Text>
         <TextInput
-          label="Zone ID"
+          label={FIELD_HELP.zoneId.label}
+          description={
+            <>
+              {FIELD_HELP.zoneId.how}{" "}
+              <Anchor href={LINKS.findIds} target="_blank" rel="noreferrer" size="sm">
+                Find Zone ID
+              </Anchor>
+            </>
+          }
           value={zoneId}
           onChange={(e) => setZoneId(e.currentTarget.value)}
         />
         <PasswordInput
-          label="API token"
-          description={link.hasApiToken ? "Token saved — leave blank to keep" : "Not saved"}
+          label={FIELD_HELP.apiToken.label}
+          description={
+            link.hasApiToken ? (
+              "Token saved — leave blank to keep"
+            ) : (
+              <>
+                {FIELD_HELP.apiToken.how}{" "}
+                <Anchor href={LINKS.apiTokens} target="_blank" rel="noreferrer" size="sm">
+                  Open API Tokens
+                </Anchor>
+              </>
+            )
+          }
           value={token}
           onChange={(e) => setToken(e.currentTarget.value)}
         />
         <TextInput
-          label="Hostname"
+          label={FIELD_HELP.hostname.label}
+          description={
+            <>
+              {FIELD_HELP.hostname.how}{" "}
+              <Anchor href={LINKS.dnsRecords} target="_blank" rel="noreferrer" size="sm">
+                DNS records
+              </Anchor>
+            </>
+          }
           value={hostname}
           onChange={(e) => setHostname(e.currentTarget.value)}
         />
         <TextInput
-          label="Worker service"
+          label={FIELD_HELP.workerService.label}
+          description={
+            <>
+              {FIELD_HELP.workerService.how}{" "}
+              <Anchor href={LINKS.workersAndPages} target="_blank" rel="noreferrer" size="sm">
+                Workers & Pages
+              </Anchor>
+            </>
+          }
           value={workerService}
           onChange={(e) => setWorkerService(e.currentTarget.value)}
         />

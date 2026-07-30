@@ -67,6 +67,35 @@ describe("admin setup wizard and dashboard", () => {
     expect(denied.status).toBe(400);
   });
 
+  it("rejects short Cloudflare API tokens on token-verify", async () => {
+    await resetAdmin();
+    const denied = await exports.default.fetch(
+      new Request("https://example.com/api/admin/setup/cloudflare/token-verify", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${ADMIN_SECRET}`,
+        },
+        body: JSON.stringify({ apiToken: "too-short" }),
+      }),
+    );
+    expect(denied.status).toBe(400);
+    const body = await json<{ error?: { message?: string } }>(denied);
+    expect(body.error?.message ?? JSON.stringify(body)).toMatch(/token/i);
+  });
+
+  it("requires TOKEN_SECRET bearer for token-verify", async () => {
+    await resetAdmin();
+    const denied = await exports.default.fetch(
+      new Request("https://example.com/api/admin/setup/cloudflare/token-verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ apiToken: "a".repeat(40) }),
+      }),
+    );
+    expect(denied.status).toBe(401);
+  });
+
   it("completes setup, persists branding, and requires login afterward", async () => {
     await resetAdmin();
     await seedSetupPendingForTests(env);

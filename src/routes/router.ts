@@ -37,6 +37,7 @@ import {
   handleAdminSetupCloudflareAttachDomain,
   handleAdminSetupCloudflareFix,
   handleAdminSetupCloudflareSsl,
+  handleAdminSetupCloudflareTokenVerify,
   handleAdminSetupCloudflareVerify,
   handleAdminSetupTurnstileProvision,
   handleAdminSetupTurnstileVerify,
@@ -214,6 +215,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "POST" && url.pathname === "/api/admin/setup") {
     return await handleAdminSetup(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/setup/cloudflare/token-verify") {
+    return await handleAdminSetupCloudflareTokenVerify(request, env);
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/setup/cloudflare/verify") {

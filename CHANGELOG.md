@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Setup Cloudflare **token-verify** gate (`POST /api/admin/setup/cloudflare/token-verify`) before zone/hostname
+- In-wizard roadmap, per-step guides, Cloudflare deeplinks, and progressive 2a→2d substeps (token → zone → SSL → domain)
 - Cloudflare setup **2a/2b/2c** sub-steps (verify+Fix → SSL Set/Skip → domain Attach/Skip) with Verified/Skipped gates
 - Admin password policy (8+, uppercase, digit or symbol, match) with live checklist on Account + invite
 - After setup, browser Back / bfcache never re-opens the claim wizard
@@ -53,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Deploy-to-Cloudflare / `wrangler.jsonc` no longer templates `ORIGIN_*`, `DEFAULT_QUEUE`, or `ADMISSION_MODE` — those are set in `/admin` after deploy
 - Cloudflare access is no longer “optional Check/Fix later only” — required in first-run setup; dashboard panel expanded into zone controls
 - Admin login / invite accept fail closed when Turnstile is configured
 - Initial project scaffold for Cloudflare Workers

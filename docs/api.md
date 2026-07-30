@@ -172,6 +172,7 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | Method               | Path                                   | Auth                         | Notes                                                  |
 | -------------------- | -------------------------------------- | ---------------------------- | ------------------------------------------------------ |
 | `GET`                | `/api/admin/bootstrap`                 | public                       | `{ setupComplete, turnstileSitekey, version, … }`      |
+| `POST`               | `/api/admin/setup/cloudflare/token-verify` | `TOKEN_SECRET` bearer        | Validates API token only (no zone write)               |
 | `POST`               | `/api/admin/setup/cloudflare/verify`   | `TOKEN_SECRET` bearer        | Token + zone verify; stores setup pending              |
 | `POST`               | `/api/admin/setup/cloudflare/fix`      | `TOKEN_SECRET` bearer        | Orange-cloud DNS + IP Geolocation                      |
 | `POST`               | `/api/admin/setup/turnstile/provision` | `TOKEN_SECRET` bearer        | Creates Turnstile widget; seals secret pending         |

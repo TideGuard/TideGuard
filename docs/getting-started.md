@@ -48,7 +48,7 @@ After setup (or `npm run dev`):
 
 1. Open `/` or `/admin` (unfinished setups redirect from `/`).
 2. Paste your `TOKEN_SECRET` (from `.dev.vars` / setup output), choose a **username** and a strong password (8+, uppercase, digit or symbol — live checklist).
-3. **Cloudflare:** create an API token (link in the wizard), then **2a** verify (+ Fix if needed) → **2b** SSL Set/Skip → **2c** domain Attach/Skip.
+3. **Cloudflare:** create an API token ([link in the wizard](https://dash.cloudflare.com/profile/api-tokens)) → **verify token** → zone/hostname verify (+ Fix if needed) → **SSL** Set/Skip → **domain** Attach/Skip.
 4. **Turnstile:** create the widget, complete the challenge → **Click to verify**.
 5. Choose queue / mode, then branding → Finish setup.
 6. You are signed in with an HttpOnly session cookie. Later logins require Turnstile (browser Back will not re-open claim).
@@ -64,11 +64,13 @@ Details: [admin.md](admin.md). Before production traffic: [launch-checklist.md](
 
 Use **Deploy to Cloudflare** on the [README](../README.md). Cloudflare clones the repo, provisions KV and Durable Objects from `wrangler.jsonc`, and deploys the Worker named `tideguard`.
 
-When prompted, set:
+When prompted, set the Worker secret:
 
 ```text
 TOKEN_SECRET=<output of openssl rand -hex 32>
 ```
+
+Capacity/timeout vars (`MAX_CONCURRENT_USERS`, `ADMIT_PER_SECOND`, …) may appear with defaults. **Do not** expect Deploy to ask for origin URL, queue name, admission mode, Cloudflare API token, Zone ID, or Turnstile — those are configured in `/admin` after deploy.
 
 ### Option B: Wrangler CLI
 
@@ -102,7 +104,8 @@ curl -s "http://localhost:8787/api/cost-estimate?visitors=100000&averageWaitSeco
 | -------------------------------- | --------------------------------- | ------------------------------------------------------------- |
 | Capacity / timeouts              | `wrangler.jsonc` → `vars`         | Restart / redeploy to apply                                   |
 | Admit rate (max outflow)         | `/admin` traffic panel or vars    | Live override via admin; env is default when cleared          |
-| Default admission mode           | `ADMISSION_MODE` var or `/admin`  | Live switch via admin or `POST /mode`                         |
+| Default admission mode           | `/admin` wizard or `POST /mode`   | Not a Deploy prompt; optional advanced env override           |
+| Origin proxy                     | `/admin` Origin panel             | Stored in KV; not a Deploy prompt                             |
 | Branding + depth display         | `/admin` → Save branding          | KV write on save only                                         |
 | Admin password                   | `/admin` wizard                   | PBKDF2 hash in KV; reset with `TOKEN_SECRET`                  |
 | Cloudflare API token / Turnstile | `/admin` setup + Cloudflare panel | Required on first claim; seals token + Turnstile secret in KV |

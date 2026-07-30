@@ -13,7 +13,7 @@ import { parseQueueName } from "./validation";
 
 export async function handleWaitingRoom(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE);
+  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
   const embed = url.searchParams.get("embed") === "1";
   const origin = await resolveOriginConfig(env);
   const branding = await readBranding(env, queue);
@@ -69,7 +69,7 @@ export async function handleWaitingRoom(request: Request, env: Env): Promise<Res
 
 export async function handleDemo(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE);
+  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
 
   try {
     const admission = await requireAdmission(request, env, queue);

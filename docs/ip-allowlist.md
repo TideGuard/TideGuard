@@ -46,7 +46,7 @@ Paste a **Zone ID** + scoped **API token** so TideGuard can check (and fix) zone
 3. Zone Resources → **Include** → only the zone that fronts TideGuard
 4. Create the token, copy it once
 
-The setup wizard walks you through verify → Fix (proxied DNS + IP Geolocation) → optional SSL Full (strict) and custom domain attach. The control-room **Cloudflare access** panel can toggle IP Geolocation (turning off clears country block), set SSL Full (strict), and add/remove custom domains without leaving TideGuard.
+The setup wizard walks you through **verify API token** → zone/hostname verify → Fix (proxied DNS + IP Geolocation) → optional SSL Full (strict) and custom domain attach. The control-room **Cloudflare access** panel can toggle IP Geolocation (turning off clears country block), set SSL Full (strict), and add/remove custom domains without leaving TideGuard.
 
 ### In TideGuard admin → Cloudflare access
 

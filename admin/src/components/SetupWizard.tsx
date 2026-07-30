@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  Anchor,
   Button,
   Card,
   Checkbox,
   ColorInput,
   Group,
+  List,
   NumberInput,
   PasswordInput,
   SegmentedControl,
@@ -17,6 +19,16 @@ import {
 } from "@mantine/core";
 import { api } from "../lib/api";
 import type { BootstrapResponse } from "../lib/types";
+import {
+  CF_PHASE_LABELS,
+  FIELD_HELP,
+  LINKS,
+  SETUP_STEPS,
+  TOKEN_PERMISSIONS,
+  type CfPhase,
+  isPasswordReady,
+  passwordChecks,
+} from "../lib/setup-guidance";
 
 declare global {
   interface Window {
@@ -35,6 +47,52 @@ declare global {
   }
 }
 
+type VerifyPayload = {
+  ok?: boolean;
+  verify?: {
+    proxy?: { ok?: boolean; summary?: string; suggestions?: string[] };
+    ssl?: { mode?: string | null; isStrict?: boolean };
+    domains?: { hostnameAttached?: boolean };
+  };
+};
+
+function ExtLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Anchor href={href} target="_blank" rel="noreferrer" size="sm">
+      {children}
+    </Anchor>
+  );
+}
+
+function FieldGuide({
+  why,
+  how,
+  link,
+  linkLabel,
+}: {
+  why: string;
+  how: string;
+  link?: string;
+  linkLabel?: string;
+}) {
+  return (
+    <Stack gap={4}>
+      <Text size="xs" c="dimmed">
+        {why}
+      </Text>
+      <Text size="xs" c="dimmed">
+        {how}
+        {link && linkLabel ? (
+          <>
+            {" "}
+            <ExtLink href={link}>{linkLabel}</ExtLink>
+          </>
+        ) : null}
+      </Text>
+    </Stack>
+  );
+}
+
 export function SetupWizard({
   bootstrap,
   onComplete,
@@ -43,15 +101,24 @@ export function SetupWizard({
   onComplete: () => Promise<void>;
 }) {
   const [step, setStep] = useState(1);
+  const [cfPhase, setCfPhase] = useState<CfPhase>("token");
   const [tokenSecret, setTokenSecret] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
   const [cfToken, setCfToken] = useState("");
+  const [tokenVerified, setTokenVerified] = useState(false);
   const [zoneId, setZoneId] = useState("");
-  const [hostname, setHostname] = useState("");
+  const [hostname, setHostname] = useState(() =>
+    typeof window !== "undefined" ? window.location.hostname : "",
+  );
   const [workerService, setWorkerService] = useState("tideguard");
-  const [cfReady, setCfReady] = useState(false);
+  const [proxyOk, setProxyOk] = useState(false);
+  const [proxyChecked, setProxyChecked] = useState(false);
+  const [proxySummary, setProxySummary] = useState<string | null>(null);
+  const [proxySuggestions, setProxySuggestions] = useState<string[]>([]);
+  const [sslDone, setSslDone] = useState(false);
+  const [domainDone, setDomainDone] = useState(false);
   const [tsSitekey, setTsSitekey] = useState<string | null>(bootstrap.turnstileSitekey);
   const [tsToken, setTsToken] = useState<string | null>(null);
   const [tsVerified, setTsVerified] = useState(false);
@@ -74,6 +141,9 @@ export function SetupWizard({
   const [status, setStatus] = useState<string | null>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
+
+  const pwd = passwordChecks(password, confirmPassword);
+  const activeStep = SETUP_STEPS.find((s) => s.id === step);
 
   function authHeaders(): HeadersInit {
     return { Authorization: `Bearer ${tokenSecret}` };
@@ -132,9 +202,129 @@ export function SetupWizard({
     }
   }
 
+  function verifyToken() {
+    setBusy(true);
+    setStatus(null);
+    void api<{ ok?: boolean }>("/api/admin/setup/cloudflare/token-verify", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ apiToken: cfToken }),
+    })
+      .then(() => {
+        setTokenVerified(true);
+        setStatus("API token verified");
+        setCfPhase("zone");
+      })
+      .catch((e) => setStatus(e instanceof Error ? e.message : "Token verify failed"))
+      .finally(() => setBusy(false));
+  }
+
+  function applyVerifyResult(data: VerifyPayload) {
+    const ok = Boolean(data.ok && data.verify?.proxy?.ok);
+    setProxyChecked(true);
+    setProxyOk(ok);
+    setProxySummary(data.verify?.proxy?.summary ?? null);
+    setProxySuggestions(data.verify?.proxy?.suggestions ?? []);
+    return ok;
+  }
+
+  function verifyZone() {
+    setBusy(true);
+    setStatus(null);
+    void api<VerifyPayload>("/api/admin/setup/cloudflare/verify", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        apiToken: cfToken,
+        zoneId,
+        hostname,
+        workerService,
+      }),
+    })
+      .then((data) => {
+        const ok = applyVerifyResult(data);
+        if (ok) {
+          setStatus("Proxied DNS verified");
+          setCfPhase("ssl");
+        } else {
+          setStatus(
+            data.verify?.proxy?.summary ||
+              "Hostname is not fully proxied yet — use Fix setup, then verify again.",
+          );
+        }
+      })
+      .catch((e) => setStatus(e instanceof Error ? e.message : "Verify failed"))
+      .finally(() => setBusy(false));
+  }
+
+  function fixProxy() {
+    setBusy(true);
+    setStatus(null);
+    void api<VerifyPayload>("/api/admin/setup/cloudflare/fix", {
+      method: "POST",
+      headers: authHeaders(),
+      body: "{}",
+    })
+      .then((data) => {
+        const ok = Boolean(data.ok);
+        setProxyChecked(true);
+        setProxyOk(ok);
+        const check = (data as { check?: { summary?: string; suggestions?: string[] } }).check;
+        setProxySummary(check?.summary ?? null);
+        setProxySuggestions(check?.suggestions ?? []);
+        if (ok) {
+          setStatus("Proxy fixed — continue to SSL");
+          setCfPhase("ssl");
+        } else {
+          setStatus(check?.summary || "Fix incomplete — check DNS and try again");
+        }
+      })
+      .catch((e) => setStatus(e instanceof Error ? e.message : "Fix failed"))
+      .finally(() => setBusy(false));
+  }
+
+  function setSsl() {
+    setBusy(true);
+    setStatus(null);
+    void api("/api/admin/setup/cloudflare/ssl", {
+      method: "POST",
+      headers: authHeaders(),
+      body: "{}",
+    })
+      .then(() => {
+        setSslDone(true);
+        setStatus("SSL set to Full (strict)");
+        setCfPhase("domain");
+      })
+      .catch((e) => setStatus(e instanceof Error ? e.message : "SSL update failed"))
+      .finally(() => setBusy(false));
+  }
+
+  function attachDomain() {
+    setBusy(true);
+    setStatus(null);
+    void api("/api/admin/setup/cloudflare/attach-domain", {
+      method: "POST",
+      headers: authHeaders(),
+      body: "{}",
+    })
+      .then(() => {
+        setDomainDone(true);
+        setStatus("Hostname attached to Worker");
+        setStep(3);
+      })
+      .catch((e) => setStatus(e instanceof Error ? e.message : "Attach failed"))
+      .finally(() => setBusy(false));
+  }
+
+  const statusLooksBad =
+    status != null &&
+    (/fail|error|Fill|wrong|missing|invalid|incomplete|not fully|must/i.test(status) ||
+      status.includes("≥"));
+
   return (
     <Card
-      maw={560}
+      maw={720}
       mx="auto"
       withBorder
       bg="dark.7"
@@ -145,13 +335,34 @@ export function SetupWizard({
         <Title order={3}>First-time setup</Title>
         <Text size="sm" c="dimmed">
           Step {step} of 5
+          {step === 2 ? ` · ${CF_PHASE_LABELS[cfPhase]}` : ""}
         </Text>
+
+        <Group gap="xs" wrap="wrap">
+          {SETUP_STEPS.map((s) => (
+            <Text
+              key={s.id}
+              size="xs"
+              fw={s.id === step ? 700 : 400}
+              c={s.id === step ? "teal" : s.id < step ? "dimmed" : "dark.2"}
+            >
+              {s.id}. {s.label}
+              {s.id < 5 ? " →" : ""}
+            </Text>
+          ))}
+        </Group>
+
+        {activeStep ? (
+          <Text size="sm" c="dimmed">
+            {activeStep.short}
+          </Text>
+        ) : null}
 
         {step === 1 ? (
           <>
             <PasswordInput
               label="TOKEN_SECRET"
-              description="Same value as the Worker secret"
+              description="Same value as the Worker secret from Deploy to Cloudflare or .dev.vars. Required as Bearer so a public Worker cannot be claimed by a stranger."
               value={tokenSecret}
               onChange={(e) => setTokenSecret(e.currentTarget.value)}
             />
@@ -162,6 +373,7 @@ export function SetupWizard({
             />
             <PasswordInput
               label="Password"
+              description="8–128 chars, at least one uppercase letter, and a digit or symbol."
               value={password}
               onChange={(e) => setPassword(e.currentTarget.value)}
             />
@@ -170,19 +382,29 @@ export function SetupWizard({
               value={confirmPassword}
               onChange={(e) => setConfirm(e.currentTarget.value)}
             />
+            <List size="sm" spacing={2} c="dimmed">
+              <List.Item c={pwd.length ? "teal" : undefined}>
+                {pwd.length ? "✓" : "○"} At least 8 characters
+              </List.Item>
+              <List.Item c={pwd.upper ? "teal" : undefined}>
+                {pwd.upper ? "✓" : "○"} One uppercase letter
+              </List.Item>
+              <List.Item c={pwd.digitOrSymbol ? "teal" : undefined}>
+                {pwd.digitOrSymbol ? "✓" : "○"} One digit or symbol
+              </List.Item>
+              <List.Item c={pwd.match ? "teal" : undefined}>
+                {pwd.match ? "✓" : "○"} Passwords match
+              </List.Item>
+            </List>
             <Button
               onClick={() => {
-                if (
-                  !tokenSecret ||
-                  !username ||
-                  password.length < 8 ||
-                  password !== confirmPassword
-                ) {
-                  setStatus("Fill claim fields (password ≥ 8, must match)");
+                if (!tokenSecret || !username || !isPasswordReady(password, confirmPassword)) {
+                  setStatus("Fill claim fields (password policy + match required)");
                   return;
                 }
                 setStatus(null);
                 setStep(2);
+                setCfPhase("token");
               }}
             >
               Continue
@@ -190,65 +412,213 @@ export function SetupWizard({
           </>
         ) : null}
 
-        {step === 2 ? (
+        {step === 2 && cfPhase === "token" ? (
           <>
             <Text size="sm" c="dimmed">
-              Verify Cloudflare access so TideGuard can check proxied DNS and provision Turnstile.
+              Create a scoped Cloudflare API token, then verify it before entering zone details.
             </Text>
             <PasswordInput
-              label="API token"
+              label={FIELD_HELP.apiToken.label}
+              description={
+                <FieldGuide
+                  why={FIELD_HELP.apiToken.why}
+                  how={FIELD_HELP.apiToken.how}
+                  link={LINKS.apiTokens}
+                  linkLabel="Open API Tokens"
+                />
+              }
               value={cfToken}
-              onChange={(e) => setCfToken(e.currentTarget.value)}
+              onChange={(e) => {
+                setCfToken(e.currentTarget.value);
+                setTokenVerified(false);
+              }}
             />
-            <TextInput
-              label="Zone ID"
-              value={zoneId}
-              onChange={(e) => setZoneId(e.currentTarget.value)}
-            />
-            <TextInput
-              label="Hostname"
-              value={hostname}
-              onChange={(e) => setHostname(e.currentTarget.value)}
-            />
-            <TextInput
-              label="Worker service"
-              value={workerService}
-              onChange={(e) => setWorkerService(e.currentTarget.value)}
-            />
+            <Text size="xs" c="dimmed">
+              Required permissions (
+              <ExtLink href={LINKS.createTokenDocs}>create token docs</ExtLink>):
+            </Text>
+            <List size="xs" c="dimmed" spacing={2}>
+              {TOKEN_PERMISSIONS.map((p) => (
+                <List.Item key={p}>{p}</List.Item>
+              ))}
+            </List>
             <Group>
               <Button variant="default" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button
-                loading={busy}
-                onClick={() => {
-                  setBusy(true);
-                  setStatus(null);
-                  void api("/api/admin/setup/cloudflare/verify", {
-                    method: "POST",
-                    headers: authHeaders(),
-                    body: JSON.stringify({
-                      apiToken: cfToken,
-                      zoneId,
-                      hostname,
-                      workerService,
-                    }),
-                  })
-                    .then(() => {
-                      setCfReady(true);
-                      setStatus("Cloudflare verified");
-                      setStep(3);
-                    })
-                    .catch((e) => setStatus(e instanceof Error ? e.message : "Verify failed"))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                Verify & continue
+              <Button loading={busy} onClick={() => verifyToken()}>
+                Verify token
               </Button>
             </Group>
-            {cfReady ? (
+            {tokenVerified ? (
               <Text size="sm" c="teal">
-                Cloudflare ready
+                Token ready
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+
+        {step === 2 && cfPhase === "zone" ? (
+          <>
+            <Text size="sm" c="dimmed">
+              Point TideGuard at your zone and hostname. Proxied (orange cloud) DNS is required
+              before Turnstile.
+            </Text>
+            <TextInput
+              label={FIELD_HELP.zoneId.label}
+              description={
+                <FieldGuide
+                  why={FIELD_HELP.zoneId.why}
+                  how={FIELD_HELP.zoneId.how}
+                  link={LINKS.findIds}
+                  linkLabel="How to find Zone ID"
+                />
+              }
+              value={zoneId}
+              onChange={(e) => setZoneId(e.currentTarget.value)}
+              placeholder="Optional — resolve from hostname"
+            />
+            <Text size="xs" c="dimmed">
+              Also: <ExtLink href={LINKS.zoneOverview}>zone Overview</ExtLink>
+            </Text>
+            <TextInput
+              label={FIELD_HELP.hostname.label}
+              description={
+                <FieldGuide
+                  why={FIELD_HELP.hostname.why}
+                  how={FIELD_HELP.hostname.how}
+                  link={LINKS.dnsRecords}
+                  linkLabel="Open DNS records"
+                />
+              }
+              value={hostname}
+              onChange={(e) => setHostname(e.currentTarget.value)}
+            />
+            <TextInput
+              label={FIELD_HELP.workerService.label}
+              description={
+                <FieldGuide
+                  why={FIELD_HELP.workerService.why}
+                  how={FIELD_HELP.workerService.how}
+                  link={LINKS.workersAndPages}
+                  linkLabel="Workers & Pages"
+                />
+              }
+              value={workerService}
+              onChange={(e) => setWorkerService(e.currentTarget.value)}
+            />
+            {proxySummary ? (
+              <Text size="sm" c={proxyOk ? "teal" : "orange"}>
+                {proxySummary}
+              </Text>
+            ) : null}
+            {proxySuggestions.length > 0 ? (
+              <List size="xs" c="dimmed">
+                {proxySuggestions.map((s) => (
+                  <List.Item key={s}>{s}</List.Item>
+                ))}
+              </List>
+            ) : null}
+            <Group>
+              <Button
+                variant="default"
+                onClick={() => {
+                  setCfPhase("token");
+                  setStatus(null);
+                }}
+              >
+                Back
+              </Button>
+              <Button loading={busy} onClick={() => verifyZone()}>
+                Verify & continue
+              </Button>
+              {!proxyOk && proxyChecked ? (
+                <Button variant="light" loading={busy} onClick={() => fixProxy()}>
+                  Fix setup
+                </Button>
+              ) : null}
+            </Group>
+          </>
+        ) : null}
+
+        {step === 2 && cfPhase === "ssl" ? (
+          <>
+            <Text size="sm" c="dimmed">
+              Full (strict) SSL requires a valid certificate on your origin. Skip for now if the
+              origin is not ready — you can set it later in the Cloudflare panel.
+            </Text>
+            <Text size="xs" c="dimmed">
+              Dashboard: <ExtLink href={LINKS.sslTls}>SSL/TLS settings</ExtLink>
+            </Text>
+            <Group>
+              <Button
+                variant="default"
+                onClick={() => {
+                  setCfPhase("zone");
+                  setStatus(null);
+                }}
+              >
+                Back
+              </Button>
+              <Button loading={busy} onClick={() => setSsl()}>
+                Set Full (strict)
+              </Button>
+              <Button
+                variant="light"
+                onClick={() => {
+                  setSslDone(true);
+                  setStatus("SSL skipped for now");
+                  setCfPhase("domain");
+                }}
+              >
+                Skip for now
+              </Button>
+            </Group>
+            {sslDone ? (
+              <Text size="sm" c="teal">
+                SSL step done
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+
+        {step === 2 && cfPhase === "domain" ? (
+          <>
+            <Text size="sm" c="dimmed">
+              Attach this hostname to the TideGuard Worker (Domains & Routes) so traffic hits the
+              waiting room. Skip if you already attached it in the dashboard.
+            </Text>
+            <Text size="xs" c="dimmed">
+              <ExtLink href={LINKS.workersAndPages}>Workers & Pages</ExtLink> → your service →
+              Domains & Routes
+            </Text>
+            <Group>
+              <Button
+                variant="default"
+                onClick={() => {
+                  setCfPhase("ssl");
+                  setStatus(null);
+                }}
+              >
+                Back
+              </Button>
+              <Button loading={busy} onClick={() => attachDomain()}>
+                Attach domain
+              </Button>
+              <Button
+                variant="light"
+                onClick={() => {
+                  setDomainDone(true);
+                  setStatus("Domain attach skipped");
+                  setStep(3);
+                }}
+              >
+                Skip for now
+              </Button>
+            </Group>
+            {domainDone ? (
+              <Text size="sm" c="teal">
+                Domain step done
               </Text>
             ) : null}
           </>
@@ -257,7 +627,8 @@ export function SetupWizard({
         {step === 3 ? (
           <>
             <Text size="sm" c="dimmed">
-              Provision a Turnstile widget, complete the challenge, then verify.
+              TideGuard creates a Turnstile widget with your verified API token. Complete the
+              challenge, then verify — required for admin login after setup.
             </Text>
             <Group>
               <Button
@@ -274,7 +645,9 @@ export function SetupWizard({
                       setTsSitekey(data.sitekey ?? null);
                       setStatus("Widget ready — complete the challenge");
                     })
-                    .catch((e) => setStatus(e instanceof Error ? e.message : "Provision failed"))
+                    .catch((e) =>
+                      setStatus(e instanceof Error ? e.message : "Provision failed"),
+                    )
                     .finally(() => setBusy(false));
                 }}
               >
@@ -305,7 +678,13 @@ export function SetupWizard({
             </Group>
             <div ref={widgetRef} />
             <Group>
-              <Button variant="default" onClick={() => setStep(2)}>
+              <Button
+                variant="default"
+                onClick={() => {
+                  setStep(2);
+                  setCfPhase("domain");
+                }}
+              >
                 Back
               </Button>
               <Button disabled={!tsVerified} onClick={() => setStep(4)}>
@@ -317,6 +696,9 @@ export function SetupWizard({
 
         {step === 4 ? (
           <>
+            <Text size="sm" c="dimmed">
+              Queue name and admission mode are stored when you finish setup (not at deploy time).
+            </Text>
             <TextInput
               label="Queue name"
               value={queue}
@@ -358,6 +740,9 @@ export function SetupWizard({
 
         {step === 5 ? (
           <>
+            <Text size="sm" c="dimmed">
+              Preview colors client-side; nothing is written until Finish setup.
+            </Text>
             <TextInput
               label="Title"
               value={title}
@@ -388,7 +773,7 @@ export function SetupWizard({
         ) : null}
 
         {status ? (
-          <Text size="sm" c={status.includes("fail") || status.includes("Fill") ? "red" : "dimmed"}>
+          <Text size="sm" c={statusLooksBad ? "red" : "dimmed"}>
             {status}
           </Text>
         ) : null}

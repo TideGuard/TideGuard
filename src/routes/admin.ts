@@ -77,6 +77,7 @@ import {
   setIpGeolocation,
   setSslMode,
   turnstileDomainsForHostname,
+  verifyApiToken,
   verifyCloudflareAccess,
   verifyTurnstileToken,
 } from "../admin/cloudflare-api";
@@ -168,7 +169,7 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
       400,
     );
   }
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const mode = parseAdmissionMode(body.admissionMode ?? "queue");
   if (!mode) {
     throw new ApiError("bad_request", 'admissionMode must be "queue" or "lottery"', 400);
@@ -1142,6 +1143,37 @@ export async function handleAdminReset(request: Request, env: Env): Promise<Resp
   await clearSetupPending(env);
   await env.CONFIG_KV.delete(UPDATE_CHECK_CACHE_KEY);
   return jsonOk({ ok: true, setupComplete: false });
+}
+
+export async function handleAdminSetupCloudflareTokenVerify(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "setup-cf-token"), { limit: 20, windowMs: 60_000 });
+  requireSetupBearer(request, env);
+  if (await isAdminSetupComplete(env)) {
+    throw new ApiError("conflict", "Admin setup is already complete", 409);
+  }
+
+  const body = await readJsonBody(request);
+  const apiToken = typeof body.apiToken === "string" ? body.apiToken.trim() : "";
+  if (apiToken.length < 20) {
+    throw new ApiError(
+      "bad_request",
+      "Cloudflare API token looks too short or empty. Paste the token from API Tokens → Create Custom Token.",
+      400,
+    );
+  }
+
+  try {
+    const verified = await verifyApiToken(apiToken);
+    return jsonOk({ ok: true, status: verified.status, id: verified.id });
+  } catch (error) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
+    }
+    throw error;
+  }
 }
 
 export async function handleAdminSetupCloudflareVerify(

@@ -79,7 +79,7 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
   const body = await readJsonBody(request);
   const config = loadConfig(env);
   const secret = requireTokenSecret(env);
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
 
   const geo = await evaluateGeoBlock(request, env);
   if (geo.blocked) {
@@ -140,7 +140,7 @@ export async function handleStatus(request: Request, env: Env): Promise<Response
   const url = new URL(request.url);
   const config = loadConfig(env);
   const secret = requireTokenSecret(env);
-  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE);
+  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(url.searchParams.get("id"));
 
   await requireVisitorTicket(request, secret, visitorId, queue);
@@ -178,7 +178,7 @@ export async function handleEnter(request: Request, env: Env): Promise<Response>
   const body = await readJsonBody(request);
   const config = loadConfig(env);
   const secret = requireTokenSecret(env);
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
 
   await requireVisitorTicket(request, secret, visitorId, queue);
@@ -216,7 +216,7 @@ export async function handleLeave(request: Request, env: Env): Promise<Response>
   const body = await readJsonBody(request);
   const config = loadConfig(env);
   const secret = requireTokenSecret(env);
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
 
   await requireVisitorTicket(request, secret, visitorId, queue);
@@ -230,7 +230,7 @@ export async function handleHeartbeat(request: Request, env: Env): Promise<Respo
   const body = await readJsonBody(request);
   const config = loadConfig(env);
   const secret = requireTokenSecret(env);
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
 
   await requireVisitorTicket(request, secret, visitorId, queue);
@@ -252,7 +252,7 @@ export async function handleAdmit(request: Request, env: Env): Promise<Response>
 
   const body = await readJsonBody(request);
   const config = loadConfig(env);
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const count = parseOptionalCount(body.count, 1);
 
   const room = getQueueRoom(env, queue);
@@ -265,7 +265,7 @@ export async function handleMode(request: Request, env: Env): Promise<Response> 
 
   const body = await readJsonBody(request);
   const config = loadConfig(env);
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const mode = parseAdmissionMode(body.mode);
   if (!mode) {
     throw new ApiError("bad_request", 'mode must be "queue" or "lottery"', 400);
@@ -280,7 +280,7 @@ export async function handlePause(request: Request, env: Env): Promise<Response>
   await requireOperator(request, env);
 
   const body = await readJsonBody(request);
-  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const paused = body.paused === true || body.paused === "true";
 
   const room = getQueueRoom(env, queue);
@@ -292,7 +292,7 @@ export async function handleMetrics(request: Request, env: Env): Promise<Respons
 
   const url = new URL(request.url);
   const config = loadConfig(env);
-  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE);
+  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
 
   const room = getQueueRoom(env, queue);
   const metrics = await room.metrics({ queue, config });

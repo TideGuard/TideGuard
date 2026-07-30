@@ -1,10 +1,17 @@
 /**
- * Secrets and optional origin proxy vars.
+ * Secrets and optional overrides.
+ * Queue name, admission mode, and origin proxy are set in /admin (KV);
+ * optional env fields below remain for advanced dashboard overrides only —
+ * they are not prompted by Deploy to Cloudflare (not in wrangler.jsonc vars).
  * Wrangler-generated Env is merged with these declarations.
  */
 declare namespace Cloudflare {
   interface Env {
     TOKEN_SECRET: string;
+    /** Optional override; default queue name comes from setup / "default". */
+    DEFAULT_QUEUE?: string;
+    /** Optional override; live mode is set via /admin or POST /mode. */
+    ADMISSION_MODE?: string;
     ORIGIN_URL?: string;
     ORIGIN_PROTECT_ALL?: string;
     ORIGIN_PATH_PREFIXES?: string;
@@ -18,6 +25,8 @@ declare namespace Cloudflare {
 
 interface Env {
   TOKEN_SECRET: string;
+  DEFAULT_QUEUE?: string;
+  ADMISSION_MODE?: string;
   ORIGIN_URL?: string;
   ORIGIN_PROTECT_ALL?: string;
   ORIGIN_PATH_PREFIXES?: string;

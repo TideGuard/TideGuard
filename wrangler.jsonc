@@ -29,19 +29,16 @@
       "fallthrough": true,
     },
   ],
+  // Capacity / timeouts only. Queue name, admission mode, and origin proxy are
+  // set in /admin (wizard + control room) — omit them here so Deploy to Cloudflare
+  // does not prompt for values that are configured dynamically after deploy.
   "vars": {
     "ENVIRONMENT": "production",
-    "DEFAULT_QUEUE": "default",
     "MAX_CONCURRENT_USERS": "20",
     "ADMIT_PER_SECOND": "2",
     "TOKEN_TTL_SECONDS": "600",
     "HEARTBEAT_TIMEOUT_SECONDS": "180",
     "QUEUE_TIMEOUT_SECONDS": "1800",
-    "ADMISSION_MODE": "queue",
-    // Origin proxy (empty ORIGIN_URL = disabled). See docs/protecting-origin.md
-    "ORIGIN_URL": "",
-    "ORIGIN_PROTECT_ALL": "true",
-    "ORIGIN_PATH_PREFIXES": "",
   },
   "kv_namespaces": [
     {

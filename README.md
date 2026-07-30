@@ -122,7 +122,7 @@ npm run test:load       # in-memory scale test (see docs/load-testing.md)
 
 ## Configuration
 
-Defaults live in `wrangler.jsonc` under `vars`:
+Capacity defaults live in `wrangler.jsonc` under `vars` (Deploy to Cloudflare may show these with defaults). Queue name, admission mode, origin proxy, Cloudflare API token, and Turnstile are configured in `/admin` after deploy — not as Deploy prompts.
 
 | Variable                    | Default      | Meaning                        |
 | --------------------------- | ------------ | ------------------------------ |
@@ -131,12 +131,17 @@ Defaults live in `wrangler.jsonc` under `vars`:
 | `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime       |
 | `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors   |
 | `QUEUE_TIMEOUT_SECONDS`     | `1800`       | Max time in queue              |
-| `DEFAULT_QUEUE`             | `default`    | Queue when none is specified   |
-| `ADMISSION_MODE`            | `queue`      | `queue` (FIFO) or `lottery`    |
-| `ORIGIN_URL`                | _(empty)_    | Upstream origin for proxy      |
-| `ORIGIN_PROTECT_ALL`        | `true`       | Gate all non-TideGuard paths   |
-| `ORIGIN_PATH_PREFIXES`      | _(empty)_    | Prefixes if protect-all is off |
 | `ENVIRONMENT`               | `production` | Reported by `/health`          |
+
+Optional advanced Worker vars (set in the dashboard if needed; not in the Deploy template):
+
+| Variable               | Default   | Meaning                                      |
+| ---------------------- | --------- | -------------------------------------------- |
+| `DEFAULT_QUEUE`        | `default` | Fallback queue when none is specified        |
+| `ADMISSION_MODE`       | `queue`   | `queue` (FIFO) or `lottery` (prefer `/admin`) |
+| `ORIGIN_URL`           | _(empty)_ | Upstream origin for proxy (prefer `/admin`)  |
+| `ORIGIN_PROTECT_ALL`   | `true`    | Gate all non-TideGuard paths                 |
+| `ORIGIN_PATH_PREFIXES` | _(empty)_ | Prefixes if protect-all is off               |
 
 Advanced (not recommended — disables adaptive waiting-room polling):
 
