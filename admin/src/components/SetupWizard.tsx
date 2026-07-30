@@ -64,35 +64,6 @@ function ExtLink({ href, children }: { href: string; children: ReactNode }) {
   );
 }
 
-function FieldGuide({
-  why,
-  how,
-  link,
-  linkLabel,
-}: {
-  why: string;
-  how: string;
-  link?: string;
-  linkLabel?: string;
-}) {
-  return (
-    <Stack gap={4}>
-      <Text size="xs" c="dimmed">
-        {why}
-      </Text>
-      <Text size="xs" c="dimmed">
-        {how}
-        {link && linkLabel ? (
-          <>
-            {" "}
-            <ExtLink href={link}>{linkLabel}</ExtLink>
-          </>
-        ) : null}
-      </Text>
-    </Stack>
-  );
-}
-
 export function SetupWizard({
   bootstrap,
   onComplete,
@@ -351,7 +322,7 @@ export function SetupWizard({
           ))}
         </Group>
 
-        {activeStep ? (
+        {activeStep && step !== 2 ? (
           <Text size="sm" c="dimmed">
             {activeStep.short}
           </Text>
@@ -414,38 +385,67 @@ export function SetupWizard({
         {step === 2 && cfPhase === "token" ? (
           <>
             <Text size="sm" c="dimmed">
-              Create a scoped Cloudflare API token, then verify it before entering zone details.
+              One-time connect: create a token in Cloudflare, paste it here, then TideGuard can
+              manage the rest for you.
             </Text>
-            <PasswordInput
-              label={FIELD_HELP.apiToken.label}
-              description={
-                <FieldGuide
-                  why={FIELD_HELP.apiToken.why}
-                  how={FIELD_HELP.apiToken.how}
-                  link={LINKS.apiTokens}
-                  linkLabel="Open API Tokens"
-                />
-              }
-              value={cfToken}
-              onChange={(e) => {
-                setCfToken(e.currentTarget.value);
-                setTokenVerified(false);
-              }}
-            />
-            <Text size="xs" c="dimmed">
-              Required permissions (
-              <ExtLink href={LINKS.createTokenDocs}>create token docs</ExtLink>):
-            </Text>
-            <List size="xs" c="dimmed" spacing={2}>
-              {TOKEN_PERMISSIONS.map((p) => (
-                <List.Item key={p}>{p}</List.Item>
-              ))}
-            </List>
+
+            <Stack gap="xs">
+              <Text size="sm" fw={600}>
+                1. Create a Custom Token
+              </Text>
+              <Text size="sm" c="dimmed">
+                In Cloudflare: API Tokens → Create Token → Create Custom Token. Limit Zone Resources
+                to your domain.
+              </Text>
+              <div>
+                <Button
+                  component="a"
+                  href={LINKS.apiTokens}
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="light"
+                  size="compact-sm"
+                >
+                  Open API Tokens
+                </Button>
+              </div>
+            </Stack>
+
+            <Stack gap={4}>
+              <Text size="sm" fw={600}>
+                2. Add these permissions
+              </Text>
+              <List size="sm" c="dimmed" spacing={2} withPadding>
+                {TOKEN_PERMISSIONS.map((p) => (
+                  <List.Item key={p}>{p}</List.Item>
+                ))}
+              </List>
+            </Stack>
+
+            <Stack gap="xs">
+              <Text size="sm" fw={600}>
+                3. Paste and verify
+              </Text>
+              <PasswordInput
+                label={FIELD_HELP.apiToken.label}
+                placeholder="Paste the token you just created"
+                value={cfToken}
+                onChange={(e) => {
+                  setCfToken(e.currentTarget.value);
+                  setTokenVerified(false);
+                }}
+              />
+            </Stack>
+
             <Group>
               <Button variant="default" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button loading={busy} onClick={() => verifyToken()}>
+              <Button
+                loading={busy}
+                onClick={() => verifyToken()}
+                disabled={cfToken.trim().length < 20}
+              >
                 Verify token
               </Button>
             </Group>
@@ -460,44 +460,28 @@ export function SetupWizard({
         {step === 2 && cfPhase === "zone" ? (
           <>
             <Text size="sm" c="dimmed">
-              Point TideGuard at your zone and hostname. Proxied (orange cloud) DNS is required
-              before Turnstile.
-            </Text>
-            <TextInput
-              label={FIELD_HELP.zoneId.label}
-              description={
-                <FieldGuide
-                  why={FIELD_HELP.zoneId.why}
-                  how={FIELD_HELP.zoneId.how}
-                  link={LINKS.findIds}
-                  linkLabel="How to find Zone ID"
-                />
-              }
-              value={zoneId}
-              onChange={(e) => setZoneId(e.currentTarget.value)}
-              placeholder="Optional — resolve from hostname"
-            />
-            <Text size="xs" c="dimmed">
-              Also: <ExtLink href={LINKS.zoneOverview}>zone Overview</ExtLink>
+              Tell TideGuard which site to protect. Hostname must be proxied (orange cloud).
             </Text>
             <TextInput
               label={FIELD_HELP.hostname.label}
-              description={
-                <FieldGuide
-                  why={FIELD_HELP.hostname.why}
-                  how={FIELD_HELP.hostname.how}
-                  link={LINKS.dnsRecords}
-                  linkLabel="Open DNS records"
-                />
-              }
+              description={FIELD_HELP.hostname.hint}
               value={hostname}
               onChange={(e) => setHostname(e.currentTarget.value)}
             />
             <TextInput
-              label={FIELD_HELP.workerService.label}
+              label={FIELD_HELP.zoneId.label}
               description={
-                <FieldGuide why={FIELD_HELP.workerService.why} how={FIELD_HELP.workerService.how} />
+                <>
+                  {FIELD_HELP.zoneId.hint} <ExtLink href={LINKS.findIds}>Find Zone ID</ExtLink>
+                </>
               }
+              value={zoneId}
+              onChange={(e) => setZoneId(e.currentTarget.value)}
+              placeholder="Leave blank to auto-detect"
+            />
+            <TextInput
+              label={FIELD_HELP.workerService.label}
+              description={FIELD_HELP.workerService.hint}
               value={workerService}
               onChange={(e) => setWorkerService(e.currentTarget.value)}
             />
@@ -523,8 +507,8 @@ export function SetupWizard({
               >
                 Back
               </Button>
-              <Button loading={busy} onClick={() => verifyZone()}>
-                Verify & continue
+              <Button loading={busy} onClick={() => verifyZone()} disabled={!hostname.trim()}>
+                Verify site
               </Button>
               {!proxyOk && proxyChecked ? (
                 <Button variant="light" loading={busy} onClick={() => fixProxy()}>
@@ -538,9 +522,8 @@ export function SetupWizard({
         {step === 2 && cfPhase === "ssl" ? (
           <>
             <Text size="sm" c="dimmed">
-              Full (strict) SSL requires a valid certificate on your origin. TideGuard sets this via
-              the Cloudflare API — you do not need to open the Cloudflare dashboard. Skip for now if
-              the origin is not ready; you can set it later under Admin → Cloudflare access.
+              Recommended when your origin has a valid certificate. Skip if you are not ready — you
+              can set this later in Admin → Cloudflare access.
             </Text>
             <Group>
               <Button
@@ -577,9 +560,8 @@ export function SetupWizard({
         {step === 2 && cfPhase === "domain" ? (
           <>
             <Text size="sm" c="dimmed">
-              Attach this hostname to the TideGuard Worker so traffic hits the waiting room.
-              TideGuard does this via the API — no need to open Cloudflare. Skip if the hostname is
-              already attached; you can attach or detach later under Admin → Cloudflare access.
+              Link your hostname to this Worker so visitors hit the waiting room. Skip if it is
+              already linked — you can manage domains later in Admin → Cloudflare access.
             </Text>
             <Group>
               <Button

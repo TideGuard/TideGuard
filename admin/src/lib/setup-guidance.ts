@@ -5,60 +5,52 @@ export const SETUP_STEPS = [
   {
     id: 2,
     label: "Cloudflare",
-    short: "Give TideGuard scoped API access to check DNS, SSL, and Turnstile.",
+    short: "Connect once so TideGuard can manage DNS, SSL, and Turnstile for you.",
   },
-  { id: 3, label: "Turnstile", short: "Provision bot protection for admin login." },
+  { id: 3, label: "Turnstile", short: "Add bot protection for admin login." },
   { id: 4, label: "Queue", short: "Choose how visitors wait before the event." },
   { id: 5, label: "Branding", short: "Set the waiting-room look; saved on Finish." },
 ] as const;
 
 export type CfPhase = "token" | "zone" | "ssl" | "domain";
 
+/** Friendly substep titles shown in the step line (no 2a/2b jargon). */
 export const CF_PHASE_LABELS: Record<CfPhase, string> = {
-  token: "2a · API token",
-  zone: "2b · Zone & hostname",
-  ssl: "2c · SSL",
-  domain: "2d · Custom domain",
+  token: "API token",
+  zone: "Your site",
+  ssl: "SSL",
+  domain: "Domain",
 };
 
 export const LINKS = {
   apiTokens: "https://dash.cloudflare.com/profile/api-tokens",
-  createTokenDocs: "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
   findIds: "https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/",
-  zoneOverview: "https://dash.cloudflare.com/?to=/:account/:zone/",
-  dnsRecords: "https://dash.cloudflare.com/?to=/:account/:zone/dns/records",
-  sslTls: "https://dash.cloudflare.com/?to=/:account/:zone/ssl-tls",
-  workersAndPages: "https://dash.cloudflare.com/?to=/:account/workers-and-pages",
 } as const;
 
+/** Short labels for the permission checklist (Cloudflare UI wording). */
 export const TOKEN_PERMISSIONS = [
-  "Zone → DNS → Edit",
-  "Zone → Zone → Read",
-  "Zone → Zone Settings → Edit",
-  "Account → Turnstile → Edit",
-  "Account → Workers Scripts → Edit",
+  "Zone · DNS · Edit",
+  "Zone · Zone · Read",
+  "Zone · Zone Settings · Edit",
+  "Account · Turnstile · Edit",
+  "Account · Workers Scripts · Edit",
 ] as const;
 
 export const FIELD_HELP = {
   apiToken: {
-    label: "API token",
-    why: "TideGuard calls the Cloudflare API to check proxied DNS, manage SSL, attach domains, and create Turnstile.",
-    how: "Open API Tokens → Create Token → Create Custom Token. Scope Zone Resources to the zone that fronts TideGuard. Copy the token once.",
+    label: "Paste API token",
   },
   zoneId: {
     label: "Zone ID",
-    why: "Identifies the Cloudflare zone TideGuard will manage.",
-    how: "Dashboard → your domain → Overview → API section → copy Zone ID (32 hex chars). Leave blank to resolve from hostname.",
+    hint: "Optional. On your domain’s Overview page, copy Zone ID — or leave blank.",
   },
   hostname: {
     label: "Hostname",
-    why: "The DNS name that must be proxied (orange cloud) so TideGuard receives CF-Connecting-IP and can gate traffic.",
-    how: "Usually www.example.com or the apex. Must match an A, AAAA, or CNAME record in the zone.",
+    hint: "The site visitors use, e.g. www.example.com (must be orange-cloud / proxied).",
   },
   workerService: {
-    label: "Worker service",
-    why: "The Workers script name used when attaching a custom domain (Wrangler name).",
-    how: "Default tideguard matches Deploy to Cloudflare. Change only if you renamed the Worker.",
+    label: "Worker name",
+    hint: "Usually tideguard. Change only if you renamed the Worker.",
   },
 } as const;
 
