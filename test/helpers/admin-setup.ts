@@ -23,10 +23,12 @@ export async function resetAdmin(): Promise<void> {
   );
 }
 
+export const ADMIN_PASSWORD = "Correct-horse1";
+
 /** Seeds Cloudflare+Turnstile pending state, then finishes first-run setup. */
 export async function setupAdmin(
   username = "ops",
-  password = "correct-horse",
+  password = ADMIN_PASSWORD,
   extras?: Record<string, unknown>,
 ): Promise<string> {
   await seedSetupPendingForTests(env);

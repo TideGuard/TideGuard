@@ -7,7 +7,7 @@ import {
   resetGeoBlockStatsWindow,
 } from "../src/admin/geo-block-stats";
 
-const PASSWORD = "access-gates-pass";
+const PASSWORD = "Access-gates1";
 const OFFICE_IP = "203.0.113.40";
 
 async function json<T>(response: Response): Promise<T> {

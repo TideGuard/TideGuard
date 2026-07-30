@@ -161,6 +161,74 @@ export function renderAdminApp(options: AdminAppOptions): string {
         padding-left: 1.2rem;
       }
       .wizard-guide li { margin: 0.25rem 0; }
+      .pw-checklist {
+        list-style: none;
+        margin: -0.35rem 0 1rem;
+        padding: 0;
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+      .pw-checklist li {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin: 0.28rem 0;
+      }
+      .pw-checklist li::before {
+        content: "";
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--line);
+        flex-shrink: 0;
+      }
+      .pw-checklist li[data-met="1"] {
+        color: var(--ok);
+      }
+      .pw-checklist li[data-met="1"]::before {
+        background: var(--ok);
+      }
+      .cf-subs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0 0 1rem;
+        padding: 0;
+        list-style: none;
+      }
+      .cf-subs li {
+        font-size: 0.75rem;
+        color: var(--muted);
+        padding: 0.28rem 0.6rem;
+        border: 1px solid transparent;
+        border-radius: 999px;
+      }
+      .cf-subs li[data-done="1"] {
+        color: var(--text);
+        border-color: color-mix(in oklab, var(--ok) 40%, var(--line));
+      }
+      .cf-subs li[aria-current="step"] {
+        color: var(--text);
+        border-color: var(--line);
+        background: color-mix(in oklab, var(--accent) 16%, transparent);
+      }
+      .verified-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin: 0.65rem 0 0;
+        padding: 0.35rem 0.65rem;
+        border-radius: 8px;
+        border: 1px solid color-mix(in oklab, var(--ok) 45%, var(--line));
+        color: var(--ok);
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      .verified-badge[data-tone="skip"] {
+        color: var(--muted);
+        border-color: var(--line);
+        font-weight: 500;
+      }
       .grid {
         display: grid;
         gap: 1.25rem;
@@ -242,9 +310,19 @@ export function renderAdminApp(options: AdminAppOptions): string {
         min-height: 1.35em;
         font-size: 0.9rem;
         margin: 0.75rem 0 0;
+        white-space: pre-line;
       }
       .status[data-tone="err"] { color: var(--danger); }
       .status[data-tone="ok"] { color: var(--ok); }
+      .wizard-hints {
+        margin: 0.45rem 0 0;
+        padding-left: 1.15rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+        line-height: 1.45;
+      }
+      .wizard-hints[hidden] { display: none; }
+      .wizard-hints li { margin: 0.2rem 0; }
       .check {
         display: flex;
         align-items: center;
@@ -495,7 +573,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <strong>What you’ll do</strong>
             <ol>
               <li>Paste the same <code>TOKEN_SECRET</code> you set with Wrangler / Deploy to Cloudflare.</li>
-              <li>Choose the first admin username and a strong password (8+ characters).</li>
+              <li>Choose the first admin username and a strong password (checklist below).</li>
             </ol>
           </div>
           <label>TOKEN_SECRET
@@ -510,39 +588,74 @@ export function renderAdminApp(options: AdminAppOptions): string {
           <label>Confirm password
             <input id="setup-confirm" type="password" autocomplete="new-password" minlength="8" />
           </label>
+          <ul class="pw-checklist" id="setup-pw-checklist" aria-label="Password requirements">
+            <li data-rule="length">At least 8 characters</li>
+            <li data-rule="upper">One uppercase letter</li>
+            <li data-rule="digitOrSymbol">One digit or symbol</li>
+            <li data-rule="match">Both passwords match</li>
+          </ul>
         </div>
         <div id="wizard-step-2" hidden>
           <h2 class="wizard-step-title">Connect Cloudflare</h2>
-          <p class="wizard-step-why">TideGuard needs a scoped API token to check proxied DNS (<code>CF-Connecting-IP</code>), IP Geolocation, SSL mode, and custom domains — and to create Turnstile next. Prefer staying in this wizard over the Cloudflare dashboard after the token exists.</p>
-          <div class="wizard-guide">
-            <strong>Create a token</strong>
-            <ol>
-              <li>Open <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">API Tokens</a> → Create Custom Token.</li>
-              <li>Permissions: <code>Zone → DNS → Edit</code>, <code>Zone → Zone → Read</code>, <code>Zone → Zone Settings → Edit</code>, <code>Account → Turnstile → Edit</code>, <code>Account → Workers Scripts → Write</code>.</li>
-              <li>Zone Resources → Include → only this zone. Copy the token once.</li>
-              <li>Paste token, Zone ID (zone Overview), and the hostname that should hit this Worker. Then <strong>Click to verify</strong>.</li>
-            </ol>
-            Use Fix setup / Set Full (strict) / Attach custom domain if verify reports gaps.
+          <p class="wizard-step-why">Verify proxied DNS with a scoped API token, then optionally set SSL and attach a custom domain. Fix runs only when verify finds gaps.</p>
+          <ol class="cf-subs" aria-label="Cloudflare sub-steps">
+            <li data-cf-sub="1" aria-current="step">2a. Connect</li>
+            <li data-cf-sub="2">2b. SSL</li>
+            <li data-cf-sub="3">2c. Domain</li>
+          </ol>
+          <div id="setup-cf-sub-1">
+            <div class="wizard-guide">
+              <strong>Create a token</strong>
+              <ol>
+                <li>Open <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">API Tokens</a> → Create Custom Token.</li>
+                <li>Permissions: <code>Zone → DNS → Edit</code>, <code>Zone → Zone → Read</code>, <code>Zone → Zone Settings → Edit</code>, <code>Account → Turnstile → Edit</code>, <code>Account → Workers Scripts → Write</code>.</li>
+                <li>Zone Resources → Include → only this zone. Copy the token once.</li>
+                <li>Paste token, Zone ID (zone Overview), and hostname → <strong>Click to verify</strong>. Use <strong>Fix setup</strong> only if verify reports DNS/proxy gaps.</li>
+              </ol>
+            </div>
+            <label>API token
+              <input id="setup-cf-token" type="password" autocomplete="off" spellcheck="false" />
+            </label>
+            <label>Zone ID
+              <input id="setup-cf-zone" type="text" placeholder="32-character id from zone Overview" autocomplete="off" spellcheck="false" />
+            </label>
+            <label>Hostname
+              <input id="setup-cf-hostname" type="text" placeholder="www.example.com" autocomplete="off" />
+            </label>
+            <label>Worker service name
+              <input id="setup-cf-worker" type="text" value="tideguard" autocomplete="off" spellcheck="false" />
+            </label>
+            <div class="actions">
+              <button type="button" class="primary" id="setup-cf-verify">Click to verify</button>
+              <button type="button" class="ghost" id="setup-cf-fix" hidden>Fix setup</button>
+            </div>
+            <p class="verified-badge" id="setup-cf-verified" hidden>Verified — proxied DNS OK</p>
+            <p class="status" id="setup-cf-status" data-tone="ok"></p>
+            <ul class="wizard-hints" id="setup-cf-hints" hidden></ul>
           </div>
-          <label>API token
-            <input id="setup-cf-token" type="password" autocomplete="off" spellcheck="false" />
-          </label>
-          <label>Zone ID
-            <input id="setup-cf-zone" type="text" placeholder="32-character id from zone Overview" autocomplete="off" spellcheck="false" />
-          </label>
-          <label>Hostname
-            <input id="setup-cf-hostname" type="text" placeholder="www.example.com" autocomplete="off" />
-          </label>
-          <label>Worker service name
-            <input id="setup-cf-worker" type="text" value="tideguard" autocomplete="off" spellcheck="false" />
-          </label>
-          <div class="actions">
-            <button type="button" class="primary" id="setup-cf-verify">Click to verify</button>
-            <button type="button" class="ghost" id="setup-cf-fix" hidden>Fix setup</button>
-            <button type="button" class="ghost" id="setup-cf-ssl" hidden>Set Full (strict)</button>
-            <button type="button" class="ghost" id="setup-cf-domain" hidden>Attach custom domain</button>
+          <div id="setup-cf-sub-2" hidden>
+            <div class="wizard-guide">
+              <strong>SSL Full (strict)</strong>
+              <p style="margin:0.45rem 0 0">Optional. Full (strict) requires a valid certificate on your origin. Wrong mode can cause Error 526 for visitors. Skip if you are not ready.</p>
+            </div>
+            <div class="actions">
+              <button type="button" class="primary" id="setup-cf-ssl">Set Full (strict)</button>
+              <button type="button" class="ghost" id="setup-cf-ssl-skip">Skip for now</button>
+            </div>
+            <p class="verified-badge" id="setup-cf-ssl-badge" hidden>Verified — SSL Full (strict)</p>
           </div>
-          <p class="status" id="setup-cf-status" data-tone="ok"></p>
+          <div id="setup-cf-sub-3" hidden>
+            <div class="wizard-guide">
+              <strong>Custom domain</strong>
+              <p style="margin:0.45rem 0 0">Optional until go-live. Attach this hostname to the TideGuard Worker, or skip and use workers.dev / routes for now.</p>
+            </div>
+            <div class="actions">
+              <button type="button" class="primary" id="setup-cf-domain">Attach custom domain</button>
+              <button type="button" class="ghost" id="setup-cf-domain-skip">Skip for now</button>
+            </div>
+            <p class="verified-badge" id="setup-cf-domain-badge" hidden>Verified — custom domain attached</p>
+            <p class="status" id="setup-cf-domain-status" data-tone="ok"></p>
+          </div>
         </div>
         <div id="wizard-step-3" hidden>
           <h2 class="wizard-step-title">Protect admin login</h2>
@@ -563,6 +676,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
             <button type="button" class="ghost" id="setup-ts-verify">Click to verify</button>
           </div>
           <p class="status" id="setup-ts-status" data-tone="ok"></p>
+          <ul class="wizard-hints" id="setup-ts-hints" hidden></ul>
         </div>
         <div id="wizard-step-4" hidden>
           <h2 class="wizard-step-title">Configure the line</h2>
@@ -681,6 +795,12 @@ export function renderAdminApp(options: AdminAppOptions): string {
         <label>Confirm password
           <input id="invite-confirm" type="password" autocomplete="new-password" minlength="8" />
         </label>
+        <ul class="pw-checklist" id="invite-pw-checklist" aria-label="Password requirements">
+          <li data-rule="length">At least 8 characters</li>
+          <li data-rule="upper">One uppercase letter</li>
+          <li data-rule="digitOrSymbol">One digit or symbol</li>
+          <li data-rule="match">Both passwords match</li>
+        </ul>
         <div id="invite-turnstile" style="margin:0.75rem 0"></div>
         <div class="actions">
           <button type="button" class="primary" id="invite-accept-btn">Join team</button>
@@ -1066,6 +1186,11 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         const state = {
           step: 1,
+          cfSubStep: 1,
+          cfSslDone: false,
+          cfSslSkipped: false,
+          cfDomainDone: false,
+          cfDomainSkipped: false,
           admissionMode: "queue",
           setupComplete: initialSetupComplete,
           updatesChecked: false,
@@ -1090,6 +1215,18 @@ export function renderAdminApp(options: AdminAppOptions): string {
         function setStatus(el, text, tone) {
           el.textContent = text || "";
           el.dataset.tone = tone || "ok";
+        }
+
+        function setWizardHints(el, hints) {
+          if (!el) return;
+          const list = Array.isArray(hints) ? hints.filter(Boolean) : [];
+          if (list.length === 0) {
+            el.innerHTML = "";
+            el.hidden = true;
+            return;
+          }
+          el.innerHTML = list.map((h) => "<li>" + escapeHtml(String(h)) + "</li>").join("");
+          el.hidden = false;
         }
 
         function formatDuration(sec) {
@@ -1548,8 +1685,12 @@ export function renderAdminApp(options: AdminAppOptions): string {
           document.getElementById("wizard-back").hidden = step === 1;
           const nextBtn = document.getElementById("wizard-next");
           nextBtn.textContent = step === 5 ? "Finish setup" : "Continue";
-          if (step === 2) {
-            nextBtn.disabled = !state.cloudflareReady;
+          if (step === 1) {
+            nextBtn.disabled = !accountStepReady();
+            syncPasswordChecklist("setup");
+          } else if (step === 2) {
+            paintCfSubSteps();
+            nextBtn.disabled = !cfSubStepContinueEnabled();
           } else if (step === 3) {
             nextBtn.disabled = !state.turnstileReady;
           } else {
@@ -1569,6 +1710,104 @@ export function renderAdminApp(options: AdminAppOptions): string {
           if (step === 5) paintPreview("preview", wizardBranding(), state.admissionMode);
           if (step === 3 && state.turnstileSitekey) {
             renderTurnstile("setup-ts-widget", state.turnstileSitekey, "setup");
+          }
+        }
+
+        function paintCfSubSteps() {
+          const sub = state.cfSubStep;
+          document.getElementById("setup-cf-sub-1").hidden = sub !== 1;
+          document.getElementById("setup-cf-sub-2").hidden = sub !== 2;
+          document.getElementById("setup-cf-sub-3").hidden = sub !== 3;
+          document.getElementById("wizard-back").hidden = false;
+          document.querySelectorAll(".cf-subs li").forEach((li) => {
+            const n = Number(li.dataset.cfSub);
+            if (n === sub) {
+              li.setAttribute("aria-current", "step");
+              li.removeAttribute("data-done");
+            } else {
+              li.removeAttribute("aria-current");
+              if (n < sub || (n === 1 && state.cloudflareReady) || (n === 2 && state.cfSslDone) || (n === 3 && state.cfDomainDone)) {
+                if (n < sub) li.setAttribute("data-done", "1");
+                else li.removeAttribute("data-done");
+              } else {
+                li.removeAttribute("data-done");
+              }
+              if (n < sub) li.setAttribute("data-done", "1");
+            }
+          });
+          const verified = document.getElementById("setup-cf-verified");
+          verified.hidden = !state.cloudflareReady;
+          const sslBadge = document.getElementById("setup-cf-ssl-badge");
+          if (state.cfSslDone) {
+            sslBadge.hidden = false;
+            sslBadge.dataset.tone = state.cfSslSkipped ? "skip" : "ok";
+            sslBadge.textContent = state.cfSslSkipped
+              ? "Skipped — SSL unchanged"
+              : "Verified — SSL Full (strict)";
+          } else {
+            sslBadge.hidden = true;
+          }
+          const domainBadge = document.getElementById("setup-cf-domain-badge");
+          if (state.cfDomainDone) {
+            domainBadge.hidden = false;
+            domainBadge.dataset.tone = state.cfDomainSkipped ? "skip" : "ok";
+            domainBadge.textContent = state.cfDomainSkipped
+              ? "Skipped — custom domain optional"
+              : "Verified — custom domain attached";
+          } else {
+            domainBadge.hidden = true;
+          }
+        }
+
+        function cfSubStepContinueEnabled() {
+          if (state.cfSubStep === 1) return !!state.cloudflareReady;
+          if (state.cfSubStep === 2) return !!state.cfSslDone;
+          if (state.cfSubStep === 3) return !!state.cfDomainDone;
+          return false;
+        }
+
+        function evaluatePassword(password, confirm) {
+          return {
+            length: password.length >= 8 && password.length <= 128,
+            upper: /[A-Z]/.test(password),
+            digitOrSymbol: /[0-9]/.test(password) || /[^A-Za-z0-9]/.test(password),
+            match: password.length > 0 && password === confirm,
+          };
+        }
+
+        function syncPasswordChecklist(kind) {
+          const passwordEl = document.getElementById(kind + "-password");
+          const confirmEl = document.getElementById(kind + "-confirm");
+          const list = document.getElementById(kind + "-pw-checklist");
+          if (!passwordEl || !confirmEl || !list) return false;
+          const checks = evaluatePassword(passwordEl.value, confirmEl.value);
+          list.querySelectorAll("[data-rule]").forEach((li) => {
+            const rule = li.getAttribute("data-rule");
+            li.dataset.met = checks[rule] ? "1" : "0";
+          });
+          return !!(checks.length && checks.upper && checks.digitOrSymbol && checks.match);
+        }
+
+        function accountStepReady() {
+          const tokenSecret = document.getElementById("setup-token-secret").value.trim();
+          const username = document.getElementById("setup-username").value.trim();
+          if (tokenSecret.length < 16) return false;
+          if (usernameError(username)) return false;
+          return syncPasswordChecklist("setup");
+        }
+
+        function wirePasswordChecklist(kind, onChange) {
+          const passwordEl = document.getElementById(kind + "-password");
+          const confirmEl = document.getElementById(kind + "-confirm");
+          const handler = () => {
+            syncPasswordChecklist(kind);
+            if (onChange) onChange();
+          };
+          passwordEl.addEventListener("input", handler);
+          confirmEl.addEventListener("input", handler);
+          if (kind === "setup") {
+            document.getElementById("setup-token-secret").addEventListener("input", onChange);
+            document.getElementById("setup-username").addEventListener("input", onChange);
           }
         }
 
@@ -1631,6 +1870,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         function paintSetupCloudflareUi(verify, pending) {
           const status = document.getElementById("setup-cf-status");
+          const hintsEl = document.getElementById("setup-cf-hints");
           const proxyOk = pending
             ? !!pending.proxyOk
             : !!(verify && verify.proxy && verify.proxy.ok);
@@ -1649,20 +1889,45 @@ export function renderAdminApp(options: AdminAppOptions): string {
           } else if (pending && pending.sslMode) {
             bits.push("SSL " + pending.sslMode + (pending.sslIsStrict ? " (strict)" : ""));
           }
-          if (!domainOk) bits.push("custom domain not attached");
+          if (domainOk) {
+            bits.push("custom domain attached");
+          } else if (proxyOk) {
+            bits.push("custom domain optional");
+          }
           setStatus(status, bits.join(" · "), proxyOk ? "ok" : "err");
+          const suggestions =
+            (verify && verify.proxy && verify.proxy.suggestions) ||
+            (verify && verify.check && verify.check.suggestions) ||
+            [];
+          setWizardHints(hintsEl, suggestions);
           document.getElementById("setup-cf-fix").hidden = proxyOk;
-          document.getElementById("setup-cf-ssl").hidden = sslStrict;
-          document.getElementById("setup-cf-domain").hidden = domainOk;
           if (pending) {
             state.cloudflareReady = !!pending.cloudflareReady;
             if (pending.turnstileReady != null) state.turnstileReady = !!pending.turnstileReady;
             if (pending.turnstileSitekey) state.turnstileSitekey = pending.turnstileSitekey;
+            if (pending.sslIsStrict) {
+              state.cfSslDone = true;
+              state.cfSslSkipped = false;
+            }
+            if (pending.hostnameAttached) {
+              state.cfDomainDone = true;
+              state.cfDomainSkipped = false;
+            }
           } else {
             state.cloudflareReady = proxyOk;
           }
+          if (sslStrict && !state.cfSslDone) {
+            state.cfSslDone = true;
+            state.cfSslSkipped = false;
+          }
+          if (domainOk && !state.cfDomainDone) {
+            state.cfDomainDone = true;
+            state.cfDomainSkipped = false;
+          }
+          document.getElementById("setup-cf-verified").hidden = !state.cloudflareReady;
           if (state.step === 2) {
-            document.getElementById("wizard-next").disabled = !state.cloudflareReady;
+            paintCfSubSteps();
+            document.getElementById("wizard-next").disabled = !cfSubStepContinueEnabled();
           }
         }
 
@@ -2070,11 +2335,28 @@ export function renderAdminApp(options: AdminAppOptions): string {
             if (bootData.setupPending.hostname) {
               document.getElementById("setup-cf-hostname").value = bootData.setupPending.hostname;
             }
+            if (bootData.setupPending.sslIsStrict) {
+              state.cfSslDone = true;
+              state.cfSslSkipped = false;
+            }
+            if (bootData.setupPending.hostnameAttached) {
+              state.cfDomainDone = true;
+              state.cfDomainSkipped = false;
+            }
             paintSetupCloudflareUi(null, bootData.setupPending);
+            if (state.cloudflareReady && state.cfSslDone) {
+              state.cfSubStep = 3;
+            } else if (state.cloudflareReady) {
+              state.cfSubStep = 2;
+            } else {
+              state.cfSubStep = 1;
+            }
           }
 
           if (params.get("invite")) {
             showView("invite");
+            syncPasswordChecklist("invite");
+            document.getElementById("invite-accept-btn").disabled = !syncPasswordChecklist("invite");
             if (state.turnstileSitekey) {
               renderTurnstile("invite-turnstile", state.turnstileSitekey, "invite");
             }
@@ -2086,6 +2368,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
             setWizardStep(1);
             return;
           }
+          // Setup already finished — never show claim wizard (incl. after browser Back).
           try {
             await loadDashboard();
           } catch (err) {
@@ -2118,6 +2401,13 @@ export function renderAdminApp(options: AdminAppOptions): string {
         });
 
         document.getElementById("wizard-back").addEventListener("click", () => {
+          const status = document.getElementById("wizard-status");
+          setStatus(status, "", "ok");
+          if (state.step === 2 && state.cfSubStep > 1) {
+            state.cfSubStep -= 1;
+            setWizardStep(2);
+            return;
+          }
           setWizardStep(Math.max(1, state.step - 1));
         });
 
@@ -2127,8 +2417,6 @@ export function renderAdminApp(options: AdminAppOptions): string {
           if (state.step === 1) {
             const tokenSecret = document.getElementById("setup-token-secret").value.trim();
             const username = document.getElementById("setup-username").value.trim();
-            const password = document.getElementById("setup-password").value;
-            const confirm = document.getElementById("setup-confirm").value;
             if (tokenSecret.length < 16) {
               setStatus(status, "TOKEN_SECRET must be at least 16 characters.", "err");
               return;
@@ -2138,28 +2426,51 @@ export function renderAdminApp(options: AdminAppOptions): string {
               setStatus(status, usernameProblem, "err");
               return;
             }
-            if (password.length < 8) {
-              setStatus(status, "Password must be at least 8 characters.", "err");
+            if (!syncPasswordChecklist("setup")) {
+              setStatus(status, "Meet all password requirements before continuing.", "err");
               return;
             }
-            if (password !== confirm) {
-              setStatus(status, "Passwords do not match.", "err");
-              return;
+            if (state.cloudflareReady && state.cfSslDone) {
+              state.cfSubStep = 3;
+            } else if (state.cloudflareReady) {
+              state.cfSubStep = 2;
+            } else {
+              state.cfSubStep = 1;
             }
             setWizardStep(2);
             return;
           }
           if (state.step === 2) {
-            if (!state.cloudflareReady) {
-              setStatus(status, "Click to verify Cloudflare access before continuing.", "err");
+            if (state.cfSubStep === 1) {
+              if (!state.cloudflareReady) {
+                setStatus(status, "Click to verify Cloudflare (proxied DNS must pass) before continuing.", "err");
+                return;
+              }
+              state.cfSubStep = 2;
+              setWizardStep(2);
               return;
             }
-            setWizardStep(3);
-            return;
+            if (state.cfSubStep === 2) {
+              if (!state.cfSslDone) {
+                setStatus(status, "Set Full (strict) or Skip for now before continuing.", "err");
+                return;
+              }
+              state.cfSubStep = 3;
+              setWizardStep(2);
+              return;
+            }
+            if (state.cfSubStep === 3) {
+              if (!state.cfDomainDone) {
+                setStatus(status, "Attach a custom domain or Skip for now before continuing.", "err");
+                return;
+              }
+              setWizardStep(3);
+              return;
+            }
           }
           if (state.step === 3) {
             if (!state.turnstileReady) {
-              setStatus(status, "Verify Turnstile before continuing.", "err");
+              setStatus(status, "Create the Turnstile widget, complete the challenge, then Click to verify.", "err");
               return;
             }
             setWizardStep(4);
@@ -2171,10 +2482,9 @@ export function renderAdminApp(options: AdminAppOptions): string {
           }
           try {
             document.getElementById("wizard-next").disabled = true;
-            const tokenSecret = document.getElementById("setup-token-secret").value.trim();
             await api("/api/admin/setup", {
               method: "POST",
-              headers: { authorization: "Bearer " + tokenSecret },
+              headers: setupBearerHeaders(),
               body: JSON.stringify({
                 username: document.getElementById("setup-username").value.trim(),
                 password: document.getElementById("setup-password").value,
@@ -2185,6 +2495,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
               }),
             });
             state.setupComplete = true;
+            window.history.replaceState({}, "", window.location.pathname);
             await loadDashboard();
             setStatus(document.getElementById("dash-status"), "Setup complete.", "ok");
           } catch (err) {
@@ -2196,17 +2507,36 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("setup-cf-verify").addEventListener("click", async () => {
           const status = document.getElementById("setup-cf-status");
+          const hintsEl = document.getElementById("setup-cf-hints");
           const btn = document.getElementById("setup-cf-verify");
+          const apiToken = document.getElementById("setup-cf-token").value.trim();
+          const hostname = document.getElementById("setup-cf-hostname").value.trim();
+          const zoneId = document.getElementById("setup-cf-zone").value.trim();
+          if (apiToken.length < 20) {
+            setWizardHints(hintsEl, [
+              "Paste the API token from dash.cloudflare.com/profile/api-tokens (Create Custom Token).",
+            ]);
+            setStatus(status, "Cloudflare API token looks too short or empty.", "err");
+            return;
+          }
+          if (!hostname) {
+            setWizardHints(hintsEl, [
+              "Use the hostname visitors will hit (for example www.example.com). Zone ID can be blank if the token can look it up.",
+            ]);
+            setStatus(status, "Hostname is required.", "err");
+            return;
+          }
           try {
             btn.disabled = true;
+            setWizardHints(hintsEl, []);
             setStatus(status, "Verifying…", "ok");
             const data = await api("/api/admin/setup/cloudflare/verify", {
               method: "POST",
               headers: setupBearerHeaders(),
               body: JSON.stringify({
-                apiToken: document.getElementById("setup-cf-token").value.trim(),
-                zoneId: document.getElementById("setup-cf-zone").value.trim(),
-                hostname: document.getElementById("setup-cf-hostname").value.trim(),
+                apiToken,
+                zoneId,
+                hostname,
                 workerService: document.getElementById("setup-cf-worker").value.trim() || "tideguard",
               }),
             });
@@ -2217,6 +2547,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
           } catch (err) {
             state.cloudflareReady = false;
             document.getElementById("wizard-next").disabled = true;
+            setWizardHints(hintsEl, []);
             setStatus(status, err.message, "err");
           } finally {
             btn.disabled = false;
@@ -2225,6 +2556,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("setup-cf-fix").addEventListener("click", async () => {
           const status = document.getElementById("setup-cf-status");
+          const hintsEl = document.getElementById("setup-cf-hints");
           try {
             setStatus(status, "Fixing…", "ok");
             const data = await api("/api/admin/setup/cloudflare/fix", {
@@ -2232,14 +2564,19 @@ export function renderAdminApp(options: AdminAppOptions): string {
               headers: setupBearerHeaders(),
               body: "{}",
             });
-            paintSetupCloudflareUi(data.check ? { proxy: data.check, ssl: null, domains: null } : null, data.pending);
+            paintSetupCloudflareUi(
+              data.check
+                ? { proxy: data.check, ssl: null, domains: { hostnameAttached: data.pending && data.pending.hostnameAttached } }
+                : null,
+              data.pending,
+            );
           } catch (err) {
+            setWizardHints(hintsEl, []);
             setStatus(status, err.message, "err");
           }
         });
 
         document.getElementById("setup-cf-ssl").addEventListener("click", async () => {
-          const status = document.getElementById("setup-cf-status");
           if (
             !(await confirmAction(
               "Set SSL to Full (strict)?",
@@ -2254,17 +2591,34 @@ export function renderAdminApp(options: AdminAppOptions): string {
               headers: setupBearerHeaders(),
               body: "{}",
             });
+            state.cfSslDone = true;
+            state.cfSslSkipped = false;
             paintSetupCloudflareUi(
-              data.ssl ? { proxy: { ok: data.pending && data.pending.proxyOk, summary: "SSL updated" }, ssl: data.ssl, domains: { hostnameAttached: data.pending && data.pending.hostnameAttached } } : null,
+              data.ssl
+                ? {
+                    proxy: { ok: data.pending && data.pending.proxyOk, summary: "SSL updated" },
+                    ssl: data.ssl,
+                    domains: { hostnameAttached: data.pending && data.pending.hostnameAttached },
+                  }
+                : null,
               data.pending,
             );
+            paintCfSubSteps();
+            document.getElementById("wizard-next").disabled = !cfSubStepContinueEnabled();
           } catch (err) {
-            setStatus(status, err.message, "err");
+            setStatus(document.getElementById("setup-cf-status"), err.message, "err");
           }
         });
 
+        document.getElementById("setup-cf-ssl-skip").addEventListener("click", () => {
+          state.cfSslDone = true;
+          state.cfSslSkipped = true;
+          paintCfSubSteps();
+          document.getElementById("wizard-next").disabled = !cfSubStepContinueEnabled();
+        });
+
         document.getElementById("setup-cf-domain").addEventListener("click", async () => {
-          const status = document.getElementById("setup-cf-status");
+          const status = document.getElementById("setup-cf-domain-status");
           try {
             setStatus(status, "Attaching domain…", "ok");
             const data = await api("/api/admin/setup/cloudflare/attach-domain", {
@@ -2272,18 +2626,31 @@ export function renderAdminApp(options: AdminAppOptions): string {
               headers: setupBearerHeaders(),
               body: "{}",
             });
+            state.cfDomainDone = true;
+            state.cfDomainSkipped = false;
             paintSetupCloudflareUi(null, data.pending);
             setStatus(status, "Custom domain attached.", "ok");
+            paintCfSubSteps();
+            document.getElementById("wizard-next").disabled = !cfSubStepContinueEnabled();
           } catch (err) {
             setStatus(status, err.message, "err");
           }
         });
 
+        document.getElementById("setup-cf-domain-skip").addEventListener("click", () => {
+          state.cfDomainDone = true;
+          state.cfDomainSkipped = true;
+          paintCfSubSteps();
+          document.getElementById("wizard-next").disabled = !cfSubStepContinueEnabled();
+        });
+
         document.getElementById("setup-ts-provision").addEventListener("click", async () => {
           const status = document.getElementById("setup-ts-status");
+          const hintsEl = document.getElementById("setup-ts-hints");
           const btn = document.getElementById("setup-ts-provision");
           try {
             btn.disabled = true;
+            setWizardHints(hintsEl, []);
             setStatus(status, "Creating widget…", "ok");
             const data = await api("/api/admin/setup/turnstile/provision", {
               method: "POST",
@@ -2296,11 +2663,17 @@ export function renderAdminApp(options: AdminAppOptions): string {
             }
             if (state.turnstileSitekey) {
               renderTurnstile("setup-ts-widget", state.turnstileSitekey, "setup");
+              setWizardHints(hintsEl, [
+                "Complete the challenge below, then Click to verify so TideGuard can confirm siteverify.",
+              ]);
               setStatus(status, "Widget ready — complete the challenge, then Click to verify.", "ok");
             } else {
               setStatus(status, "Provision succeeded but no sitekey returned.", "err");
             }
           } catch (err) {
+            setWizardHints(hintsEl, [
+              "Cloudflare step must be verified first. Token needs Account → Turnstile → Edit.",
+            ]);
             setStatus(status, err.message, "err");
           } finally {
             btn.disabled = false;
@@ -2309,9 +2682,13 @@ export function renderAdminApp(options: AdminAppOptions): string {
 
         document.getElementById("setup-ts-verify").addEventListener("click", async () => {
           const status = document.getElementById("setup-ts-status");
+          const hintsEl = document.getElementById("setup-ts-hints");
           const btn = document.getElementById("setup-ts-verify");
           const turnstileToken = getTurnstileToken("setup");
           if (!turnstileToken) {
+            setWizardHints(hintsEl, [
+              "If no widget is visible, click Create Turnstile widget first.",
+            ]);
             setStatus(status, "Complete the Turnstile challenge first.", "err");
             return;
           }
@@ -2326,11 +2703,15 @@ export function renderAdminApp(options: AdminAppOptions): string {
             if (state.step === 3) {
               document.getElementById("wizard-next").disabled = !state.turnstileReady;
             }
+            setWizardHints(hintsEl, []);
             setStatus(status, state.turnstileReady ? "Turnstile verified." : "Verification incomplete.", state.turnstileReady ? "ok" : "err");
             resetTurnstile("setup");
           } catch (err) {
             state.turnstileReady = false;
             resetTurnstile("setup");
+            setWizardHints(hintsEl, [
+              "Refresh the challenge and Click to verify again. For local dev, widget domains include localhost.",
+            ]);
             setStatus(status, err.message, "err");
           } finally {
             btn.disabled = false;
@@ -2361,21 +2742,17 @@ export function renderAdminApp(options: AdminAppOptions): string {
           const params = new URLSearchParams(window.location.search);
           const token = params.get("invite") || "";
           const username = document.getElementById("invite-username").value.trim();
-          const password = document.getElementById("invite-password").value;
-          const confirm = document.getElementById("invite-confirm").value;
           const usernameProblem = usernameError(username);
           if (usernameProblem) {
             setStatus(status, usernameProblem, "err");
             return;
           }
-          if (password.length < 8) {
-            setStatus(status, "Password must be at least 8 characters.", "err");
+          if (!syncPasswordChecklist("invite")) {
+            setStatus(status, "Meet all password requirements before joining.", "err");
             return;
           }
-          if (password !== confirm) {
-            setStatus(status, "Passwords do not match.", "err");
-            return;
-          }
+          const password = document.getElementById("invite-password").value;
+          const confirm = document.getElementById("invite-confirm").value;
           const btn = document.getElementById("invite-accept-btn");
           try {
             btn.disabled = true;
@@ -2395,7 +2772,7 @@ export function renderAdminApp(options: AdminAppOptions): string {
             resetTurnstile("invite");
             setStatus(status, err.message, "err");
           } finally {
-            btn.disabled = false;
+            btn.disabled = !syncPasswordChecklist("invite");
           }
         });
 
@@ -2943,9 +3320,32 @@ export function renderAdminApp(options: AdminAppOptions): string {
           });
         });
 
+        wirePasswordChecklist("setup", () => {
+          if (state.step === 1) {
+            document.getElementById("wizard-next").disabled = !accountStepReady();
+          }
+        });
+        wirePasswordChecklist("invite", () => {
+          document.getElementById("invite-accept-btn").disabled = !syncPasswordChecklist("invite");
+        });
+        document.getElementById("invite-username").addEventListener("input", () => {
+          document.getElementById("invite-accept-btn").disabled = !syncPasswordChecklist("invite");
+        });
+
+        window.addEventListener("pageshow", (event) => {
+          if (!event.persisted) return;
+          boot().catch(() => {
+            if (state.setupComplete) showView("login");
+          });
+        });
+
         boot().catch((err) => {
           showView(initialSetupComplete ? "login" : "wizard");
-          setStatus(document.getElementById("login-status"), err.message || "Could not load admin", "err");
+          if (initialSetupComplete) {
+            setStatus(document.getElementById("login-status"), err.message || "Could not load admin", "err");
+          } else {
+            setStatus(document.getElementById("wizard-status"), err.message || "Could not load admin", "err");
+          }
         });
       })();
     </script>

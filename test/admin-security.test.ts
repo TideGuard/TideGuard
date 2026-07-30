@@ -29,7 +29,7 @@ describe("first-run redirect", () => {
 describe("multi-admin invites and audit", () => {
   it("creates and accepts an invite, then audits consequential actions", async () => {
     await resetAdmin();
-    const ownerCookie = await setupAdmin("owner", "correct-horse");
+    const ownerCookie = await setupAdmin("owner", "Correct-horse1");
 
     const created = await exports.default.fetch(
       new Request("https://example.com/api/admin/invites", {
@@ -54,8 +54,8 @@ describe("multi-admin invites and audit", () => {
         body: JSON.stringify({
           token: createdBody.token,
           username: "teammate",
-          password: "another-horse",
-          confirmPassword: "another-horse",
+          password: "Another-horse1",
+          confirmPassword: "Another-horse1",
           ...turnstileBody(),
         }),
       }),
@@ -71,8 +71,8 @@ describe("multi-admin invites and audit", () => {
         body: JSON.stringify({
           token: createdBody.token,
           username: "other",
-          password: "another-horse",
-          confirmPassword: "another-horse",
+          password: "Another-horse1",
+          confirmPassword: "Another-horse1",
           ...turnstileBody(),
         }),
       }),
@@ -143,8 +143,8 @@ describe("multi-admin invites and audit", () => {
         body: JSON.stringify({
           token: body.token,
           username: "nope",
-          password: "correct-horse",
-          confirmPassword: "correct-horse",
+          password: "Correct-horse1",
+          confirmPassword: "Correct-horse1",
           ...turnstileBody(),
         }),
       }),
@@ -155,7 +155,7 @@ describe("multi-admin invites and audit", () => {
   it("migrates legacy single-password admin config", async () => {
     await resetAdmin();
     const { hashPassword } = await import("../src/auth/password");
-    const { hash, salt } = await hashPassword("legacy-pass!");
+    const { hash, salt } = await hashPassword("Legacy-pass1");
     await env.CONFIG_KV.put(
       "admin:config",
       JSON.stringify({
@@ -171,7 +171,7 @@ describe("multi-admin invites and audit", () => {
       new Request("https://example.com/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "admin", password: "legacy-pass!" }),
+        body: JSON.stringify({ username: "admin", password: "Legacy-pass1" }),
       }),
     );
     expect(login.status).toBe(200);

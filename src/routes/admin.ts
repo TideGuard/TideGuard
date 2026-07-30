@@ -3,6 +3,7 @@ import { ApiError, jsonOk } from "../core/errors";
 import { DEFAULT_BRANDING, sanitizeRedirectUrl, type WaitingRoomBranding } from "../core/branding";
 import type { AdmissionMode } from "../core/types";
 import { hashPassword, verifyPassword } from "../auth/password";
+import { assertAdminPassword } from "../auth/password-policy";
 import { signAdminSession } from "../auth/admin-session";
 import { buildAccessCookie, buildAdmissionClaims, signAccessToken } from "../auth";
 import {
@@ -79,6 +80,10 @@ import {
   verifyCloudflareAccess,
   verifyTurnstileToken,
 } from "../admin/cloudflare-api";
+import {
+  formatCloudflareOperatorError,
+  formatTurnstileOperatorError,
+} from "../admin/operator-errors";
 import {
   clearSetupPending,
   isSetupPendingReady,
@@ -159,12 +164,16 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
       400,
     );
   }
-  const password = parsePassword(body.password);
-  const confirm = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
-  if (password !== confirm) {
-    throw new ApiError("bad_request", "Passwords do not match", 400);
+  let password: string;
+  try {
+    password = assertAdminPassword(body.password, body.confirmPassword);
+  } catch (error) {
+    throw new ApiError(
+      "bad_request",
+      error instanceof Error ? error.message : "Invalid password",
+      400,
+    );
   }
-
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE);
   const mode = parseAdmissionMode(body.admissionMode ?? "queue");
   if (!mode) {
@@ -181,7 +190,7 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
   if (!isSetupPendingReady(pending) || !pending.cloudflare || !pending.turnstile) {
     throw new ApiError(
       "bad_request",
-      "Complete Cloudflare verify and Turnstile verify before finishing setup",
+      "Finish Cloudflare verify (proxied DNS) and Turnstile verify before completing setup.",
       400,
     );
   }
@@ -446,10 +455,15 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
       400,
     );
   }
-  const password = parsePassword(body.password);
-  const confirm = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
-  if (password !== confirm) {
-    throw new ApiError("bad_request", "Passwords do not match", 400);
+  let password: string;
+  try {
+    password = assertAdminPassword(body.password, body.confirmPassword);
+  } catch (error) {
+    throw new ApiError(
+      "bad_request",
+      error instanceof Error ? error.message : "Invalid password",
+      400,
+    );
   }
 
   let invite;
@@ -597,7 +611,7 @@ export async function handleAdminSaveCloudflare(request: Request, env: Env): Pro
       throw new ApiError("bad_request", error.message, 400);
     }
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -659,7 +673,7 @@ async function runCloudflareProxyAction(
     return jsonOk({ ok: result.ok, check: result });
   } catch (error) {
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -1068,7 +1082,11 @@ export async function handleAdminSetupCloudflareVerify(
       : "tideguard";
 
   if (apiToken.length < 20) {
-    throw new ApiError("bad_request", "Cloudflare API token looks too short", 400);
+    throw new ApiError(
+      "bad_request",
+      "Cloudflare API token looks too short or empty. Paste the token from API Tokens → Create Custom Token.",
+      400,
+    );
   }
 
   try {
@@ -1077,7 +1095,7 @@ export async function handleAdminSetupCloudflareVerify(
       if (!found) {
         throw new ApiError(
           "bad_request",
-          "Could not resolve Zone ID from hostname — paste Zone ID from the Cloudflare overview",
+          "Could not resolve Zone ID from hostname. Paste the Zone ID from the zone Overview, or check the hostname spelling.",
           400,
         );
       }
@@ -1110,7 +1128,7 @@ export async function handleAdminSetupCloudflareVerify(
     });
   } catch (error) {
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -1157,7 +1175,7 @@ export async function handleAdminSetupCloudflareFix(request: Request, env: Env):
     return jsonOk({ ok: check.ok, check, pending: toSetupPendingPublic(next) });
   } catch (error) {
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -1178,7 +1196,7 @@ export async function handleAdminSetupTurnstileProvision(
   if (!pending.cloudflare?.proxyOk || !apiToken) {
     throw new ApiError(
       "bad_request",
-      "Verify Cloudflare access and fix proxy/geo before Turnstile",
+      "Verify Cloudflare access first (proxied DNS must pass) before creating Turnstile.",
       400,
     );
   }
@@ -1214,7 +1232,10 @@ export async function handleAdminSetupTurnstileProvision(
       pending: toSetupPendingPublic(next),
     });
   } catch (error) {
-    if (error instanceof CloudflareApiError || error instanceof SetupPendingError) {
+    if (error instanceof CloudflareApiError) {
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
+    }
+    if (error instanceof SetupPendingError) {
       throw new ApiError("bad_request", error.message, 400);
     }
     throw error;
@@ -1241,7 +1262,11 @@ export async function handleAdminSetupTurnstileVerify(
   const secret = await openSetupPendingTurnstileSecret(env);
   const pending = await readSetupPending(env);
   if (!secret || !pending.turnstile) {
-    throw new ApiError("bad_request", "Provision Turnstile before verifying", 400);
+    throw new ApiError(
+      "bad_request",
+      "Create the Turnstile widget first, then complete the challenge and Click to verify.",
+      400,
+    );
   }
 
   const result = await verifyTurnstileToken({
@@ -1250,7 +1275,7 @@ export async function handleAdminSetupTurnstileVerify(
     remoteip: clientConnectingIp(request),
   });
   if (!result.success) {
-    throw new ApiError("bad_request", "Turnstile verification failed", 400);
+    throw new ApiError("bad_request", formatTurnstileOperatorError(result.errorCodes), 400);
   }
 
   const next = await markSetupPendingTurnstileVerified(env);
@@ -1285,7 +1310,7 @@ export async function handleAdminCloudflareIpGeolocation(
     return jsonOk({ ok: true, ipGeolocation: { on } });
   } catch (error) {
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -1306,7 +1331,7 @@ export async function handleAdminCloudflareSsl(request: Request, env: Env): Prom
     return jsonOk({ ok: true, ssl });
   } catch (error) {
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -1329,7 +1354,7 @@ export async function handleAdminCloudflareDomains(request: Request, env: Env): 
       return jsonOk({ ok: true, domains, workerService });
     } catch (error) {
       if (error instanceof CloudflareApiError) {
-        throw new ApiError("bad_request", error.message, 400);
+        throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
       }
       throw error;
     }
@@ -1368,7 +1393,7 @@ export async function handleAdminCloudflareDomains(request: Request, env: Env): 
       return jsonOk({ ok: true, domain });
     } catch (error) {
       if (error instanceof CloudflareApiError) {
-        throw new ApiError("bad_request", error.message, 400);
+        throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
       }
       throw error;
     }
@@ -1396,7 +1421,7 @@ export async function handleAdminCloudflareDomains(request: Request, env: Env): 
       return jsonOk({ ok: true });
     } catch (error) {
       if (error instanceof CloudflareApiError) {
-        throw new ApiError("bad_request", error.message, 400);
+        throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
       }
       throw error;
     }
@@ -1443,7 +1468,7 @@ export async function handleAdminSetupCloudflareAttachDomain(
     return jsonOk({ ok: true, pending: toSetupPendingPublic(next) });
   } catch (error) {
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -1478,7 +1503,7 @@ export async function handleAdminSetupCloudflareSsl(request: Request, env: Env):
     return jsonOk({ ok: true, ssl, pending: toSetupPendingPublic(next) });
   } catch (error) {
     if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", error.message, 400);
+      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
     }
     throw error;
   }
@@ -1491,7 +1516,7 @@ function requireSetupBearer(request: Request, env: Env): void {
   if (!bearer || !timingSafeStringEqualSync(bearer, secret)) {
     throw new ApiError(
       "unauthorized",
-      "Authorization: Bearer TOKEN_SECRET is required for this action",
+      "Paste your TOKEN_SECRET as Authorization Bearer (same value as in .dev.vars / Wrangler secrets).",
       401,
     );
   }
@@ -1522,7 +1547,7 @@ async function requireTurnstileResponse(
     remoteip: clientConnectingIp(request),
   });
   if (!result.success) {
-    throw new ApiError("unauthorized", "Turnstile verification failed", 401);
+    throw new ApiError("unauthorized", formatTurnstileOperatorError(result.errorCodes), 401);
   }
 }
 

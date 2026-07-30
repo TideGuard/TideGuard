@@ -13,13 +13,15 @@ Visitor pages never write KV. Admin does, and only on explicit Save / Finish set
 
 Shown when `admin:config` is missing from KV. Until then, `GET /` redirects to `/admin`.
 
-| Step          | You set                                                                                           | Stored when                                     |
-| ------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 1. Account    | `TOKEN_SECRET` + username + admin password (8–128 chars)                                          | Finish setup                                    |
-| 2. Cloudflare | API token + Zone ID + hostname → **Click to verify**; Fix proxy/geo; optional SSL / domain attach | Finish setup (credentials sealed in KV)         |
-| 3. Turnstile  | Create widget → complete challenge → **Click to verify**                                          | Finish setup (sitekey + sealed secret in KV)    |
-| 4. Queue      | Queue name, mode, depth, redirect path, click-to-enter / hold                                     | Finish setup                                    |
-| 5. Branding   | Title, message, colors                                                                            | Finish setup (live preview is client-side only) |
+| Step          | You set                                                                               | Stored when                                     |
+| ------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1. Account    | `TOKEN_SECRET` + username + password (8+, uppercase, digit or symbol; live checklist) | Finish setup                                    |
+| 2. Cloudflare | **2a** verify (+ Fix if needed) → **2b** SSL Set/Skip → **2c** domain Attach/Skip     | Finish setup (credentials sealed in KV)         |
+| 3. Turnstile  | Create widget → complete challenge → **Click to verify**                              | Finish setup (sitekey + sealed secret in KV)    |
+| 4. Queue      | Queue name, mode, depth, redirect path, click-to-enter / hold                         | Finish setup                                    |
+| 5. Branding   | Title, message, colors                                                                | Finish setup (live preview is client-side only) |
+
+Cloudflare step 2 is three sub-steps: proxied DNS verify is required; SSL Full (strict) and custom domain are optional (Skip for now). After finish, browser Back returns to login/dashboard — not the claim wizard.
 
 On finish, TideGuard:
 
@@ -45,7 +47,7 @@ Admins can create invite links from the **Team** panel:
 
 1. **Create invite** → one-time URL (`/admin?invite=<id>.<token>`) shown once
 2. Share the link however you like (chat, password manager, etc.) — TideGuard does not send email
-3. Invitee sets their own username + password within **72 hours**
+3. Invitee sets their own username + password (same strength rules as first admin) within **72 hours**
 4. Unused or revoked invites expire; create a new one if needed
 
 Raw invite tokens are never stored — only a SHA-256 hash in KV with `expirationTtl`. There is no password-reset flow; emergency wipe is still `POST /api/admin/reset` with Bearer `TOKEN_SECRET`.

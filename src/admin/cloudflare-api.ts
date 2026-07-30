@@ -163,11 +163,14 @@ export async function checkHostnameProxy(input: {
 
   if (relevant.length === 0) {
     suggestions.push(
-      `No A/AAAA/CNAME record found for ${hostname}. Add a DNS record and point the hostname at this Worker (custom domain or route).`,
+      `Add an A, AAAA, or CNAME record for ${hostname} in this Cloudflare zone (or fix a typo in the hostname).`,
+    );
+    suggestions.push(
+      "Optional later: Attach custom domain can create the Workers hostname binding when you are ready for production traffic.",
     );
     return {
       ok: false,
-      summary: `No DNS records found for ${hostname}`,
+      summary: `No DNS A/AAAA/CNAME found for ${hostname}`,
       zoneId: input.zoneId,
       hostname,
       records: [],
@@ -179,10 +182,10 @@ export async function checkHostnameProxy(input: {
   const unproxied = relevant.filter((r) => !r.proxied);
   if (unproxied.length > 0) {
     suggestions.push(
-      "Turn on the orange cloud (proxied) for these records so traffic hits Cloudflare. TideGuard can do this with Fix setup.",
+      `Click Fix setup to orange-cloud (proxy) ${unproxied.length} DNS-only record(s) so traffic hits Cloudflare.`,
     );
     suggestions.push(
-      "Allowlist uses CF-Connecting-IP (automatic when proxied). IP Geolocation (CF-IPCountry) is a different header for country codes.",
+      "Proxied DNS is required for CF-Connecting-IP (allowlist). IP Geolocation (CF-IPCountry) is separate and optional.",
     );
     return {
       ok: false,
@@ -197,12 +200,12 @@ export async function checkHostnameProxy(input: {
 
   if (ipGeolocation && !ipGeolocation.on) {
     suggestions.push(
-      "IP Geolocation is off. Optional — enables CF-IPCountry (country), not required for IP allowlist. Fix setup can turn it on.",
+      "IP Geolocation is off (optional). Fix setup can enable CF-IPCountry for country block.",
     );
   }
 
   suggestions.push(
-    "Also confirm this hostname is attached to the TideGuard Worker (Custom domains or Routes).",
+    "Custom domain is optional until go-live — use Attach custom domain when this hostname should hit the TideGuard Worker.",
   );
 
   const geoNote =

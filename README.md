@@ -101,9 +101,8 @@ Deep dive: [docs/architecture.md](docs/architecture.md)
 git clone https://github.com/TideGuard/TideGuard.git
 cd TideGuard
 npm install
-npm run types
-cp .dev.vars.example .dev.vars   # set TOKEN_SECRET
-npm run dev
+npm run setup   # types + .dev.vars TOKEN_SECRET + handoff (optional: starts dev)
+# then open http://localhost:8787/admin
 ```
 
 | URL                          | Purpose                                              |

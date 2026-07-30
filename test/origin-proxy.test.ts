@@ -9,7 +9,7 @@ async function json<T>(response: Response): Promise<T> {
 describe("origin proxy gate", () => {
   it("redirects protected paths to /wait when origin proxy is enabled", async () => {
     await resetAdmin();
-    const session = await setupAdmin("ops", "origin-proxy-pass");
+    const session = await setupAdmin("ops", "Origin-proxy1");
 
     const saved = await exports.default.fetch(
       new Request("https://example.com/api/admin/origin", {

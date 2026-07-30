@@ -60,7 +60,7 @@ export function requireTokenSecret(env: Env): string {
   if (!secret || secret.length < 16) {
     throw new ApiError(
       "invalid_config",
-      "TOKEN_SECRET must be set to a random string of at least 16 characters",
+      "This Worker has no TOKEN_SECRET (or it is too short). Run npm run setup / set .dev.vars for local, or wrangler secret put TOKEN_SECRET for deploy, then restart.",
       500,
     );
   }

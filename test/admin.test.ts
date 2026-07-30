@@ -28,6 +28,12 @@ describe("admin setup wizard and dashboard", () => {
     expect(html).toContain("Protect admin login");
     expect(html).toContain("2. Cloudflare");
     expect(html).toContain("3. Turnstile");
+    expect(html).toContain("setup-cf-sub-1");
+    expect(html).toContain("setup-cf-sub-2");
+    expect(html).toContain("setup-cf-sub-3");
+    expect(html).toContain("Skip for now");
+    expect(html).toContain("setup-pw-checklist");
+    expect(html).toContain("One uppercase letter");
     expect(html).toContain("Check for updates");
     expect(html).toContain("/api/admin/updates");
   });
@@ -67,8 +73,8 @@ describe("admin setup wizard and dashboard", () => {
         },
         body: JSON.stringify({
           username: "ops",
-          password: "correct-horse",
-          confirmPassword: "correct-horse",
+          password: "Correct-horse1",
+          confirmPassword: "Correct-horse1",
           queue: "admin-q",
         }),
       }),
@@ -89,8 +95,8 @@ describe("admin setup wizard and dashboard", () => {
         },
         body: JSON.stringify({
           username: "ops",
-          password: "correct-horse",
-          confirmPassword: "correct-horse",
+          password: "Correct-horse1",
+          confirmPassword: "Correct-horse1",
           queue: "admin-q",
           admissionMode: "lottery",
           branding: {
@@ -140,8 +146,8 @@ describe("admin setup wizard and dashboard", () => {
         },
         body: JSON.stringify({
           username: "ops2",
-          password: "another-password",
-          confirmPassword: "another-password",
+          password: "Another-pass1",
+          confirmPassword: "Another-pass1",
           queue: "admin-q",
         }),
       }),
@@ -163,7 +169,7 @@ describe("admin setup wizard and dashboard", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           username: "ops",
-          password: "wrong-password",
+          password: "Wrong-pass1",
           ...turnstileBody(),
         }),
       }),
@@ -174,7 +180,7 @@ describe("admin setup wizard and dashboard", () => {
       new Request("https://example.com/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "ops", password: "correct-horse" }),
+        body: JSON.stringify({ username: "ops", password: "Correct-horse1" }),
       }),
     );
     expect(loginNoTs.status).toBe(401);
@@ -185,7 +191,7 @@ describe("admin setup wizard and dashboard", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           username: "ops",
-          password: "correct-horse",
+          password: "Correct-horse1",
           ...turnstileBody(),
         }),
       }),
@@ -239,8 +245,8 @@ describe("admin setup wizard and dashboard", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           username: "ops",
-          password: "correct-horse",
-          confirmPassword: "correct-horse",
+          password: "Correct-horse1",
+          confirmPassword: "Correct-horse1",
           queue: "admin-q",
         }),
       }),

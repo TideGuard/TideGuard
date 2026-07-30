@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cloudflare setup **2a/2b/2c** sub-steps (verify+Fix → SSL Set/Skip → domain Attach/Skip) with Verified/Skipped gates
+- Admin password policy (8+, uppercase, digit or symbol, match) with live checklist on Account + invite
+- After setup, browser Back / bfcache never re-opens the claim wizard
+- **`npm run setup`** — interactive local bootstrap (Wrangler types, `.dev.vars` / `TOKEN_SECRET`, handoff to `/admin`; `--yes` / `--dev` flags)
+- Clearer setup-wizard errors — per-failure Cloudflare/Turnstile copy, proxy fix suggestions under verify status
 - **Guided 5-step `/admin` setup** — Account → Cloudflare verify → Turnstile → Queue → Branding (with in-wizard roadmap and per-step guides)
 - **Required Cloudflare API verify** during setup (token + zone); Fix proxied DNS / IP Geolocation; optional Full (strict) SSL and custom-domain attach
 - **Turnstile for admin auth** — wizard provisions a widget via Cloudflare API; login and invite accept require siteverify (plus existing rate limits)

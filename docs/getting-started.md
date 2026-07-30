@@ -14,24 +14,26 @@ Deploy TideGuard on Cloudflare, or run it locally with Wrangler.
 git clone https://github.com/TideGuard/TideGuard.git
 cd TideGuard
 npm install
-npm run types
+npm run setup
 ```
 
-## 2. Local secrets
+`npm run setup` regenerates Worker Env types (`wrangler types`), creates `.dev.vars` with a generated `TOKEN_SECRET` if needed, prints the admin handoff checklist, and can start `npm run dev`. Use `npm run setup -- --yes` in scripts/CI (no prompts; does not start the long-running dev server unless you also pass `--dev`).
+
+### Or do it by hand
 
 ```bash
+npm run types
 cp .dev.vars.example .dev.vars
 openssl rand -hex 32
 # paste the value into .dev.vars as TOKEN_SECRET=...
+npm run dev
 ```
 
 `.dev.vars` is gitignored. Never commit real secrets.
 
-## 3. Run locally
+## 2. Run locally
 
-```bash
-npm run dev
-```
+After setup (or `npm run dev`):
 
 | URL                                      | What it is                                          |
 | ---------------------------------------- | --------------------------------------------------- |
@@ -45,18 +47,18 @@ npm run dev
 ### First-run admin
 
 1. Open `/` or `/admin` (unfinished setups redirect from `/`).
-2. Paste your `TOKEN_SECRET`, choose a **username** and password.
-3. **Cloudflare:** create an API token (link in the wizard), paste token + Zone ID + hostname → **Click to verify**. Use Fix setup / Set Full (strict) / Attach custom domain as prompted.
+2. Paste your `TOKEN_SECRET` (from `.dev.vars` / setup output), choose a **username** and a strong password (8+, uppercase, digit or symbol — live checklist).
+3. **Cloudflare:** create an API token (link in the wizard), then **2a** verify (+ Fix if needed) → **2b** SSL Set/Skip → **2c** domain Attach/Skip.
 4. **Turnstile:** create the widget, complete the challenge → **Click to verify**.
 5. Choose queue / mode, then branding → Finish setup.
-6. You are signed in with an HttpOnly session cookie. Later logins require Turnstile.
+6. You are signed in with an HttpOnly session cookie. Later logins require Turnstile (browser Back will not re-open claim).
 7. Visit `/demo` (or `/wait`) as a visitor to exercise the line.
 
 Without `Authorization: Bearer <TOKEN_SECRET>`, setup is rejected so a public Workers URL cannot be claimed by a stranger. Localhost is included on the Turnstile widget domains for `npm run dev`.
 
 Details: [admin.md](admin.md). Before production traffic: [launch-checklist.md](launch-checklist.md).
 
-## 4. Deploy to Cloudflare
+## 3. Deploy to Cloudflare
 
 ### Option A: Deploy button
 
@@ -86,7 +88,7 @@ After deploy:
 
 Later releases: do **not** click Deploy to Cloudflare again. Follow [upgrading.md](upgrading.md) (merge upstream or `git pull`, then redeploy / push to Workers Builds).
 
-## 5. Verify
+## 4. Verify
 
 ```bash
 npm run ci
