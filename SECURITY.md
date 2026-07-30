@@ -33,7 +33,7 @@ Include:
 - For production origins: Full (strict) SSL + Authenticated Origin Pulls so the upstream cannot be hit bypassing TideGuard ([protecting-origin.md](docs/protecting-origin.md)) — set Full (strict) from the admin Cloudflare panel when the origin cert is ready
 - Consider Cloudflare Access / Zero Trust in front of `/admin` for high-stakes deployments (in addition to Turnstile)
 - Rotate `TOKEN_SECRET` if it may have leaked (invalidates outstanding visitor tokens, tickets, and admin sessions)
-- Keep waiting-room poll intervals at the default 15s (or higher) to limit Durable Object request volume
+- Prefer adaptive waiting-room polling (default). Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended — they raise Durable Object request volume
 - Do not use KV as the source of truth for queue membership or ordering
 - Use public origins only; lock the origin so it is not reachable without Cloudflare / TideGuard
 - Before go-live, walk through [docs/launch-checklist.md](docs/launch-checklist.md)

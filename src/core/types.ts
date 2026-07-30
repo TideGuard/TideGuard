@@ -61,7 +61,12 @@ export interface QueueMetrics {
   /** Remaining concurrent capacity (capacity - admitted). */
   openSlots: number;
   capacity: number;
+  /** Current admit setpoint (runtime override or env default). */
   admitPerSecond: number;
+  /** Runtime override when set; null falls back to Worker env. */
+  admitPerSecondOverride: number | null;
+  /** Env / deploy default admit rate (before override). */
+  admitPerSecondDefault: number;
   /** ETA for a new joiner at the back of the line (rate-based). */
   estimatedWaitSeconds: number;
   /** Mean elapsed wait among people currently waiting (0 if empty). */
@@ -74,6 +79,12 @@ export interface QueueMetrics {
   opensAt: number | null;
   /** Effective admit rate after health multiplier. */
   effectiveAdmitPerSecond: number;
+  /** Cumulative joins since room creation (approx; for inflow cards). */
+  totalInflow: number;
+  /** Joins in the current (open) traffic bucket. */
+  inflowCurrent: number;
+  /** Admits in the current (open) traffic bucket. */
+  outflowCurrent: number;
   health: {
     enabled: boolean;
     level: "ok" | "slow" | "pause";
@@ -104,6 +115,11 @@ export interface JoinResult {
   entered?: boolean;
   /** Seconds left to confirm entry (click-to-enter mode). */
   holdSecondsRemaining?: number;
+  /**
+   * Adaptive status poll hint while waiting (ms). Always present for waiting
+   * visitors; clients may ignore it when using fixed-interval overrides.
+   */
+  nextPollAfterMs?: number | null;
   accessToken?: string;
 }
 
@@ -120,6 +136,7 @@ export interface StatusResult {
   lotteryOdds?: number;
   entered?: boolean;
   holdSecondsRemaining?: number;
+  nextPollAfterMs?: number | null;
   accessToken?: string;
 }
 

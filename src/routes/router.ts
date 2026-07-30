@@ -21,6 +21,9 @@ import {
   handleAdminPage,
   handleAdminPass,
   handleAdminPause,
+  handleAdminRate,
+  handleAdminClearRate,
+  handleAdminTraffic,
   handleAdminReset,
   handleAdminRevokeInvite,
   handleAdminSaveBranding,
@@ -60,6 +63,7 @@ import {
   handleStatus,
 } from "./queue";
 import { handleNotificationSound } from "./sounds";
+import { serveAdminAssets } from "./admin-assets";
 
 /**
  * Paths that never need origin proxy config (skip KV / cache lookup).
@@ -157,6 +161,9 @@ function isStaticTideGuardPath(pathname: string): boolean {
   if (STATIC_TIDEGUARD.has(pathname)) {
     return true;
   }
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return true;
+  }
   return pathname === "/api/admin" || pathname.startsWith("/api/admin/");
 }
 
@@ -185,8 +192,20 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return handleCostEstimateApi(request);
   }
 
-  if (request.method === "GET" && url.pathname === "/admin") {
+  if (request.method === "GET" && (url.pathname === "/admin" || url.pathname === "/admin/")) {
+    const assets = await serveAdminAssets(request, env);
+    if (assets) {
+      return assets;
+    }
     return await handleAdminPage(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname.startsWith("/admin/")) {
+    const assets = await serveAdminAssets(request, env);
+    if (assets) {
+      return assets;
+    }
+    return new Response("Admin assets not built. Run npm run build:admin.", { status: 503 });
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/bootstrap") {
@@ -290,6 +309,18 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "POST" && url.pathname === "/api/admin/pause") {
     return await handleAdminPause(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/rate") {
+    return await handleAdminRate(request, env);
+  }
+
+  if (request.method === "DELETE" && url.pathname === "/api/admin/rate") {
+    return await handleAdminClearRate(request, env);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/traffic") {
+    return await handleAdminTraffic(request, env);
   }
 
   if (request.method === "PUT" && url.pathname === "/api/admin/schedule") {

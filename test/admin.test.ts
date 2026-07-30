@@ -18,24 +18,9 @@ describe("admin setup wizard and dashboard", () => {
     const response = await exports.default.fetch(new Request("https://example.com/admin"));
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain("TideGuard");
-    expect(html).toContain("Setup");
-    expect(html).toContain("/api/admin/setup");
-    expect(html).toContain("site-footer");
-    expect(html).toContain("wizard-intro");
-    expect(html).toContain("Claim the Worker");
-    expect(html).toContain("Connect Cloudflare");
-    expect(html).toContain("Protect admin login");
-    expect(html).toContain("2. Cloudflare");
-    expect(html).toContain("3. Turnstile");
-    expect(html).toContain("setup-cf-sub-1");
-    expect(html).toContain("setup-cf-sub-2");
-    expect(html).toContain("setup-cf-sub-3");
-    expect(html).toContain("Skip for now");
-    expect(html).toContain("setup-pw-checklist");
-    expect(html).toContain("One uppercase letter");
-    expect(html).toContain("Check for updates");
-    expect(html).toContain("/api/admin/updates");
+    expect(html).toContain("TideGuard Admin");
+    expect(html).toContain('id="root"');
+    expect(html).toContain("/admin/assets/");
   });
 
   it("exposes version on bootstrap and requires session for update check", async () => {

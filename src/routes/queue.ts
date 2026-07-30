@@ -42,6 +42,7 @@ type VisitorView = {
   entered: boolean;
   holdSecondsRemaining: number | null;
   showWaitingCount?: boolean;
+  nextPollAfterMs?: number | null;
 };
 
 function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean }) {
@@ -56,6 +57,7 @@ function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean
     ...(visitor.holdSecondsRemaining !== null
       ? { holdSecondsRemaining: visitor.holdSecondsRemaining }
       : {}),
+    ...(visitor.nextPollAfterMs != null ? { nextPollAfterMs: visitor.nextPollAfterMs } : {}),
   };
   if (!includeDepth) {
     return base;

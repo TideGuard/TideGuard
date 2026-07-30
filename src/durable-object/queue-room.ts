@@ -15,11 +15,20 @@ import {
 import {
   QUEUE_ALARM_INTERVAL_MS,
   admissionsForTick,
+  nextPollAfterMs,
   openSlots,
+  queuePollProgress,
   waitingPosition,
 } from "../queue/engine";
+import {
+  TRAFFIC_BUCKET_MS,
+  TRAFFIC_RETENTION_MS,
+  alignTrafficBucket,
+  parseAdmitPerSecond,
+} from "../queue/traffic";
 import { buildMetrics } from "../queue/types";
 import type {
+  QueueAdmitRateResponse,
   QueueEnterResponse,
   QueueForceAdmitRequest,
   QueueForceAdmitResponse,
@@ -34,6 +43,7 @@ import type {
   QueueSetModeRequest,
   QueueSetModeResponse,
   QueueStatusResponse,
+  QueueTrafficResponse,
   QueueVisitorRequest,
 } from "../queue/types";
 
@@ -109,6 +119,7 @@ export class QueueRoom extends DurableObject<Env> {
         admittedAt: now,
         entered: !this.effectiveConfig(request.config).requireClickToEnter,
       });
+      this.recordTraffic(now, request.config, { joins: 1, admits: 1 });
       await this.ensureAlarm();
       return this.toView(this.getVisitor(visitorId)!, request.config, now);
     }
@@ -121,6 +132,7 @@ export class QueueRoom extends DurableObject<Env> {
       admittedAt: null,
       entered: false,
     });
+    this.recordTraffic(now, request.config, { joins: 1, admits: 0 });
     await this.ensureAlarm();
     return this.toView(this.getVisitor(visitorId)!, request.config, now);
   }
@@ -134,6 +146,19 @@ export class QueueRoom extends DurableObject<Env> {
     const visitor = this.getVisitor(request.visitorId);
     if (!visitor || visitor.status === "left" || visitor.status === "expired") {
       return { ok: false, code: "not_found" };
+    }
+
+    // Status polls renew liveness so adaptive (status-only) clients stay alive.
+    if (visitor.status === "waiting") {
+      this.ctx.storage.sql.exec(
+        `UPDATE visitors SET last_heartbeat_at = ? WHERE id = ? AND status = 'waiting'`,
+        now,
+        request.visitorId,
+      );
+      return {
+        ok: true,
+        visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
+      };
     }
 
     return { ok: true, visitor: this.toView(visitor, request.config, now) };
@@ -233,10 +258,12 @@ export class QueueRoom extends DurableObject<Env> {
     const entered = this.countEntered();
     const waitStats = this.waitingWaitStats(now);
     const holding = Math.max(0, admitted - entered);
+    const effective = this.effectiveConfig(request.config);
+    const open = this.currentTrafficOpen(now);
 
     return buildMetrics({
       queue: this.queueName(),
-      config: request.config,
+      config: effective,
       waiting,
       admitted,
       entered,
@@ -248,6 +275,11 @@ export class QueueRoom extends DurableObject<Env> {
       admissionMode: this.admissionMode(request.config),
       opensAt: this.getOpensAt(),
       effectiveAdmitPerSecond: this.effectiveAdmitPerSecond(request.config, now),
+      admitPerSecondOverride: this.getAdmitPerSecondOverride(),
+      admitPerSecondDefault: request.config.admitPerSecond,
+      totalInflow: this.totalInflow(),
+      inflowCurrent: open.joins,
+      outflowCurrent: open.admits,
       health: this.healthSnapshot(now),
     });
   }
@@ -389,6 +421,90 @@ export class QueueRoom extends DurableObject<Env> {
     return { config, state: this.readHealthState() };
   }
 
+  async setAdmitRate(request: {
+    queue: string;
+    config: QueueConfig;
+    admitPerSecond: number;
+  }): Promise<QueueAdmitRateResponse> {
+    this.ensureQueueName(request.queue);
+    this.rememberConfig(request.config);
+    const parsed = parseAdmitPerSecond(request.admitPerSecond);
+    if (parsed === null) {
+      throw new Error("admitPerSecond out of range");
+    }
+    this.setMeta("admit_per_second_override", String(parsed));
+    await this.ensureAlarm();
+    return this.admitRateSnapshot(request.config);
+  }
+
+  async clearAdmitRate(request: {
+    queue: string;
+    config: QueueConfig;
+  }): Promise<QueueAdmitRateResponse> {
+    this.ensureQueueName(request.queue);
+    this.rememberConfig(request.config);
+    this.setMeta("admit_per_second_override", "");
+    await this.ensureAlarm();
+    return this.admitRateSnapshot(request.config);
+  }
+
+  async getAdmitRate(request: {
+    queue: string;
+    config: QueueConfig;
+  }): Promise<QueueAdmitRateResponse> {
+    this.ensureQueueName(request.queue);
+    this.rememberConfig(request.config);
+    return this.admitRateSnapshot(request.config);
+  }
+
+  async getTraffic(request: {
+    queue: string;
+    config: QueueConfig;
+    rangeMs?: number;
+    now?: number;
+  }): Promise<QueueTrafficResponse> {
+    const now = request.now ?? Date.now();
+    this.ensureQueueName(request.queue);
+    this.rememberConfig(request.config);
+    this.flushTrafficBucket(now, request.config);
+
+    const rangeMs = Math.min(
+      Math.max(request.rangeMs ?? TRAFFIC_RETENTION_MS, TRAFFIC_BUCKET_MS),
+      TRAFFIC_RETENTION_MS,
+    );
+    const cutoff = now - rangeMs;
+    const rows = this.ctx.storage.sql
+      .exec<{
+        t: number;
+        joins: number;
+        admits: number;
+        max_outflow: number;
+        waiting: number;
+        entered: number;
+      }>(
+        `SELECT t, joins, admits, max_outflow, waiting, entered
+         FROM traffic_buckets
+         WHERE t >= ?
+         ORDER BY t ASC`,
+        cutoff,
+      )
+      .toArray();
+
+    return {
+      queue: this.queueName(),
+      bucketMs: TRAFFIC_BUCKET_MS,
+      buckets: rows.map((r) => ({
+        t: r.t,
+        joins: r.joins,
+        admits: r.admits,
+        maxOutflow: r.max_outflow,
+        waiting: r.waiting,
+        entered: r.entered,
+      })),
+      totalInflow: this.totalInflow(),
+    };
+  }
+
   async alarm(): Promise<void> {
     const config = this.alarmConfig();
     if (!config) {
@@ -399,6 +515,7 @@ export class QueueRoom extends DurableObject<Env> {
     this.sweep(config, now, true);
     await this.maybeProbeHealth(now);
     this.admitFromBudget(config, now);
+    this.flushTrafficBucket(now, config);
 
     await this.ensureAlarm();
   }
@@ -441,6 +558,21 @@ export class QueueRoom extends DurableObject<Env> {
     if (version < 3) {
       this.reconcileDepth();
       this.setMeta("schema_version", "3");
+      version = 3;
+    }
+
+    if (version < 4) {
+      this.ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS traffic_buckets (
+          t INTEGER PRIMARY KEY,
+          joins INTEGER NOT NULL DEFAULT 0,
+          admits INTEGER NOT NULL DEFAULT 0,
+          max_outflow REAL NOT NULL DEFAULT 0,
+          waiting INTEGER NOT NULL DEFAULT 0,
+          entered INTEGER NOT NULL DEFAULT 0
+        )
+      `);
+      this.setMeta("schema_version", "4");
     }
   }
 
@@ -567,6 +699,7 @@ export class QueueRoom extends DurableObject<Env> {
     if (admittedIds.length > 0) {
       this.bumpDepth(-admittedIds.length, admittedIds.length);
       this.aheadCache.clear();
+      this.recordTraffic(now, config, { joins: 0, admits: admittedIds.length });
     }
     return admittedIds;
   }
@@ -675,12 +808,117 @@ export class QueueRoom extends DurableObject<Env> {
     const click = this.getMeta("require_click");
     const holdRaw = this.getMeta("admit_hold_seconds");
     const hold = holdRaw !== null ? Number(holdRaw) : config.admitHoldSeconds;
+    const rateOverride = this.getAdmitPerSecondOverride();
     return {
       ...config,
+      admitPerSecond: rateOverride ?? config.admitPerSecond,
       requireClickToEnter: click === null ? config.requireClickToEnter : click === "1",
       admitHoldSeconds:
         Number.isFinite(hold) && hold >= 15 && hold <= 900 ? hold : config.admitHoldSeconds,
     };
+  }
+
+  private getAdmitPerSecondOverride(): number | null {
+    const raw = this.getMeta("admit_per_second_override");
+    if (!raw) {
+      return null;
+    }
+    return parseAdmitPerSecond(Number(raw));
+  }
+
+  private admitRateSnapshot(config: QueueConfig): QueueAdmitRateResponse {
+    const override = this.getAdmitPerSecondOverride();
+    return {
+      admitPerSecond: override ?? config.admitPerSecond,
+      admitPerSecondOverride: override,
+      admitPerSecondDefault: config.admitPerSecond,
+    };
+  }
+
+  private totalInflow(): number {
+    const raw = Number(this.getMeta("total_inflow") ?? "0");
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+  }
+
+  private currentTrafficOpen(now: number): { joins: number; admits: number } {
+    const bucket = alignTrafficBucket(now);
+    const openT = Number(this.getMeta("traffic_open_t") ?? "0");
+    if (openT !== bucket) {
+      return { joins: 0, admits: 0 };
+    }
+    return {
+      joins: Number(this.getMeta("traffic_open_joins") ?? "0") || 0,
+      admits: Number(this.getMeta("traffic_open_admits") ?? "0") || 0,
+    };
+  }
+
+  private recordTraffic(
+    now: number,
+    config: QueueConfig,
+    delta: { joins: number; admits: number },
+  ): void {
+    this.flushTrafficBucket(now, config);
+    const bucket = alignTrafficBucket(now);
+    const openT = Number(this.getMeta("traffic_open_t") ?? "0");
+    let joins = Number(this.getMeta("traffic_open_joins") ?? "0") || 0;
+    let admits = Number(this.getMeta("traffic_open_admits") ?? "0") || 0;
+    if (openT !== bucket) {
+      joins = 0;
+      admits = 0;
+      this.setMeta("traffic_open_t", String(bucket));
+    }
+    joins += delta.joins;
+    admits += delta.admits;
+    this.setMeta("traffic_open_joins", String(joins));
+    this.setMeta("traffic_open_admits", String(admits));
+    if (delta.joins > 0) {
+      this.setMeta("total_inflow", String(this.totalInflow() + delta.joins));
+    }
+  }
+
+  private flushTrafficBucket(now: number, config: QueueConfig): void {
+    const openT = Number(this.getMeta("traffic_open_t") ?? "0");
+    if (!Number.isFinite(openT) || openT <= 0) {
+      this.setMeta("traffic_open_t", String(alignTrafficBucket(now)));
+      this.setMeta("traffic_open_joins", "0");
+      this.setMeta("traffic_open_admits", "0");
+      return;
+    }
+
+    const current = alignTrafficBucket(now);
+    if (openT >= current) {
+      return;
+    }
+
+    const joins = Number(this.getMeta("traffic_open_joins") ?? "0") || 0;
+    const admits = Number(this.getMeta("traffic_open_admits") ?? "0") || 0;
+    const maxOutflow = this.effectiveConfig(config).admitPerSecond;
+    const waiting = this.countByStatus("waiting");
+    const entered = this.countEntered();
+
+    this.ctx.storage.sql.exec(
+      `INSERT INTO traffic_buckets (t, joins, admits, max_outflow, waiting, entered)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(t) DO UPDATE SET
+         joins = joins + excluded.joins,
+         admits = admits + excluded.admits,
+         max_outflow = excluded.max_outflow,
+         waiting = excluded.waiting,
+         entered = excluded.entered`,
+      openT,
+      joins,
+      admits,
+      maxOutflow,
+      waiting,
+      entered,
+    );
+
+    const cutoff = now - TRAFFIC_RETENTION_MS;
+    this.ctx.storage.sql.exec(`DELETE FROM traffic_buckets WHERE t < ?`, cutoff);
+
+    this.setMeta("traffic_open_t", String(current));
+    this.setMeta("traffic_open_joins", "0");
+    this.setMeta("traffic_open_admits", "0");
   }
 
   private insertVisitor(input: {
@@ -859,6 +1097,19 @@ export class QueueRoom extends DurableObject<Env> {
     }
 
     const showDepth = this.showWaitingCount();
+    const effective = this.effectiveConfig(config);
+    let pollAfterMs: number | null = null;
+    if (status === "waiting") {
+      const progress = queuePollProgress({
+        admissionMode: mode,
+        position,
+        waiting,
+        estimatedWaitSeconds,
+        queueTimeoutSeconds: effective.queueTimeoutSeconds,
+      });
+      pollAfterMs = nextPollAfterMs(progress, effective.heartbeatTimeoutSeconds);
+    }
+
     return {
       id: visitor.id,
       status,
@@ -875,6 +1126,7 @@ export class QueueRoom extends DurableObject<Env> {
       entered,
       holdSecondsRemaining,
       showWaitingCount: showDepth,
+      nextPollAfterMs: pollAfterMs,
     };
   }
 
@@ -935,7 +1187,7 @@ export class QueueRoom extends DurableObject<Env> {
       return 0;
     }
     const mult = healthRateMultiplier(this.readHealthConfig(), this.readHealthState(), now);
-    return config.admitPerSecond * mult;
+    return this.effectiveConfig(config).admitPerSecond * mult;
   }
 
   private readHealthConfig(): OriginHealthConfig {

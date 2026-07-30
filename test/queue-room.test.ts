@@ -157,7 +157,47 @@ describe("QueueRoom FIFO behavior", () => {
     if (beat.ok) {
       expect(beat.visitor.status).toBe("waiting");
       expect(beat.visitor.lastHeartbeatAt).toBe(t0 + 1_000);
+      expect(beat.visitor.nextPollAfterMs).toBeGreaterThanOrEqual(5_000);
     }
+  });
+
+  it("renews last_heartbeat_at on waiting status polls", async () => {
+    const stub = room("status-heartbeat");
+    const cfg = config({ maxConcurrentUsers: 1, heartbeatTimeoutSeconds: 30 });
+    const t0 = 8_000_000;
+
+    await stub.join({
+      queue: "status-heartbeat",
+      config: cfg,
+      visitorId: "seat",
+      now: t0,
+    });
+    await stub.join({
+      queue: "status-heartbeat",
+      config: cfg,
+      visitorId: "waiter",
+      now: t0,
+    });
+
+    const refreshed = await stub.status({
+      queue: "status-heartbeat",
+      config: cfg,
+      visitorId: "waiter",
+      now: t0 + 25_000,
+    });
+    expect(refreshed.ok).toBe(true);
+    if (refreshed.ok) {
+      expect(refreshed.visitor.lastHeartbeatAt).toBe(t0 + 25_000);
+      expect(refreshed.visitor.nextPollAfterMs).toBeGreaterThanOrEqual(5_000);
+    }
+
+    const stillWaiting = await stub.status({
+      queue: "status-heartbeat",
+      config: cfg,
+      visitorId: "waiter",
+      now: t0 + 50_000,
+    });
+    expect(stillWaiting.ok).toBe(true);
   });
 
   it("rate-limits admission through the alarm while paused slots stay closed", async () => {

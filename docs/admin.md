@@ -62,9 +62,21 @@ Toggles that change visitor-visible or security-sensitive behavior (pause, mode,
 
 ## Control room
 
-Dark teal single-page UI (Source Sans). Includes live queue, analytics, traffic, origin proxy, allowlist, geo block, **Cloudflare control plane** (IP Geolocation switch, SSL Full strict, custom domains), team, activity, and updates.
+React SPA (Mantine + Chart.js) served from Workers Static Assets under `/admin/`. Dark teal theme (Source Sans). Includes live queue, **adaptive traffic** (inflow vs max outflow chart + live rate control), branding, schedule/pause/health, origin proxy, allowlist, geo block, Cloudflare controls, team, activity, and updates.
 
-Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). Charts: [analytics.md](analytics.md). Origin lock-down including Authenticated Origin Pulls: [protecting-origin.md](protecting-origin.md).
+Build with `npm run build:admin` (also runs before `npm run dev` / `npm run deploy`).
+
+### Adaptive max outflow
+
+Operators can change admit rate without redeploying:
+
+1. Set the value in the traffic panel and click **Update** (`PUT /api/admin/rate`)
+2. Pause / resume with the play-pause control (`POST /api/admin/pause`)
+3. Clear the override with `DELETE /api/admin/rate` to fall back to `ADMIT_PER_SECOND`
+
+The chart shows joins per interval (inflow) vs the setpoint (max outflow). Series come from the Durable Object (`GET /api/admin/traffic`, ~15s buckets, ~2h retention).
+
+Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). Traffic charts: [analytics.md](analytics.md). Origin lock-down including Authenticated Origin Pulls: [protecting-origin.md](protecting-origin.md).
 
 ## API (admin)
 
@@ -80,7 +92,11 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `POST`               | `/api/admin/setup`                          | Bearer `TOKEN_SECRET` once; requires pending CF+Turnstile |
 | `POST`               | `/api/admin/login`                          | Public (rate-limited); username + password + Turnstile    |
 | `POST`               | `/api/admin/logout`                         | Session                                                   |
-| `GET`                | `/api/admin/state`                          | Session (includes `me`, `team`, `turnstile`)              |
+| `GET`                | `/api/admin/state`                          | Session (includes `me`, `team`, `turnstile`, traffic)     |
+| `GET`                | `/api/admin/metrics`                        | Session                                                   |
+| `GET`                | `/api/admin/traffic`                        | Session (inflow/outflow time series)                      |
+| `PUT`                | `/api/admin/rate`                           | Session (set max outflow override)                        |
+| `DELETE`             | `/api/admin/rate`                           | Session (clear override → env default)                    |
 | `PUT`                | `/api/admin/cloudflare/ip-geolocation`      | Session                                                   |
 | `PUT`                | `/api/admin/cloudflare/ssl`                 | Session (set Full strict)                                 |
 | `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`             | Session (list / attach / detach)                          |

@@ -10,6 +10,7 @@ export default tseslint.config(
       ".wrangler/**",
       "worker-configuration.d.ts",
       "coverage/**",
+      "admin/vite.config.ts",
     ],
   },
   js.configs.recommended,
@@ -20,6 +21,9 @@ export default tseslint.config(
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
     },
     rules: {
       "@typescript-eslint/consistent-type-imports": [
@@ -34,11 +38,14 @@ export default tseslint.config(
     },
   },
   {
-    files: ["scripts/**/*.{js,mjs,cjs}"],
+    files: ["scripts/**/*.{js,mjs,cjs}", "admin/**/*.{cjs,js}"],
     languageOptions: {
       globals: {
         console: "readonly",
         process: "readonly",
+        module: "readonly",
+        require: "readonly",
+        __dirname: "readonly",
       },
     },
     rules: {

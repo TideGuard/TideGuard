@@ -1,6 +1,6 @@
 import { parseAdmissionMode } from "../core/config";
 import { ApiError, jsonOk } from "../core/errors";
-import { DEFAULT_BRANDING, sanitizeRedirectUrl, type WaitingRoomBranding } from "../core/branding";
+import { sanitizeRedirectUrl, type WaitingRoomBranding } from "../core/branding";
 import type { AdmissionMode } from "../core/types";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { assertAdminPassword } from "../auth/password-policy";
@@ -107,23 +107,17 @@ import { clientConnectingIp, hasConnectingIpHeader } from "../auth/client-ip";
 import { clientCountryCode, isCountryBlocked } from "../auth/geo-country";
 import { normalizeOriginUrl, parsePathPrefixes } from "../core/origin";
 import { checkForUpdates, UPDATE_CHECK_CACHE_KEY } from "../admin/update-check";
-import { renderAdminApp } from "../html/admin";
 import { configFromEnv, getQueueRoom } from "../queue/client";
+import { MAX_ADMIT_PER_SECOND, MIN_ADMIT_PER_SECOND, parseAdmitPerSecond } from "../queue/traffic";
 import { VERSION } from "../version";
 import { parseQueueName, readJsonBody } from "./validation";
 
-export async function handleAdminPage(_request: Request, env: Env): Promise<Response> {
-  const setupComplete = await isAdminSetupComplete(env);
-  const html = renderAdminApp({
-    setupComplete,
-    defaultQueue: env.DEFAULT_QUEUE || "default",
-    defaultBranding: DEFAULT_BRANDING,
-    version: VERSION,
-  });
+export async function handleAdminPage(_request: Request, _env: Env): Promise<Response> {
   return withSecurityHeaders(
-    new Response(html, {
+    new Response("Admin UI assets are missing. Run `npm run build:admin` then restart wrangler.", {
+      status: 503,
       headers: {
-        "content-type": "text/html; charset=utf-8",
+        "content-type": "text/plain; charset=utf-8",
         "cache-control": "no-store",
       },
     }),
@@ -359,6 +353,12 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
       paused: metrics.paused,
       health: metrics.health,
       effectiveAdmitPerSecond: metrics.effectiveAdmitPerSecond,
+      admitPerSecond: metrics.admitPerSecond,
+      admitPerSecondOverride: metrics.admitPerSecondOverride,
+      admitPerSecondDefault: metrics.admitPerSecondDefault,
+      totalInflow: metrics.totalInflow,
+      inflowCurrent: metrics.inflowCurrent,
+      outflowCurrent: metrics.outflowCurrent,
       healthConfig: health.config,
     },
     version: VERSION,
@@ -932,6 +932,89 @@ export async function handleAdminPause(request: Request, env: Env): Promise<Resp
     meta: { queue },
   });
   return jsonOk(result);
+}
+
+export async function handleAdminRate(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  const admitPerSecond = parseAdmitPerSecond(body.admitPerSecond);
+  if (admitPerSecond === null) {
+    throw new ApiError(
+      "bad_request",
+      `admitPerSecond must be between ${MIN_ADMIT_PER_SECOND} and ${MAX_ADMIT_PER_SECOND}`,
+      400,
+    );
+  }
+
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+  const result = await room.setAdmitRate({ queue, config, admitPerSecond });
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "rate.set",
+    summary: `Set max outflow to ${admitPerSecond}/s`,
+    meta: { queue, admitPerSecond },
+  });
+  return jsonOk(result);
+}
+
+export async function handleAdminClearRate(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const url = new URL(request.url);
+  const body =
+    request.method === "DELETE"
+      ? ((await readJsonBody(request).catch(() => ({}))) as Record<string, unknown>)
+      : {};
+  const queue = parseQueueName(body.queue ?? url.searchParams.get("queue"), admin.defaultQueue);
+
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+  const result = await room.clearAdmitRate({ queue, config });
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "rate.clear",
+    summary: "Cleared max outflow override (env default)",
+    meta: { queue },
+  });
+  return jsonOk(result);
+}
+
+export async function handleAdminTraffic(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin setup has not been completed", 404);
+  }
+
+  const url = new URL(request.url);
+  const queue = parseQueueName(url.searchParams.get("queue"), admin.defaultQueue);
+  const rangeRaw = url.searchParams.get("rangeMs");
+  const rangeMs = rangeRaw ? Number(rangeRaw) : undefined;
+  if (rangeMs !== undefined && (!Number.isFinite(rangeMs) || rangeMs < 1)) {
+    throw new ApiError("bad_request", "rangeMs must be a positive number", 400);
+  }
+
+  const config = configFromEnv(env);
+  const room = getQueueRoom(env, queue);
+  const traffic = await room.getTraffic({
+    queue,
+    config,
+    ...(rangeMs !== undefined ? { rangeMs } : {}),
+  });
+  return jsonOk({ ok: true, ...traffic, refreshedAt: Date.now() });
 }
 
 export async function handleAdminSchedule(request: Request, env: Env): Promise<Response> {

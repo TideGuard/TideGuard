@@ -31,7 +31,7 @@ Commercial waiting rooms work. They are also expensive, opaque, and hard to stud
 | **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.                   |
 | **HMAC admission tokens**      | Time-limited access without a session database.                            |
 | **Waiting room (`/wait`)**     | Branded hold page with heartbeats, optional depth, redirect after admit.   |
-| **Admin control room**         | Named admins, guided 5-step setup, branding preview, live queue metrics.   |
+| **Admin control room**         | React (Mantine) SPA: branding, live metrics, adaptive max outflow.         |
 | **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.          |
 | **Tested Worker logic**        | ≈80% line coverage (`npm run test:coverage`); CI runs format, lint, types. |
 
@@ -49,7 +49,7 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 | **Turnstile on admin auth** | Setup provisions a widget; login and invites require siteverify (not rate limits alone).      |
 | **Analytics**               | Control-room charts for queue depth, wait, and geo hits.                                      |
 | **Cost calculator**         | Ballpark Cloudflare spend before the launch.                                                  |
-| **Updates check**           | Compare running version to GitHub Releases from admin.                                        |
+| **Adaptive max outflow**    | Live admit-rate control + inflow/outflow chart (no redeploy).                                 |
 | **Team invites**            | 72-hour invite links for additional admins (no email).                                        |
 | **Activity audit log**      | Who turned what on or off in the control room.                                                |
 
@@ -129,7 +129,7 @@ Defaults live in `wrangler.jsonc` under `vars`:
 | `MAX_CONCURRENT_USERS`      | `20`         | Capacity past the waiting room |
 | `ADMIT_PER_SECOND`          | `2`          | Steady admission rate          |
 | `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime       |
-| `HEARTBEAT_TIMEOUT_SECONDS` | `60`         | Drop silent waiting visitors   |
+| `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors   |
 | `QUEUE_TIMEOUT_SECONDS`     | `1800`       | Max time in queue              |
 | `DEFAULT_QUEUE`             | `default`    | Queue when none is specified   |
 | `ADMISSION_MODE`            | `queue`      | `queue` (FIFO) or `lottery`    |
@@ -137,6 +137,13 @@ Defaults live in `wrangler.jsonc` under `vars`:
 | `ORIGIN_PROTECT_ALL`        | `true`       | Gate all non-TideGuard paths   |
 | `ORIGIN_PATH_PREFIXES`      | _(empty)_    | Prefixes if protect-all is off |
 | `ENVIRONMENT`               | `production` | Reported by `/health`          |
+
+Advanced (not recommended — disables adaptive waiting-room polling):
+
+| Variable                             | Meaning                                     |
+| ------------------------------------ | ------------------------------------------- |
+| `WAITING_ROOM_POLL_INTERVAL_MS`      | Fixed status poll interval                  |
+| `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` | Fixed heartbeat interval (with fixed polls) |
 
 | Secret         | Purpose                                                         |
 | -------------- | --------------------------------------------------------------- |
@@ -152,12 +159,13 @@ src/
   auth/             Admission tokens, admin password + session
   admin/            KV helpers for branding, users, invites, audit
   proxy/            Upstream origin forwarding
-  queue/            Pure queue engine + in-memory load simulator
+  queue/            Pure queue engine + traffic helpers + simulator
   durable-object/   QueueRoom (SQLite + alarms)
   health/           Origin probe + graduated throttle
   routes/           HTTP adapters
-  html/             Waiting room, admin, cost calculator
+  html/             Waiting room, cost calculator, geo block
   demo/             Protected demo page
+admin/              React admin SPA (Vite + Mantine → dist/admin)
 docs/               Guides (start with docs/README.md)
 test/               Vitest + Workers pool tests
 ```
@@ -167,7 +175,7 @@ test/               Vitest + Workers pool tests
 - [x] Durable Object waiting room (Queue + Lottery)
 - [x] REST API + HMAC admission tokens
 - [x] Waiting room, demo, embed mode, cost calculator
-- [x] Admin wizard with live branding preview
+- [x] Admin React control room (Mantine + Chart.js) with adaptive max outflow
 - [x] Guided setup: Cloudflare verify + Turnstile for admin login
 - [x] In-admin Cloudflare controls (proxy/geo, SSL Full strict, custom domains)
 - [x] Docs hub (getting started, architecture, API, admin, load testing)

@@ -34,7 +34,7 @@ The product should feel like controlled water pressure: protective without panic
 1. **One job per surface** — waiting room shows place in line; protected demo shows access; admin shows control and first-run setup.
 2. **Calm under load** — visitors should feel informed, not rushed.
 3. **Tokens over chrome** — colors and fonts are CSS variables so branding can change without rewriting layout.
-4. **Cost-aware UX** — poll every few seconds; never write KV on heartbeat/status.
+4. **Cost-aware UX** — adaptive status polls (slower far back, faster near your turn); never write KV on heartbeat/status.
 5. **Clear craft** — visuals and architecture should be easy to follow and maintain.
 6. **Stay in TideGuard when possible** — Cloudflare zone checks (proxy, geo, SSL, domains) and Turnstile for admin login are driven from `/admin` after a one-time API token, so operators are not bounced through the Cloudflare dashboard for routine setup.
 

@@ -18,8 +18,10 @@
   },
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "build:admin": "vite build --config admin/vite.config.ts",
+    "dev:admin": "vite --config admin/vite.config.ts",
+    "dev": "npm run build:admin && wrangler dev",
+    "deploy": "npm run build:admin && wrangler deploy",
     "types": "wrangler types",
     "check": "wrangler check",
     "test": "vitest run",
@@ -31,8 +33,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
-    "ci": "npm run types && npm run format:check && npm run lint && npm run typecheck && npm run test"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json && tsc --noEmit -p admin/tsconfig.json",
+    "ci": "npm run build:admin && npm run types && npm run format:check && npm run lint && npm run typecheck && npm run test"
   },
   "cloudflare": {
     "bindings": {
@@ -45,14 +47,21 @@
     "@cloudflare/vitest-pool-workers": "^0.19.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-istanbul": "^4.1.10",
     "@vitest/runner": "^4.1.10",
     "@vitest/snapshot": "^4.1.10",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
+    "postcss": "^8.5.25",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
     "prettier": "^3.6.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
+    "vite": "^8.2.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.115.0"
   },
@@ -60,5 +69,16 @@
     "esbuild@0.28.1": true,
     "workerd@1.20260722.1": true,
     "fsevents@2.3.3": true
+  },
+  "dependencies": {
+    "@mantine/core": "^9.5.0",
+    "@mantine/form": "^9.5.0",
+    "@mantine/hooks": "^9.5.0",
+    "@mantine/notifications": "^9.5.0",
+    "@tabler/icons-react": "^3.46.0",
+    "chart.js": "^4.5.1",
+    "react": "^19.2.8",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.2.8"
   }
 }

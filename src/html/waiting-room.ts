@@ -7,23 +7,37 @@ export interface WaitingRoomRenderOptions {
   returnTo?: string;
   visitorId?: string;
   branding?: Partial<WaitingRoomBranding>;
-  /** Status poll interval in ms. Default 15s; keep >= 2000 to limit DO request volume. */
+  /**
+   * Fixed status poll interval (ms). When set, disables adaptive `nextPollAfterMs`.
+   * Not recommended — prefer adaptive (default). Floor 2000.
+   */
   pollIntervalMs?: number;
-  /** Heartbeat interval in ms. Default 30s. */
+  /**
+   * Fixed heartbeat interval (ms). Used with fixed poll override.
+   * Not recommended when status renews liveness. Floor 5000.
+   */
   heartbeatIntervalMs?: number;
+  /** Server heartbeat timeout; used for dedicated-heartbeat fallback. */
+  heartbeatTimeoutSeconds?: number;
   /** Unix ms when admissions begin; null/undefined = already open. */
   opensAt?: number | null;
 }
 
 /**
  * Self-contained waiting room page (full page or embeddable iframe).
- * Joins the queue in-browser, polls /status, heartbeats, then redirects with a cookie.
+ * Joins the queue in-browser, polls /status (adaptive by default), then redirects with a cookie.
  */
 export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   const branding = mergeBranding(options.branding);
   const embed = options.embed === true;
-  const pollIntervalMs = Math.max(2000, options.pollIntervalMs ?? 15_000);
-  const heartbeatIntervalMs = Math.max(5000, options.heartbeatIntervalMs ?? 30_000);
+  const fixedPoll =
+    options.pollIntervalMs !== undefined ? Math.max(2000, options.pollIntervalMs) : null;
+  const fixedHeartbeat =
+    options.heartbeatIntervalMs !== undefined ? Math.max(5000, options.heartbeatIntervalMs) : null;
+  const useFixedIntervals = fixedPoll !== null || fixedHeartbeat !== null;
+  const pollIntervalMs = fixedPoll ?? 15_000;
+  const heartbeatIntervalMs = fixedHeartbeat ?? 30_000;
+  const heartbeatTimeoutSeconds = Math.max(10, options.heartbeatTimeoutSeconds ?? 180);
   const returnTo = options.returnTo ?? "/demo";
   const queue = options.queue;
   const initialVisitorId = options.visitorId ?? "";
@@ -273,8 +287,10 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
       (() => {
         const queue = ${JSON.stringify(queue)};
         const returnTo = ${JSON.stringify(returnTo)};
+        const useFixedIntervals = ${JSON.stringify(useFixedIntervals)};
         const pollMs = ${JSON.stringify(pollIntervalMs)};
         const heartbeatMs = ${JSON.stringify(heartbeatIntervalMs)};
+        const heartbeatTimeoutMs = ${JSON.stringify(heartbeatTimeoutSeconds * 1000)};
         const showWaitingCount = ${JSON.stringify(showWaitingCount)};
         const requireClickToEnter = ${JSON.stringify(branding.requireClickToEnter)};
         const playTurnSound = ${JSON.stringify(branding.playTurnSound && branding.requireClickToEnter)};
@@ -290,6 +306,8 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         let entering = false;
         let turnSoundPlayed = false;
         let turnAudio = null;
+        let lastPollHintMs = pollMs;
+        let stopped = false;
 
         const el = {
           stats: document.getElementById("stats"),
@@ -375,8 +393,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         }
 
         function showGeoBlocked(country) {
-          if (timer) { clearInterval(timer); timer = null; }
-          if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+          stopPolling();
           if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
           el.enterPanel.hidden = true;
           el.progress.hidden = true;
@@ -408,6 +425,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
 
         function redirectNow() {
           setStatus("You’re in. Redirecting…", "ok");
+          stopPolling();
           window.location.replace(returnTo + (returnTo.includes("?") ? "&" : "?") + "queue=" + encodeURIComponent(queue));
         }
 
@@ -464,6 +482,15 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           }
           el.eta.textContent = formatEta(data.estimatedWaitSeconds);
           updateProgress(data);
+          notePollHint(data);
+        }
+
+        function notePollHint(data) {
+          if (useFixedIntervals) return;
+          const hint = Number(data.nextPollAfterMs);
+          if (Number.isFinite(hint) && hint >= 2000) {
+            lastPollHintMs = hint;
+          }
         }
 
         function showEnterPanel(data) {
@@ -618,6 +645,59 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           }
         }
 
+        function clearPollTimer() {
+          if (timer) {
+            clearTimeout(timer);
+            clearInterval(timer);
+            timer = null;
+          }
+        }
+
+        function clearHeartbeatTimer() {
+          if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+          }
+        }
+
+        function stopPolling() {
+          stopped = true;
+          clearPollTimer();
+          clearHeartbeatTimer();
+        }
+
+        function needsDedicatedHeartbeat(intervalMs) {
+          return intervalMs > heartbeatTimeoutMs * 0.5;
+        }
+
+        function syncHeartbeatFallback(intervalMs) {
+          clearHeartbeatTimer();
+          if (!needsDedicatedHeartbeat(intervalMs)) return;
+          heartbeatTimer = setInterval(() => {
+            heartbeat().catch(() => {});
+          }, Math.max(5000, Math.floor(heartbeatTimeoutMs * 0.4)));
+        }
+
+        function scheduleAdaptive() {
+          if (stopped || useFixedIntervals) return;
+          clearPollTimer();
+          const delay = Math.max(2000, lastPollHintMs || pollMs);
+          syncHeartbeatFallback(delay);
+          timer = setTimeout(async () => {
+            await tick();
+            scheduleAdaptive();
+          }, delay);
+        }
+
+        function startFixed() {
+          clearPollTimer();
+          clearHeartbeatTimer();
+          timer = setInterval(tick, pollMs);
+          heartbeatTimer = setInterval(() => {
+            heartbeat().catch(() => {});
+          }, heartbeatMs);
+        }
+
         el.enterBtn.addEventListener("click", () => { confirmEnter(); });
 
         if (playTurnSound && el.soundToggle) {
@@ -639,18 +719,19 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         (async () => {
           try {
             await join();
-            timer = setInterval(tick, pollMs);
-            heartbeatTimer = setInterval(() => {
-              heartbeat().catch(() => {});
-            }, heartbeatMs);
+            if (stopped) return;
+            if (useFixedIntervals) {
+              startFixed();
+            } else {
+              scheduleAdaptive();
+            }
           } catch (err) {
             setStatus(err.message || "Could not join queue", "err");
           }
         })();
 
         window.addEventListener("pagehide", () => {
-          if (timer) clearInterval(timer);
-          if (heartbeatTimer) clearInterval(heartbeatTimer);
+          stopPolling();
           if (holdTimer) clearInterval(holdTimer);
           if (openTimer) clearInterval(openTimer);
         });

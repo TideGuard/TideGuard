@@ -58,6 +58,9 @@ export function isTideGuardPath(pathname: string, originEnabled: boolean): boole
   if (RESERVED_EXACT.has(pathname)) {
     return true;
   }
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return true;
+  }
   return RESERVED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

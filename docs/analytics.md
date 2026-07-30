@@ -1,27 +1,20 @@
-# Admin analytics
+# Admin analytics & traffic
 
-The control room **Analytics** panel charts queue and geo-block activity from the live metrics already shown in the dashboard.
+The control room shows live queue metrics and a **server-backed traffic chart** for adaptive max-outflow control.
 
-## How it works
+## Traffic series (server)
 
-- While the control room is open, metrics polls (~5s) upsert one **5-minute** bucket in this browser’s `localStorage`.
-- No Durable Object / KV time-series is stored server-side.
-- History is kept for up to **24 hours** in the browser and pruned automatically.
-- Range toggle: **1h**, **12h**, or **24h** (filters the same local series).
+- QueueRoom Durable Object records joins and admits into ~**15-second** buckets.
+- Buckets retain about **2 hours** in DO SQLite (`traffic_buckets`).
+- `GET /api/admin/traffic?queue=&rangeMs=` returns the series for Chart.js.
+- Chart series:
+  - **Total inflow** — joins per bucket
+  - **Max outflow** — admit/s setpoint during that bucket (stepped when operators update rate)
 
-Charts:
-
-| Chart              | Series                                           |
-| ------------------ | ------------------------------------------------ |
-| Queue depth        | Waiting, admitted                                |
-| Average wait       | `averageWaitSeconds`                             |
-| Country block hits | Per-interval delta of `geoBlock.stats.totalHits` |
-| Blocked countries  | Live `byCountry` for the current block window    |
-
-Leaving the control room closed for a stretch means those intervals are missing from the chart until you open it again.
+Metrics also expose `totalInflow`, `inflowCurrent`, `outflowCurrent`, `admitPerSecond`, and `admitPerSecondOverride`.
 
 ## Related
 
-- [Admin](admin.md)
-- [Country block](geo-block.md)
+- [Admin](admin.md) — traffic panel + rate API
 - [API](api.md)
+- [Country block](geo-block.md)

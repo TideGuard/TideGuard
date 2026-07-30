@@ -39,6 +39,8 @@ describe("origin proxy config", () => {
   it("keeps TideGuard control paths reserved when proxy is on", () => {
     expect(isTideGuardPath("/wait", true)).toBe(true);
     expect(isTideGuardPath("/admin", true)).toBe(true);
+    expect(isTideGuardPath("/admin/", true)).toBe(true);
+    expect(isTideGuardPath("/admin/assets/index.js", true)).toBe(true);
     expect(isTideGuardPath("/api/admin/state", true)).toBe(true);
     expect(isTideGuardPath("/sounds/notification.mp3", true)).toBe(true);
     expect(isTideGuardPath("/", true)).toBe(false);

@@ -37,10 +37,12 @@ Enter a queue.
 
 Every successful join sets cookie `tg_ticket` (visitor ownership proof). `/status`, `/leave`, and `/heartbeat` require that cookie to match the visitor id and queue.
 
-Waiting responses include `admissionMode` (`queue` | `lottery`). Depth fields (`waiting`, `ahead`, `behind`, `lotteryOdds`) are included **only** when branding `showWaitingCount` is enabled for that queue (synced to the DO on branding save). Public join/status never expose pause, health, `opensAt`, or capacity.
+Waiting responses include `admissionMode` (`queue` | `lottery`) and, while waiting, `nextPollAfterMs` (adaptive status poll hint). Depth fields (`waiting`, `ahead`, `behind`, `lotteryOdds`) are included **only** when branding `showWaitingCount` is enabled for that queue (synced to the DO on branding save). Public join/status never expose pause, health, `opensAt`, or capacity.
 
-- **Queue Mode** — `position` (1-based FIFO), optional `ahead` / `behind`, `estimatedWaitSeconds`
-- **Lottery Mode** — `position` omitted, optional `lotteryOdds` (`1 / waitingCount`) and `waiting`
+- **Queue Mode** — `position` (1-based FIFO), optional `ahead` / `behind`, `estimatedWaitSeconds`, `nextPollAfterMs`
+- **Lottery Mode** — `position` omitted, optional `lotteryOdds` (`1 / waitingCount`) and `waiting`, plus `nextPollAfterMs`
+
+The built-in waiting room schedules the next `/status` from `nextPollAfterMs` (relative to place in line: faster near the front, slower far back). Status renews liveness, so dedicated heartbeats are usually unnecessary. Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended.
 
 If a valid `tg_ticket` cookie is already present for the queue, join **resumes that visitor** and ignores a conflicting body `visitorId` (same-browser multi-tab).
 
@@ -48,7 +50,7 @@ If a valid `tg_ticket` cookie is already present for the queue, join **resumes t
 
 Current visitor status. Requires cookie `tg_ticket` for that visitor/queue.
 When `status` is `admitted` and click-to-enter is satisfied, response includes `accessToken` and sets HttpOnly `tg_access`.
-Same field rules as `/join` (no ops fields; depth only if `showWaitingCount`).
+Same field rules as `/join` (no ops fields; depth only if `showWaitingCount`). Waiting `/status` also renews `last_heartbeat_at`.
 
 ### `POST /leave`
 
@@ -60,7 +62,7 @@ Requires `tg_ticket`.
 
 ### `POST /heartbeat`
 
-Keep a waiting visitor alive. Requires `tg_ticket`.
+Keep a waiting visitor alive. Requires `tg_ticket`. Usually unnecessary for the built-in waiting room (status renews liveness); kept for custom clients and fixed-interval overrides.
 
 ```json
 { "queue": "product-launch", "visitorId": "…" }
@@ -147,20 +149,23 @@ Admin session only. Temporary country block list (`CF-IPCountry`) with required 
 
 Query params:
 
-| Param                      | Default   | Meaning                       |
-| -------------------------- | --------- | ----------------------------- |
-| `visitors`                 | `5000000` | Unique waiting-room visitors  |
-| `averageWaitSeconds`       | `900`     | Typical wait before admission |
-| `pollIntervalSeconds`      | `15`      | Status poll interval          |
-| `heartbeatIntervalSeconds` | `30`      | Heartbeat interval            |
+| Param                      | Default        | Meaning                                                         |
+| -------------------------- | -------------- | --------------------------------------------------------------- |
+| `visitors`                 | `5000000`      | Unique waiting-room visitors                                    |
+| `averageWaitSeconds`       | `900`          | Typical wait before admission                                   |
+| `pollingMode`              | `adaptive`     | `adaptive` (default) or `fixed` (advanced, not recommended)     |
+| `pollIntervalSeconds`      | ~`41.7` / `15` | Adaptive average, or fixed status poll when `pollingMode=fixed` |
+| `heartbeatIntervalSeconds` | `0` / `30`     | Unused in adaptive; fixed heartbeat when `pollingMode=fixed`    |
 
-Interactive UI: `GET /cost`.
+Interactive UI: `GET /cost` (adaptive by default; fixed intervals under advanced).
 
 ## Admin
 
 ### `GET /admin`
 
-First visit runs a **setup wizard** (`TOKEN_SECRET` → username + password → Cloudflare verify → Turnstile → queue/mode → branding). Later visits require username + password + Turnstile. Invite links use `/admin?invite=…`. Dashboard edits branding, admission mode, origin proxy, Cloudflare zone controls, team, and activity; KV writes only on explicit actions.
+React admin SPA (Mantine + Chart.js) from Workers Static Assets. First visit runs a **setup wizard** (`TOKEN_SECRET` → username + password → queue/mode → branding; Cloudflare/Turnstile can be finished in the control room). Later visits require username + password + Turnstile. Invite links use `/admin?invite=…`. Dashboard includes live traffic control (max outflow), branding, origin proxy, Cloudflare zone controls, team, and activity.
+
+Build assets with `npm run build:admin` before `wrangler deploy`.
 
 ### Admin API
 
@@ -189,6 +194,9 @@ First visit runs a **setup wizard** (`TOKEN_SECRET` → username + password → 
 | `POST`               | `/api/admin/mode`                      | session                      | Queue ↔ Lottery                                        |
 | `PUT`                | `/api/admin/schedule`                  | session                      | Opening time (`opensAt` ms UTC, or `null` = open now)  |
 | `POST`               | `/api/admin/pause`                     | session                      | Silent pause / resume                                  |
+| `PUT`                | `/api/admin/rate`                      | session                      | Set max outflow (`admitPerSecond` override)            |
+| `DELETE`             | `/api/admin/rate`                      | session                      | Clear rate override (env `ADMIT_PER_SECOND`)           |
+| `GET`                | `/api/admin/traffic`                   | session                      | Inflow/outflow time series (~15s buckets, ~2h)         |
 | `PUT`                | `/api/admin/health`                    | session                      | Origin health config / override / clear override       |
 | `POST`               | `/api/admin/reset`                     | `TOKEN_SECRET` bearer only   | Clears admin, CF link, Turnstile, pending, origin      |
 

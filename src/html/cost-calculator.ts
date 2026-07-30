@@ -183,6 +183,33 @@ export function renderCostCalculatorPage(): string {
         line-height: 1.5;
       }
       code { font-size: 0.9em; color: var(--text); }
+      .mode-fieldset {
+        border: 1px solid var(--line);
+        border-radius: 0.4rem;
+        padding: 0.75rem 0.85rem 0.35rem;
+        margin: 0 0 1rem;
+      }
+      .mode-fieldset legend {
+        padding: 0 0.35rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .mode-option {
+        display: flex;
+        gap: 0.55rem;
+        align-items: flex-start;
+        margin-bottom: 0.65rem;
+        font-size: 0.9rem;
+        line-height: 1.35;
+      }
+      .mode-option input { margin-top: 0.2rem; accent-color: var(--accent); }
+      .mode-note, .warn-note {
+        margin: 0 0 1rem;
+        font-size: 0.88rem;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .warn-note { color: var(--warn); }
     </style>
   </head>
   <body>
@@ -193,7 +220,8 @@ export function renderCostCalculatorPage(): string {
       </div>
       <h1>Calculate cost</h1>
       <p class="lede">
-        Ballpark Cloudflare spend for a waiting-room event. Polling while people wait usually dominates — not the join itself.
+        Ballpark Cloudflare spend for a waiting-room event. TideGuard’s default
+        <strong>adaptive</strong> polling slows check-ins when you’re far back and speeds up near your turn — that usually dominates cost far less than fixed frequent polls.
       </p>
 
       <div class="layout">
@@ -213,14 +241,31 @@ export function renderCostCalculatorPage(): string {
             <span>Average wait (minutes)</span>
             <input id="waitMinutes" type="number" min="0" step="1" value="15" />
           </label>
-          <label>
-            <span>Status poll interval (seconds)</span>
-            <input id="pollSeconds" type="number" min="0.5" step="0.5" value="15" />
-          </label>
-          <label>
-            <span>Heartbeat interval (seconds)</span>
-            <input id="heartbeatSeconds" type="number" min="1" step="1" value="30" />
-          </label>
+          <fieldset class="mode-fieldset">
+            <legend>Polling mode</legend>
+            <label class="mode-option">
+              <input type="radio" name="pollingMode" value="adaptive" checked />
+              <span>Adaptive (default) — relative to place in line; status renews liveness</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="pollingMode" value="fixed" />
+              <span>Fixed intervals (advanced, not recommended)</span>
+            </label>
+          </fieldset>
+          <p class="mode-note" id="adaptiveNote">
+            Model uses ~42s average poll (5s near front → 60s far back) and no dedicated heartbeats.
+          </p>
+          <div id="fixedFields" hidden>
+            <p class="warn-note">Fixed frequent polling usually costs more. Prefer adaptive unless you have a custom client.</p>
+            <label>
+              <span>Status poll interval (seconds)</span>
+              <input id="pollSeconds" type="number" min="0.5" step="0.5" value="15" />
+            </label>
+            <label>
+              <span>Heartbeat interval (seconds)</span>
+              <input id="heartbeatSeconds" type="number" min="1" step="1" value="30" />
+            </label>
+          </div>
         </section>
 
         <section class="panel" aria-labelledby="result-title" aria-live="polite">
@@ -247,6 +292,9 @@ export function renderCostCalculatorPage(): string {
         const waitInput = document.getElementById("waitMinutes");
         const pollInput = document.getElementById("pollSeconds");
         const heartbeatInput = document.getElementById("heartbeatSeconds");
+        const fixedFields = document.getElementById("fixedFields");
+        const adaptiveNote = document.getElementById("adaptiveNote");
+        const modeInputs = document.querySelectorAll('input[name="pollingMode"]');
         const totalEl = document.getElementById("total");
         const rowsEl = document.getElementById("rows");
         const calloutEl = document.getElementById("callout");
@@ -257,17 +305,46 @@ export function renderCostCalculatorPage(): string {
           return (billable / 1_000_000) * usdPerMillion;
         }
 
+        function adaptiveAveragePollSeconds() {
+          return 5 + (60 - 5) * (2 / 3);
+        }
+
+        function selectedMode() {
+          const checked = document.querySelector('input[name="pollingMode"]:checked');
+          return checked && checked.value === "fixed" ? "fixed" : "adaptive";
+        }
+
+        function syncModeUi() {
+          const fixed = selectedMode() === "fixed";
+          fixedFields.hidden = !fixed;
+          adaptiveNote.hidden = fixed;
+        }
+
         function estimate(input) {
           const visitors = Math.max(0, input.visitors);
           const averageWaitSeconds = Math.max(0, input.averageWaitSeconds);
-          const pollIntervalSeconds = Math.max(0.5, input.pollIntervalSeconds);
-          const heartbeatIntervalSeconds = Math.max(1, input.heartbeatIntervalSeconds);
+          const pollingMode = input.pollingMode === "fixed" ? "fixed" : "adaptive";
           const avgCpuMsPerRequest = 3;
 
-          const statusPollsPerVisitor =
-            averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);
-          const heartbeatsPerVisitor =
-            averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / heartbeatIntervalSeconds);
+          let pollIntervalSeconds;
+          let heartbeatIntervalSeconds;
+          let statusPollsPerVisitor;
+          let heartbeatsPerVisitor;
+
+          if (pollingMode === "adaptive") {
+            pollIntervalSeconds = adaptiveAveragePollSeconds();
+            heartbeatIntervalSeconds = 0;
+            statusPollsPerVisitor =
+              averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);
+            heartbeatsPerVisitor = 0;
+          } else {
+            pollIntervalSeconds = Math.max(0.5, input.pollIntervalSeconds);
+            heartbeatIntervalSeconds = Math.max(1, input.heartbeatIntervalSeconds);
+            statusPollsPerVisitor =
+              averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);
+            heartbeatsPerVisitor =
+              averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / heartbeatIntervalSeconds);
+          }
 
           const workerRequests = visitors * (2 + statusPollsPerVisitor + heartbeatsPerVisitor + 1);
           const durableObjectRequests = visitors * (1 + statusPollsPerVisitor + heartbeatsPerVisitor);
@@ -311,6 +388,9 @@ export function renderCostCalculatorPage(): string {
           else if (pollingShare <= 2) dominantCost = "joins";
 
           return {
+            pollingMode,
+            pollIntervalSeconds,
+            heartbeatIntervalSeconds,
             statusPollsPerVisitor,
             heartbeatsPerVisitor,
             workerRequests,
@@ -342,15 +422,24 @@ export function renderCostCalculatorPage(): string {
         }
 
         function render() {
+          syncModeUi();
+          const mode = selectedMode();
           const result = estimate({
             visitors: Number(visitorsInput.value || 0),
             averageWaitSeconds: Number(waitInput.value || 0) * 60,
+            pollingMode: mode,
             pollIntervalSeconds: Number(pollInput.value || 15),
             heartbeatIntervalSeconds: Number(heartbeatInput.value || 30),
           });
 
           totalEl.textContent = formatUsd(result.totalUsd);
+          const pollLabel =
+            result.pollingMode === "adaptive"
+              ? "Avg status poll (adaptive)"
+              : "Status poll interval";
           rowsEl.innerHTML = [
+            ["Polling mode", result.pollingMode],
+            [pollLabel, Number(result.pollIntervalSeconds).toFixed(1) + "s"],
             ["Status polls / visitor", formatCount(result.statusPollsPerVisitor)],
             ["Heartbeats / visitor", formatCount(result.heartbeatsPerVisitor)],
             ["Worker requests", formatCount(result.workerRequests)],
@@ -369,7 +458,9 @@ export function renderCostCalculatorPage(): string {
 
           const messages = {
             polling:
-              "Polling dominates this estimate. Raising the poll interval or shortening average wait cuts the bill fastest.",
+              result.pollingMode === "fixed"
+                ? "Fixed polling dominates this estimate. Switch to adaptive or raise intervals to cut the bill."
+                : "Polling still dominates at this wait length. Shortening average wait cuts the bill fastest.",
             joins:
               "Joins and page views dominate — waiting is short, so polling stays cheap.",
             base_fee: "Mostly the Workers Paid base fee at this scale.",
@@ -403,6 +494,7 @@ export function renderCostCalculatorPage(): string {
         [visitorsInput, waitInput, pollInput, heartbeatInput].forEach((el) => {
           el.addEventListener("input", render);
         });
+        modeInputs.forEach((el) => el.addEventListener("change", render));
 
         render();
       })();

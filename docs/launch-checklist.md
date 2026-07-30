@@ -13,21 +13,28 @@ Use this before pointing production traffic at TideGuard.
 
 ## Capacity
 
-| Setting                | Where             | Guidance                                          |
-| ---------------------- | ----------------- | ------------------------------------------------- |
-| `MAX_CONCURRENT_USERS` | Worker vars       | Origin concurrent capacity you can actually serve |
-| `ADMIT_PER_SECOND`     | Worker vars       | Steady admit rate once the room is full           |
-| `TOKEN_TTL_SECONDS`    | Worker vars       | How long an admission cookie remains valid        |
-| Poll interval          | Waiting UI (~15s) | Do not lower without budgeting DO requests        |
-| Heartbeat              | Waiting UI (~30s) | Must stay under `HEARTBEAT_TIMEOUT_SECONDS`       |
+| Setting                | Where                | Guidance                                                              |
+| ---------------------- | -------------------- | --------------------------------------------------------------------- |
+| `MAX_CONCURRENT_USERS` | Worker vars          | Origin concurrent capacity you can actually serve                     |
+| `ADMIT_PER_SECOND`     | Worker vars          | Steady admit rate once the room is full                               |
+| `TOKEN_TTL_SECONDS`    | Worker vars          | How long an admission cookie remains valid                            |
+| Adaptive poll          | Waiting UI (default) | Relative to place in line (`nextPollAfterMs`); status renews liveness |
+| Fixed poll override    | Env (optional)       | `WAITING_ROOM_*_INTERVAL_MS` — not recommended; budgets DO requests   |
+| Heartbeat timeout      | Worker vars (`180`)  | Drop silent waiters; adaptive polls stay under half this window       |
 
-Rough DO request volume while waiting:
+Rough DO request volume while waiting (adaptive, status-only):
+
+```text
+visitors × (1 join + waitSeconds / averageAdaptivePollInterval)
+```
+
+Fixed-interval override (discouraged) still follows:
 
 ```text
 visitors × (1 join + waitSeconds/pollInterval + waitSeconds/heartbeatInterval)
 ```
 
-Use `/cost` for Cloudflare Workers paid-plan estimates.
+Use `/cost` for Cloudflare Workers paid-plan estimates (adaptive by default).
 
 ## Origin proxy
 

@@ -17,6 +17,9 @@ export { DEFAULT_BRANDING, mergeBranding, sanitizeRedirectUrl } from "./branding
 export {
   estimateWaitingRoomCost,
   DEFAULT_CLOUDFLARE_PAID_RATES,
+  adaptiveAveragePollSeconds,
+  ADAPTIVE_POLL_MIN_SECONDS,
+  ADAPTIVE_POLL_MAX_SECONDS,
   formatUsd,
   formatCount,
 } from "./cost-estimate";
@@ -26,5 +29,6 @@ export type {
   CloudflarePaidRates,
   CostEstimateInput,
   CostEstimateBreakdown,
+  PollingMode,
 } from "./cost-estimate";
 export type * from "./types";

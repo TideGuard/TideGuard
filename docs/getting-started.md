@@ -100,7 +100,8 @@ curl -s "http://localhost:8787/api/cost-estimate?visitors=100000&averageWaitSeco
 
 | Knob                             | Where                             | Notes                                                         |
 | -------------------------------- | --------------------------------- | ------------------------------------------------------------- |
-| Capacity / admit rate / timeouts | `wrangler.jsonc` → `vars`         | Restart / redeploy to apply                                   |
+| Capacity / timeouts              | `wrangler.jsonc` → `vars`         | Restart / redeploy to apply                                   |
+| Admit rate (max outflow)         | `/admin` traffic panel or vars    | Live override via admin; env is default when cleared          |
 | Default admission mode           | `ADMISSION_MODE` var or `/admin`  | Live switch via admin or `POST /mode`                         |
 | Branding + depth display         | `/admin` → Save branding          | KV write on save only                                         |
 | Admin password                   | `/admin` wizard                   | PBKDF2 hash in KV; reset with `TOKEN_SECRET`                  |

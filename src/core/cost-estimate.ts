@@ -37,14 +37,40 @@ export const DEFAULT_CLOUDFLARE_PAID_RATES: CloudflarePaidRates = {
   durableObjectDurationUsdPerMillionGbSeconds: 12.5,
 };
 
+/** Default waiting-room pacing: adaptive (relative to place in line) or fixed intervals. */
+export type PollingMode = "adaptive" | "fixed";
+
+/** Adaptive poll bounds (seconds), matching waiting-room / engine defaults. */
+export const ADAPTIVE_POLL_MIN_SECONDS = 5;
+export const ADAPTIVE_POLL_MAX_SECONDS = 60;
+
+/**
+ * Mean poll interval when visitors are uniform over queue progress and the
+ * client uses `MIN + (MAX - MIN) * √progress`.
+ * ∫₀¹ √p dp = 2/3 → MIN + (MAX - MIN) * 2/3.
+ */
+export function adaptiveAveragePollSeconds(
+  minSeconds = ADAPTIVE_POLL_MIN_SECONDS,
+  maxSeconds = ADAPTIVE_POLL_MAX_SECONDS,
+): number {
+  const min = Math.max(0.5, minSeconds);
+  const max = Math.max(min, maxSeconds);
+  return min + (max - min) * (2 / 3);
+}
+
 export interface CostEstimateInput {
   /** Unique visitors who enter the waiting room. */
   visitors: number;
   /** Typical time each visitor spends waiting before admission (seconds). */
   averageWaitSeconds: number;
-  /** Status poll interval used by the waiting room (seconds). Default 15. */
+  /**
+   * Adaptive (default) slows polls far back and speeds up near your turn.
+   * Fixed uses constant poll/heartbeat intervals (not recommended).
+   */
+  pollingMode?: PollingMode;
+  /** Status poll interval used by the waiting room (seconds). Fixed mode default 15. */
   pollIntervalSeconds?: number;
-  /** Heartbeat interval while waiting (seconds). Default 30. */
+  /** Heartbeat interval while waiting (seconds). Fixed mode default 30; adaptive uses 0. */
   heartbeatIntervalSeconds?: number;
   /** How long the queue Durable Object stays busy (hours). Default derived from wait. */
   activeHours?: number;
@@ -58,6 +84,7 @@ export interface CostEstimateInput {
 export interface CostEstimateBreakdown {
   visitors: number;
   averageWaitSeconds: number;
+  pollingMode: PollingMode;
   pollIntervalSeconds: number;
   heartbeatIntervalSeconds: number;
   statusPollsPerVisitor: number;
@@ -87,20 +114,38 @@ function overageCost(units: number, included: number, usdPerMillion: number): nu
  * Per visitor request model (TideGuard defaults):
  * - 1× waiting page + 1× join + N× status + M× heartbeat + 1× protected page
  * - Durable Object hit on join / status / heartbeat (not on HTML page views)
+ * - Adaptive mode: status renews liveness (M ≈ 0); N uses average adaptive poll
  */
 export function estimateWaitingRoomCost(input: CostEstimateInput): CostEstimateBreakdown {
   const rates = input.rates ?? DEFAULT_CLOUDFLARE_PAID_RATES;
   const visitors = Math.max(0, input.visitors);
   const averageWaitSeconds = Math.max(0, input.averageWaitSeconds);
-  const pollIntervalSeconds = Math.max(0.5, input.pollIntervalSeconds ?? 15);
-  const heartbeatIntervalSeconds = Math.max(1, input.heartbeatIntervalSeconds ?? 30);
+  const pollingMode: PollingMode = input.pollingMode === "fixed" ? "fixed" : "adaptive";
   const avgCpuMsPerRequest = Math.max(0, input.avgCpuMsPerRequest ?? 3);
   const includeBaseFee = input.includeBaseFee !== false;
 
-  const statusPollsPerVisitor =
-    averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);
-  const heartbeatsPerVisitor =
-    averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / heartbeatIntervalSeconds);
+  let pollIntervalSeconds: number;
+  let heartbeatIntervalSeconds: number;
+  let statusPollsPerVisitor: number;
+  let heartbeatsPerVisitor: number;
+
+  if (pollingMode === "adaptive") {
+    pollIntervalSeconds =
+      input.pollIntervalSeconds !== undefined
+        ? Math.max(0.5, input.pollIntervalSeconds)
+        : adaptiveAveragePollSeconds();
+    heartbeatIntervalSeconds = 0;
+    statusPollsPerVisitor =
+      averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);
+    heartbeatsPerVisitor = 0;
+  } else {
+    pollIntervalSeconds = Math.max(0.5, input.pollIntervalSeconds ?? 15);
+    heartbeatIntervalSeconds = Math.max(1, input.heartbeatIntervalSeconds ?? 30);
+    statusPollsPerVisitor =
+      averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);
+    heartbeatsPerVisitor =
+      averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / heartbeatIntervalSeconds);
+  }
 
   // wait HTML + join + status polls + heartbeats + protected page
   const workerRequestsPerVisitor = 2 + statusPollsPerVisitor + heartbeatsPerVisitor + 1;
@@ -156,6 +201,7 @@ export function estimateWaitingRoomCost(input: CostEstimateInput): CostEstimateB
   return {
     visitors,
     averageWaitSeconds,
+    pollingMode,
     pollIntervalSeconds,
     heartbeatIntervalSeconds,
     statusPollsPerVisitor,

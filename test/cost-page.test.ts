@@ -16,12 +16,33 @@ describe("cost calculator surfaces", () => {
     );
     expect(response.status).toBe(200);
     const body = await response.json<{
-      estimate: { totalUsd: number; workerRequests: number; dominantCost: string };
+      estimate: {
+        totalUsd: number;
+        workerRequests: number;
+        dominantCost: string;
+        pollingMode: string;
+        heartbeatsPerVisitor: number;
+      };
     }>();
+    expect(body.estimate.pollingMode).toBe("adaptive");
+    expect(body.estimate.heartbeatsPerVisitor).toBe(0);
+    expect(body.estimate.workerRequests).toBeLessThan(465_000_000);
+    expect(body.estimate.totalUsd).toBeGreaterThan(20);
+    expect(body.estimate.totalUsd).toBeLessThan(200);
+  });
+
+  it("supports fixed polling mode for comparison", async () => {
+    const response = await exports.default.fetch(
+      new Request(
+        "https://example.com/api/cost-estimate?visitors=5000000&averageWaitSeconds=900&pollingMode=fixed&pollIntervalSeconds=15&heartbeatIntervalSeconds=30",
+      ),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json<{
+      estimate: { pollingMode: string; workerRequests: number };
+    }>();
+    expect(body.estimate.pollingMode).toBe("fixed");
     expect(body.estimate.workerRequests).toBe(465_000_000);
-    expect(body.estimate.totalUsd).toBeGreaterThan(150);
-    expect(body.estimate.totalUsd).toBeLessThan(350);
-    expect(body.estimate.dominantCost).toBe("polling");
   });
 
   it("links the calculator from the landing page", async () => {

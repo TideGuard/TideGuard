@@ -86,7 +86,7 @@ export const DEFAULT_QUEUE_CONFIG: QueueConfig = {
   maxConcurrentUsers: 20,
   admitPerSecond: 2,
   tokenTTLSeconds: 600,
-  heartbeatTimeoutSeconds: 60,
+  heartbeatTimeoutSeconds: 180,
   queueTimeoutSeconds: 1800,
   admissionMode: "queue",
   requireClickToEnter: false,

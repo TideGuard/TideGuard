@@ -8,7 +8,7 @@ import { resolveOriginConfig } from "../admin/origin-store";
 import { maybeAdmitIpBypass } from "../admin/ip-bypass";
 import { evaluateGeoBlock } from "../admin/geo-block";
 import { geoBlockedResponse } from "../html/geo-blocked";
-import { getQueueRoom } from "../queue/client";
+import { configFromEnv, getQueueRoom } from "../queue/client";
 import { parseQueueName } from "./validation";
 
 export async function handleWaitingRoom(request: Request, env: Env): Promise<Response> {
@@ -19,6 +19,9 @@ export async function handleWaitingRoom(request: Request, env: Env): Promise<Res
   const branding = await readBranding(env, queue);
   const fallbackReturn = branding.redirectUrl || (origin.enabled ? "/" : "/demo");
   const returnTo = resolveReturnTo(url.searchParams.get("return"), fallbackReturn);
+  const queueConfig = configFromEnv(env);
+  const fixedPollMs = parseOptionalPositiveInt(env.WAITING_ROOM_POLL_INTERVAL_MS);
+  const fixedHeartbeatMs = parseOptionalPositiveInt(env.WAITING_ROOM_HEARTBEAT_INTERVAL_MS);
 
   const bypass = await maybeAdmitIpBypass(request, env, queue);
   if (bypass && !embed) {
@@ -49,6 +52,9 @@ export async function handleWaitingRoom(request: Request, env: Env): Promise<Res
     returnTo,
     branding,
     opensAt,
+    heartbeatTimeoutSeconds: queueConfig.heartbeatTimeoutSeconds,
+    ...(fixedPollMs !== undefined ? { pollIntervalMs: fixedPollMs } : {}),
+    ...(fixedHeartbeatMs !== undefined ? { heartbeatIntervalMs: fixedHeartbeatMs } : {}),
   });
 
   return withSecurityHeaders(
@@ -119,4 +125,12 @@ export function resolveReturnTo(queryReturn: string | null, fallback: string): s
     return fromQuery;
   }
   return sanitizeRedirectUrl(fallback, "/demo") || "/demo";
+}
+
+/** Optional positive int env override (e.g. fixed waiting-room intervals). */
+function parseOptionalPositiveInt(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) return undefined;
+  return n;
 }

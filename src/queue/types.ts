@@ -25,6 +25,11 @@ export interface QueueRoomVisitorView {
   holdSecondsRemaining: number | null;
   /** When false, public APIs should omit depth fields. */
   showWaitingCount: boolean;
+  /**
+   * Suggested delay before the next status poll while waiting (adaptive).
+   * Null when not waiting.
+   */
+  nextPollAfterMs: number | null;
 }
 
 export interface QueueJoinRequest {
@@ -96,6 +101,26 @@ export type QueueHealthConfigResponse = {
   state: OriginHealthState;
 };
 
+export type QueueAdmitRateResponse = {
+  admitPerSecond: number;
+  admitPerSecondOverride: number | null;
+  admitPerSecondDefault: number;
+};
+
+export type QueueTrafficResponse = {
+  queue: QueueName;
+  bucketMs: number;
+  buckets: Array<{
+    t: number;
+    joins: number;
+    admits: number;
+    maxOutflow: number;
+    waiting: number;
+    entered: number;
+  }>;
+  totalInflow: number;
+};
+
 export function buildMetrics(input: {
   queue: QueueName;
   config: QueueConfig;
@@ -110,6 +135,11 @@ export function buildMetrics(input: {
   admissionMode: AdmissionMode;
   opensAt: number | null;
   effectiveAdmitPerSecond: number;
+  admitPerSecondOverride: number | null;
+  admitPerSecondDefault: number;
+  totalInflow: number;
+  inflowCurrent: number;
+  outflowCurrent: number;
   health: QueueMetrics["health"];
 }): QueueMetrics {
   return {
@@ -121,6 +151,8 @@ export function buildMetrics(input: {
     openSlots: input.openSlots,
     capacity: input.config.maxConcurrentUsers,
     admitPerSecond: input.config.admitPerSecond,
+    admitPerSecondOverride: input.admitPerSecondOverride,
+    admitPerSecondDefault: input.admitPerSecondDefault,
     estimatedWaitSeconds: defaultEtaCalculator.estimateWaitSeconds(input.waiting, {
       ...input.config,
       admitPerSecond: Math.max(input.effectiveAdmitPerSecond, 0.0001),
@@ -131,6 +163,9 @@ export function buildMetrics(input: {
     admissionMode: input.admissionMode,
     opensAt: input.opensAt,
     effectiveAdmitPerSecond: input.effectiveAdmitPerSecond,
+    totalInflow: input.totalInflow,
+    inflowCurrent: input.inflowCurrent,
+    outflowCurrent: input.outflowCurrent,
     health: input.health,
   };
 }

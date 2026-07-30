@@ -53,7 +53,7 @@ Stateless request handling at the edge: routing, input validation, HTML response
 
 ### Durable Object (`QueueRoom`)
 
-Authoritative state for a **single named queue**. All join, leave, heartbeat, and admit operations for that queue are serialized by the platform. Admission order is either FIFO (**Queue Mode**) or uniform random among waiters (**Lottery Mode**).
+Authoritative state for a **single named queue**. All join, leave, status, heartbeat, and admit operations for that queue are serialized by the platform. Admission order is either FIFO (**Queue Mode**) or uniform random among waiters (**Lottery Mode**).
 
 Prefer Durable Objects over KV here because:
 
@@ -81,9 +81,12 @@ Unsuitable for queue membership or ordering.
 | `src/durable-object`    | Persistence and RPC surface for `QueueRoom`                  |
 | `src/auth`              | Token sign / verify                                          |
 | `src/routes`            | HTTP mapping only — thin adapters                            |
-| `src/html` / `src/demo` | Presentation                                                 |
+| `src/html` / `src/demo` | Presentation (waiting room, cost, geo block)                 |
+| `admin/`                | React admin SPA (Vite + Mantine + Chart.js → Static Assets)  |
 
 Keeping HTTP, crypto, and queue math separate makes the core easier to unit test and eventually publish as an npm package.
+
+Runtime **admit rate overrides** and **traffic buckets** live in QueueRoom SQLite (`admit_per_second_override`, `traffic_buckets`), not KV. Env `ADMIT_PER_SECOND` remains the default when no override is set.
 
 ## Admission modes
 
@@ -107,16 +110,17 @@ The calculator is an interface (`EtaCalculator`) so more advanced estimators can
 
 Cloudflare bills for Worker requests, Durable Object requests/duration, KV operations, and alarms. TideGuard is designed to stay cheap under load:
 
-| Path                            | Strategy                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| Queue join / status / heartbeat | Durable Object only — **no KV writes** on the hot path                        |
-| Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle           |
-| Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side        |
-| Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `TOKEN_SECRET` |
-| Admin users                     | Named accounts in `admin:config.users[]`; invites hashed with 72h TTL         |
-| Activity audit                  | KV ring `admin:audit` (~200 events); no secrets                               |
-| Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV           |
-| Status polling                  | Necessary for consistency; keep intervals at **~15s** in the waiting UI       |
+| Path                            | Strategy                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| Queue join / status / heartbeat | Durable Object only — **no KV writes** on the hot path                              |
+| Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle                 |
+| Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side              |
+| Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `TOKEN_SECRET`       |
+| Admin users                     | Named accounts in `admin:config.users[]`; invites hashed with 72h TTL               |
+| Activity audit                  | KV ring `admin:audit` (~200 events); no secrets                                     |
+| Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV                 |
+| Status polling                  | Adaptive by default (`nextPollAfterMs`); fixed env overrides are not recommended    |
+| Heartbeat                       | Status renews `last_heartbeat_at` while waiting; dedicated `/heartbeat` is fallback |
 
 Avoid:
 
