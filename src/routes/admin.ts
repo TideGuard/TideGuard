@@ -189,7 +189,11 @@ export async function handleAdminSetup(request: Request, env: Env): Promise<Resp
   const apiToken = await openSetupPendingApiToken(env);
   const turnstileSecret = await openSetupPendingTurnstileSecret(env);
   if (!apiToken || !turnstileSecret) {
-    throw new ApiError("bad_request", "Setup pending secrets are missing; re-verify Cloudflare", 400);
+    throw new ApiError(
+      "bad_request",
+      "Setup pending secrets are missing; re-verify Cloudflare",
+      400,
+    );
   }
 
   const { hash, salt } = await hashPassword(password);
@@ -551,8 +555,7 @@ export async function handleAdminSaveCloudflare(request: Request, env: Env): Pro
     } else if (typeof body.apiToken === "string" && body.apiToken.trim()) {
       payload.apiToken = body.apiToken;
       let zoneId = (payload.zoneId || "").trim();
-      const hostname =
-        (payload.hostname || "").trim() || new URL(request.url).hostname;
+      const hostname = (payload.hostname || "").trim() || new URL(request.url).hostname;
       if (!zoneId && hostname) {
         const found = await findZoneIdByHostname(body.apiToken.trim(), hostname);
         if (found) {
@@ -1058,8 +1061,7 @@ export async function handleAdminSetupCloudflareVerify(
   const apiToken = typeof body.apiToken === "string" ? body.apiToken.trim() : "";
   let zoneId = typeof body.zoneId === "string" ? body.zoneId.trim() : "";
   const hostname =
-    (typeof body.hostname === "string" && body.hostname.trim()) ||
-    new URL(request.url).hostname;
+    (typeof body.hostname === "string" && body.hostname.trim()) || new URL(request.url).hostname;
   const workerService =
     typeof body.workerService === "string" && body.workerService.trim()
       ? body.workerService.trim()
@@ -1114,10 +1116,7 @@ export async function handleAdminSetupCloudflareVerify(
   }
 }
 
-export async function handleAdminSetupCloudflareFix(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function handleAdminSetupCloudflareFix(request: Request, env: Env): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-cf-fix"), { limit: 20, windowMs: 60_000 });
   requireSetupBearer(request, env);
   if (await isAdminSetupComplete(env)) {
@@ -1313,10 +1312,7 @@ export async function handleAdminCloudflareSsl(request: Request, env: Env): Prom
   }
 }
 
-export async function handleAdminCloudflareDomains(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function handleAdminCloudflareDomains(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
   const settings = await readBypassSettings(env);
   const { apiToken, zoneId, accountId, workerService } = await requireSavedCloudflare(env, {
@@ -1342,9 +1338,7 @@ export async function handleAdminCloudflareDomains(
   if (request.method === "PUT") {
     const body = await readJsonBody(request);
     const hostname =
-      (typeof body.hostname === "string" && body.hostname.trim()) ||
-      settings.hostname ||
-      "";
+      (typeof body.hostname === "string" && body.hostname.trim()) || settings.hostname || "";
     if (!hostname) {
       throw new ApiError("bad_request", "hostname is required", 400);
     }
@@ -1455,10 +1449,7 @@ export async function handleAdminSetupCloudflareAttachDomain(
   }
 }
 
-export async function handleAdminSetupCloudflareSsl(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function handleAdminSetupCloudflareSsl(request: Request, env: Env): Promise<Response> {
   rateLimitOrThrow(clientKey(request, "setup-cf-ssl"), { limit: 10, windowMs: 60_000 });
   requireSetupBearer(request, env);
   if (await isAdminSetupComplete(env)) {

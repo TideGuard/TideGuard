@@ -96,12 +96,12 @@ curl -s "http://localhost:8787/api/cost-estimate?visitors=100000&averageWaitSeco
 
 ## Configuration cheat sheet
 
-| Knob                             | Where                            | Notes                                        |
-| -------------------------------- | -------------------------------- | -------------------------------------------- |
-| Capacity / admit rate / timeouts | `wrangler.jsonc` → `vars`        | Restart / redeploy to apply                  |
-| Default admission mode           | `ADMISSION_MODE` var or `/admin` | Live switch via admin or `POST /mode`        |
-| Branding + depth display         | `/admin` → Save branding         | KV write on save only                        |
-| Admin password                   | `/admin` wizard                  | PBKDF2 hash in KV; reset with `TOKEN_SECRET` |
+| Knob                             | Where                             | Notes                                                         |
+| -------------------------------- | --------------------------------- | ------------------------------------------------------------- |
+| Capacity / admit rate / timeouts | `wrangler.jsonc` → `vars`         | Restart / redeploy to apply                                   |
+| Default admission mode           | `ADMISSION_MODE` var or `/admin`  | Live switch via admin or `POST /mode`                         |
+| Branding + depth display         | `/admin` → Save branding          | KV write on save only                                         |
+| Admin password                   | `/admin` wizard                   | PBKDF2 hash in KV; reset with `TOKEN_SECRET`                  |
 | Cloudflare API token / Turnstile | `/admin` setup + Cloudflare panel | Required on first claim; seals token + Turnstile secret in KV |
 
 Full var table: [README configuration](../README.md#configuration)  

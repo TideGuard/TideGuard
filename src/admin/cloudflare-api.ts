@@ -262,7 +262,10 @@ export async function setSslMode(
   return { mode: value, isStrict: value === "strict" };
 }
 
-export async function getIpGeolocation(apiToken: string, zoneId: string): Promise<ZoneSettingState> {
+export async function getIpGeolocation(
+  apiToken: string,
+  zoneId: string,
+): Promise<ZoneSettingState> {
   return getZoneSetting(apiToken, zoneId, "ip_geolocation");
 }
 
@@ -322,14 +325,18 @@ export async function attachWorkerDomain(input: {
       zone_id: string;
       zone_name: string;
     };
-  }>(input.apiToken, `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/workers/domains`, {
-    method: "PUT",
-    body: JSON.stringify({
-      hostname: input.hostname.replace(/\.$/, "").toLowerCase(),
-      service: input.service,
-      zone_id: input.zoneId,
-    }),
-  });
+  }>(
+    input.apiToken,
+    `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/workers/domains`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        hostname: input.hostname.replace(/\.$/, "").toLowerCase(),
+        service: input.service,
+        zone_id: input.zoneId,
+      }),
+    },
+  );
   const d = data.result;
   return {
     id: d.id,
@@ -553,10 +560,14 @@ async function patchZoneSetting(
   setting: string,
   value: string | boolean | number,
 ): Promise<void> {
-  await cfFetch(apiToken, `https://api.cloudflare.com/client/v4/zones/${zoneId}/settings/${setting}`, {
-    method: "PATCH",
-    body: JSON.stringify({ value }),
-  });
+  await cfFetch(
+    apiToken,
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}/settings/${setting}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+    },
+  );
 }
 
 function isSettingOn(value: string | boolean | number | null): boolean {

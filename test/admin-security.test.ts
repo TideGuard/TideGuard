@@ -1,11 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import {
-  cookieFrom,
-  resetAdmin,
-  setupAdmin,
-  turnstileBody,
-} from "./helpers/admin-setup";
+import { cookieFrom, resetAdmin, setupAdmin, turnstileBody } from "./helpers/admin-setup";
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;

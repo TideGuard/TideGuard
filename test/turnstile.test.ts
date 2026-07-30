@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  TURNSTILE_TEST_PASS_SECRET,
-  verifyTurnstileToken,
-} from "../src/admin/cloudflare-api";
+import { TURNSTILE_TEST_PASS_SECRET, verifyTurnstileToken } from "../src/admin/cloudflare-api";
 import { env } from "cloudflare:workers";
 import {
   isSetupPendingReady,

@@ -160,12 +160,12 @@ export async function openSetupPendingTurnstileSecret(env: Env): Promise<string 
 export function isSetupPendingReady(pending: SetupPending): boolean {
   return Boolean(
     pending.cloudflare?.zoneId &&
-      pending.cloudflare.accountId &&
-      pending.cloudflare.apiTokenSealed &&
-      pending.cloudflare.proxyOk &&
-      pending.turnstile?.sitekey &&
-      pending.turnstile.secretSealed &&
-      pending.turnstile.verifiedAt > 0,
+    pending.cloudflare.accountId &&
+    pending.cloudflare.apiTokenSealed &&
+    pending.cloudflare.proxyOk &&
+    pending.turnstile?.sitekey &&
+    pending.turnstile.secretSealed &&
+    pending.turnstile.verifiedAt > 0,
   );
 }
 
@@ -216,9 +216,8 @@ export async function seedSetupPendingForTests(
     secret: string;
   }>,
 ): Promise<SetupPending> {
-  const { TURNSTILE_TEST_PASS_SECRET, TURNSTILE_TEST_PASS_SITEKEY } = await import(
-    "./cloudflare-api"
-  );
+  const { TURNSTILE_TEST_PASS_SECRET, TURNSTILE_TEST_PASS_SITEKEY } =
+    await import("./cloudflare-api");
   const apiToken = overrides?.apiToken ?? "cf-test-token-at-least-20-chars";
   await writeSetupPendingCloudflare(env, {
     zoneId: overrides?.zoneId ?? "0123456789abcdef0123456789abcdef",

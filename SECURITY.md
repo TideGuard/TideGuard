@@ -14,13 +14,13 @@ Include:
 
 ## Threat model (short)
 
-| Trust                                  | Do not trust                       |
-| -------------------------------------- | ---------------------------------- |
-| Durable Object queue state             | Client-reported position / odds    |
-| HMAC tokens signed with `TOKEN_SECRET` | Unsigned cookies or query params   |
-| HttpOnly `tg_ticket` / `tg_access`     | Visitor id alone (no ticket)       |
-| Named admin sessions after login + Turnstile | Unauthenticated `/api/admin/setup` |
-| Hashed invite tokens with 72h TTL            | Long-lived shared admin passwords  |
+| Trust                                        | Do not trust                           |
+| -------------------------------------------- | -------------------------------------- |
+| Durable Object queue state                   | Client-reported position / odds        |
+| HMAC tokens signed with `TOKEN_SECRET`       | Unsigned cookies or query params       |
+| HttpOnly `tg_ticket` / `tg_access`           | Visitor id alone (no ticket)           |
+| Named admin sessions after login + Turnstile | Unauthenticated `/api/admin/setup`     |
+| Hashed invite tokens with 72h TTL            | Long-lived shared admin passwords      |
 | Sealed CF API token + Turnstile secret in KV | Client-only CAPTCHA without siteverify |
 
 ## Operator checklist
