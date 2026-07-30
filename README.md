@@ -135,13 +135,13 @@ Capacity defaults live in `wrangler.jsonc` under `vars` (Deploy to Cloudflare ma
 
 Optional advanced Worker vars (set in the dashboard if needed; not in the Deploy template):
 
-| Variable               | Default   | Meaning                                      |
-| ---------------------- | --------- | -------------------------------------------- |
-| `DEFAULT_QUEUE`        | `default` | Fallback queue when none is specified        |
+| Variable               | Default   | Meaning                                       |
+| ---------------------- | --------- | --------------------------------------------- |
+| `DEFAULT_QUEUE`        | `default` | Fallback queue when none is specified         |
 | `ADMISSION_MODE`       | `queue`   | `queue` (FIFO) or `lottery` (prefer `/admin`) |
-| `ORIGIN_URL`           | _(empty)_ | Upstream origin for proxy (prefer `/admin`)  |
-| `ORIGIN_PROTECT_ALL`   | `true`    | Gate all non-TideGuard paths                 |
-| `ORIGIN_PATH_PREFIXES` | _(empty)_ | Prefixes if protect-all is off               |
+| `ORIGIN_URL`           | _(empty)_ | Upstream origin for proxy (prefer `/admin`)   |
+| `ORIGIN_PROTECT_ALL`   | `true`    | Gate all non-TideGuard paths                  |
+| `ORIGIN_PATH_PREFIXES` | _(empty)_ | Prefixes if protect-all is off                |
 
 Advanced (not recommended — disables adaptive waiting-room polling):
 

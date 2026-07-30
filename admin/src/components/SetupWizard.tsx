@@ -334,8 +334,7 @@ export function SetupWizard({
       <Stack>
         <Title order={3}>First-time setup</Title>
         <Text size="sm" c="dimmed">
-          Step {step} of 5
-          {step === 2 ? ` · ${CF_PHASE_LABELS[cfPhase]}` : ""}
+          Step {step} of 5{step === 2 ? ` · ${CF_PHASE_LABELS[cfPhase]}` : ""}
         </Text>
 
         <Group gap="xs" wrap="wrap">
@@ -497,10 +496,7 @@ export function SetupWizard({
             <TextInput
               label={FIELD_HELP.workerService.label}
               description={
-                <FieldGuide
-                  why={FIELD_HELP.workerService.why}
-                  how={FIELD_HELP.workerService.how}
-                />
+                <FieldGuide why={FIELD_HELP.workerService.why} how={FIELD_HELP.workerService.how} />
               }
               value={workerService}
               onChange={(e) => setWorkerService(e.currentTarget.value)}
@@ -638,9 +634,7 @@ export function SetupWizard({
                       setTsSitekey(data.sitekey ?? null);
                       setStatus("Widget ready — complete the challenge");
                     })
-                    .catch((e) =>
-                      setStatus(e instanceof Error ? e.message : "Provision failed"),
-                    )
+                    .catch((e) => setStatus(e instanceof Error ? e.message : "Provision failed"))
                     .finally(() => setBusy(false));
                 }}
               >

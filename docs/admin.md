@@ -13,13 +13,13 @@ Visitor pages never write KV. Admin does, and only on explicit Save / Finish set
 
 Shown when `admin:config` is missing from KV. Until then, `GET /` redirects to `/admin`.
 
-| Step          | You set                                                                               | Stored when                                     |
-| ------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 1. Account    | `TOKEN_SECRET` + username + password (8+, uppercase, digit or symbol; live checklist) | Finish setup                                    |
+| Step          | You set                                                                                                         | Stored when                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1. Account    | `TOKEN_SECRET` + username + password (8+, uppercase, digit or symbol; live checklist)                           | Finish setup                                    |
 | 2. Cloudflare | **2a** verify API token → **2b** zone/hostname verify (+ Fix) → **2c** SSL Set/Skip → **2d** domain Attach/Skip | Finish setup (credentials sealed in KV)         |
-| 3. Turnstile  | Create widget → complete challenge → **Click to verify**                              | Finish setup (sitekey + sealed secret in KV)    |
-| 4. Queue      | Queue name, mode, depth, redirect path, click-to-enter / hold                         | Finish setup                                    |
-| 5. Branding   | Title, message, colors                                                                | Finish setup (live preview is client-side only) |
+| 3. Turnstile  | Create widget → complete challenge → **Click to verify**                                                        | Finish setup (sitekey + sealed secret in KV)    |
+| 4. Queue      | Queue name, mode, depth, redirect path, click-to-enter / hold                                                   | Finish setup                                    |
+| 5. Branding   | Title, message, colors                                                                                          | Finish setup (live preview is client-side only) |
 
 Cloudflare step 2 is progressive: the API token must verify before zone fields; proxied DNS verify is required; SSL Full (strict) and custom domain are optional (Skip for now). After finish, browser Back returns to login/dashboard — not the claim wizard.
 

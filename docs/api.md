@@ -169,37 +169,37 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 
 ### Admin API
 
-| Method               | Path                                   | Auth                         | Notes                                                  |
-| -------------------- | -------------------------------------- | ---------------------------- | ------------------------------------------------------ |
-| `GET`                | `/api/admin/bootstrap`                 | public                       | `{ setupComplete, turnstileSitekey, version, … }`      |
+| Method               | Path                                       | Auth                         | Notes                                                  |
+| -------------------- | ------------------------------------------ | ---------------------------- | ------------------------------------------------------ |
+| `GET`                | `/api/admin/bootstrap`                     | public                       | `{ setupComplete, turnstileSitekey, version, … }`      |
 | `POST`               | `/api/admin/setup/cloudflare/token-verify` | `TOKEN_SECRET` bearer        | Validates API token only (no zone write)               |
-| `POST`               | `/api/admin/setup/cloudflare/verify`   | `TOKEN_SECRET` bearer        | Token + zone verify; stores setup pending              |
-| `POST`               | `/api/admin/setup/cloudflare/fix`      | `TOKEN_SECRET` bearer        | Orange-cloud DNS + IP Geolocation                      |
-| `POST`               | `/api/admin/setup/turnstile/provision` | `TOKEN_SECRET` bearer        | Creates Turnstile widget; seals secret pending         |
-| `POST`               | `/api/admin/setup/turnstile/verify`    | `TOKEN_SECRET` bearer        | Siteverify challenge during wizard                     |
-| `POST`               | `/api/admin/setup`                     | `TOKEN_SECRET` bearer (once) | Requires pending CF+Turnstile; creates admin + session |
-| `POST`               | `/api/admin/login`                     | public (rate-limited)        | Username + password + Turnstile → session cookie       |
-| `POST`               | `/api/admin/logout`                    | session                      | Clears cookie                                          |
-| `GET`                | `/api/admin/state`                     | session                      | Branding + metrics + `me` + `team` + `turnstile`       |
-| `PUT`                | `/api/admin/cloudflare/ip-geolocation` | session                      | Toggle IP Geolocation; off clears country block        |
-| `PUT`                | `/api/admin/cloudflare/ssl`            | session                      | Set encryption mode to Full (strict)                   |
-| `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`        | session                      | List / attach / detach Workers custom domains          |
-| `GET`                | `/api/admin/updates`                   | session                      | GitHub latest release vs running `VERSION` (KV cache)  |
-| `GET`                | `/api/admin/audit`                     | session                      | Recent admin activity events                           |
-| `GET`                | `/api/admin/invites`                   | session                      | Pending invites (no raw tokens)                        |
-| `POST`               | `/api/admin/invites`                   | session                      | Create 72h invite; returns accept URL once             |
-| `DELETE`             | `/api/admin/invites/:id`               | session                      | Revoke invite                                          |
-| `POST`               | `/api/admin/invites/accept`            | public (rate-limited)        | Token + username + password + Turnstile → session      |
-| `PUT`                | `/api/admin/branding`                  | session                      | KV write                                               |
-| `PUT`                | `/api/admin/origin`                    | session                      | Origin proxy override in KV                            |
-| `POST`               | `/api/admin/mode`                      | session                      | Queue ↔ Lottery                                        |
-| `PUT`                | `/api/admin/schedule`                  | session                      | Opening time (`opensAt` ms UTC, or `null` = open now)  |
-| `POST`               | `/api/admin/pause`                     | session                      | Silent pause / resume                                  |
-| `PUT`                | `/api/admin/rate`                      | session                      | Set max outflow (`admitPerSecond` override)            |
-| `DELETE`             | `/api/admin/rate`                      | session                      | Clear rate override (env `ADMIT_PER_SECOND`)           |
-| `GET`                | `/api/admin/traffic`                   | session                      | Inflow/outflow time series (~15s buckets, ~2h)         |
-| `PUT`                | `/api/admin/health`                    | session                      | Origin health config / override / clear override       |
-| `POST`               | `/api/admin/reset`                     | `TOKEN_SECRET` bearer only   | Clears admin, CF link, Turnstile, pending, origin      |
+| `POST`               | `/api/admin/setup/cloudflare/verify`       | `TOKEN_SECRET` bearer        | Token + zone verify; stores setup pending              |
+| `POST`               | `/api/admin/setup/cloudflare/fix`          | `TOKEN_SECRET` bearer        | Orange-cloud DNS + IP Geolocation                      |
+| `POST`               | `/api/admin/setup/turnstile/provision`     | `TOKEN_SECRET` bearer        | Creates Turnstile widget; seals secret pending         |
+| `POST`               | `/api/admin/setup/turnstile/verify`        | `TOKEN_SECRET` bearer        | Siteverify challenge during wizard                     |
+| `POST`               | `/api/admin/setup`                         | `TOKEN_SECRET` bearer (once) | Requires pending CF+Turnstile; creates admin + session |
+| `POST`               | `/api/admin/login`                         | public (rate-limited)        | Username + password + Turnstile → session cookie       |
+| `POST`               | `/api/admin/logout`                        | session                      | Clears cookie                                          |
+| `GET`                | `/api/admin/state`                         | session                      | Branding + metrics + `me` + `team` + `turnstile`       |
+| `PUT`                | `/api/admin/cloudflare/ip-geolocation`     | session                      | Toggle IP Geolocation; off clears country block        |
+| `PUT`                | `/api/admin/cloudflare/ssl`                | session                      | Set encryption mode to Full (strict)                   |
+| `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`            | session                      | List / attach / detach Workers custom domains          |
+| `GET`                | `/api/admin/updates`                       | session                      | GitHub latest release vs running `VERSION` (KV cache)  |
+| `GET`                | `/api/admin/audit`                         | session                      | Recent admin activity events                           |
+| `GET`                | `/api/admin/invites`                       | session                      | Pending invites (no raw tokens)                        |
+| `POST`               | `/api/admin/invites`                       | session                      | Create 72h invite; returns accept URL once             |
+| `DELETE`             | `/api/admin/invites/:id`                   | session                      | Revoke invite                                          |
+| `POST`               | `/api/admin/invites/accept`                | public (rate-limited)        | Token + username + password + Turnstile → session      |
+| `PUT`                | `/api/admin/branding`                      | session                      | KV write                                               |
+| `PUT`                | `/api/admin/origin`                        | session                      | Origin proxy override in KV                            |
+| `POST`               | `/api/admin/mode`                          | session                      | Queue ↔ Lottery                                        |
+| `PUT`                | `/api/admin/schedule`                      | session                      | Opening time (`opensAt` ms UTC, or `null` = open now)  |
+| `POST`               | `/api/admin/pause`                         | session                      | Silent pause / resume                                  |
+| `PUT`                | `/api/admin/rate`                          | session                      | Set max outflow (`admitPerSecond` override)            |
+| `DELETE`             | `/api/admin/rate`                          | session                      | Clear rate override (env `ADMIT_PER_SECOND`)           |
+| `GET`                | `/api/admin/traffic`                       | session                      | Inflow/outflow time series (~15s buckets, ~2h)         |
+| `PUT`                | `/api/admin/health`                        | session                      | Origin health config / override / clear override       |
+| `POST`               | `/api/admin/reset`                         | `TOKEN_SECRET` bearer only   | Clears admin, CF link, Turnstile, pending, origin      |
 
 `/admit`, `/mode`, `/pause`, and `/metrics` accept either an admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
 
