@@ -6,15 +6,15 @@ First-time install: [getting-started.md](getting-started.md). Pre-launch checks:
 
 ## What survives a normal upgrade
 
-| Asset                      | Survives redeploy? | Notes                                                                                    |
-| -------------------------- | ------------------ | ---------------------------------------------------------------------------------------- |
-| Worker code                | Replaced           | That is the point of upgrading                                                           |
-| `TOKEN_SECRET`             | Yes                | Wrangler secret; do not re-prompt unless you intend to rotate                            |
-| KV (`CONFIG_KV`) data      | Yes                | Admin password hash, branding, origin, allowlist, geo-block                              |
-| Durable Object queue state | Yes                | Same class + migration tags; visitors stay in line across redeploys                      |
-| Custom domains / routes    | Yes                | Dashboard / Workers Builds settings                                                      |
-| `wrangler.jsonc` `vars`    | Replaced by deploy | Capacity / timeouts come from the file you deploy; origin/queue/mode live in `/admin` KV |
-| Admin overrides in KV      | Yes                | Origin / branding / Cloudflare credentials saved in `/admin`                             |
+| Asset                      | Survives redeploy? | Notes                                                                                                                                |
+| -------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Worker code                | Replaced           | That is the point of upgrading                                                                                                       |
+| `TOKEN_SECRET`             | Yes                | Wrangler secret; do not re-prompt unless you intend to rotate                                                                        |
+| KV (`CONFIG_KV`) data      | Yes                | Admin password hash, branding, origin, allowlist, geo-block                                                                          |
+| Durable Object queue state | Yes                | Same class + migration tags; visitors stay in line across redeploys                                                                  |
+| Custom domains / routes    | Yes                | Dashboard / Workers Builds settings                                                                                                  |
+| `wrangler.jsonc` `vars`    | Replaced by deploy | Template ships minimal vars; capacity/timeouts use code defaults unless you add env overrides. Origin/queue/mode live in `/admin` KV |
+| Admin overrides in KV      | Yes                | Origin / branding / Cloudflare credentials saved in `/admin`                                                                         |
 
 Re-clicking **Deploy to Cloudflare** on the README is a **new** install (new fork / new resources). It is not an upgrade.
 

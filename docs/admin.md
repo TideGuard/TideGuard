@@ -82,40 +82,41 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 
 ## API (admin)
 
-| Method               | Path                                        | Auth                                                      |
-| -------------------- | ------------------------------------------- | --------------------------------------------------------- |
-| `GET`                | `/api/admin/bootstrap`                      | Public (`setupComplete`, `turnstileSitekey`, `version`)   |
-| `POST`               | `/api/admin/setup/cloudflare/token-verify`  | Bearer `TOKEN_SECRET` (wizard)                            |
-| `POST`               | `/api/admin/setup/cloudflare/verify`        | Bearer `TOKEN_SECRET` (wizard)                            |
-| `POST`               | `/api/admin/setup/cloudflare/fix`           | Bearer `TOKEN_SECRET` (wizard)                            |
-| `POST`               | `/api/admin/setup/cloudflare/attach-domain` | Bearer `TOKEN_SECRET` (wizard)                            |
-| `POST`               | `/api/admin/setup/cloudflare/ssl`           | Bearer `TOKEN_SECRET` (wizard)                            |
-| `POST`               | `/api/admin/setup/turnstile/provision`      | Bearer `TOKEN_SECRET` (wizard)                            |
-| `POST`               | `/api/admin/setup/turnstile/verify`         | Bearer `TOKEN_SECRET` (wizard)                            |
-| `POST`               | `/api/admin/setup`                          | Bearer `TOKEN_SECRET` once; requires pending CF+Turnstile |
-| `POST`               | `/api/admin/login`                          | Public (rate-limited); username + password + Turnstile    |
-| `POST`               | `/api/admin/logout`                         | Session                                                   |
-| `GET`                | `/api/admin/state`                          | Session (includes `me`, `team`, `turnstile`, traffic)     |
-| `GET`                | `/api/admin/metrics`                        | Session                                                   |
-| `GET`                | `/api/admin/traffic`                        | Session (inflow/outflow time series)                      |
-| `PUT`                | `/api/admin/rate`                           | Session (set max outflow override)                        |
-| `DELETE`             | `/api/admin/rate`                           | Session (clear override → env default)                    |
-| `PUT`                | `/api/admin/cloudflare/ip-geolocation`      | Session                                                   |
-| `PUT`                | `/api/admin/cloudflare/ssl`                 | Session (set Full strict)                                 |
-| `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`             | Session (list / attach / detach)                          |
-| `GET`                | `/api/admin/updates`                        | Session (optional `?refresh=1`)                           |
-| `GET`                | `/api/admin/audit`                          | Session                                                   |
-| `GET`                | `/api/admin/invites`                        | Session                                                   |
-| `POST`               | `/api/admin/invites`                        | Session (returns accept URL once)                         |
-| `DELETE`             | `/api/admin/invites/:id`                    | Session                                                   |
-| `POST`               | `/api/admin/invites/accept`                 | Public (rate-limited); invite + Turnstile                 |
-| `PUT`                | `/api/admin/branding`                       | Session                                                   |
-| `PUT`                | `/api/admin/origin`                         | Session                                                   |
-| `POST`               | `/api/admin/mode`                           | Session                                                   |
-| `PUT`                | `/api/admin/schedule`                       | Session                                                   |
-| `POST`               | `/api/admin/pause`                          | Session                                                   |
-| `PUT`                | `/api/admin/health`                         | Session                                                   |
-| `POST`               | `/api/admin/reset`                          | Bearer `TOKEN_SECRET` only                                |
+| Method               | Path                                        | Auth                                                               |
+| -------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| `GET`                | `/api/admin/bootstrap`                      | Public (`setupComplete`, `claimed`, `turnstileSitekey`, `version`) |
+| `POST`               | `/api/admin/claim`                          | Bearer `TOKEN_SECRET` once; locks admin + session                  |
+| `POST`               | `/api/admin/setup/cloudflare/token-verify`  | Session (after claim)                                              |
+| `POST`               | `/api/admin/setup/cloudflare/verify`        | Session (after claim)                                              |
+| `POST`               | `/api/admin/setup/cloudflare/fix`           | Session (after claim)                                              |
+| `POST`               | `/api/admin/setup/cloudflare/attach-domain` | Session (after claim)                                              |
+| `POST`               | `/api/admin/setup/cloudflare/ssl`           | Session (after claim)                                              |
+| `POST`               | `/api/admin/setup/turnstile/provision`      | Session (after claim)                                              |
+| `POST`               | `/api/admin/setup/turnstile/verify`         | Session (after claim)                                              |
+| `POST`               | `/api/admin/setup`                          | Session; requires pending CF+Turnstile; finishes setup             |
+| `POST`               | `/api/admin/login`                          | Public (rate-limited); username + password + Turnstile             |
+| `POST`               | `/api/admin/logout`                         | Session                                                            |
+| `GET`                | `/api/admin/state`                          | Session (includes `me`, `team`, `turnstile`, traffic)              |
+| `GET`                | `/api/admin/metrics`                        | Session                                                            |
+| `GET`                | `/api/admin/traffic`                        | Session (inflow/outflow time series)                               |
+| `PUT`                | `/api/admin/rate`                           | Session (set max outflow override)                                 |
+| `DELETE`             | `/api/admin/rate`                           | Session (clear override → env/code default)                        |
+| `PUT`                | `/api/admin/cloudflare/ip-geolocation`      | Session                                                            |
+| `PUT`                | `/api/admin/cloudflare/ssl`                 | Session (set Full strict)                                          |
+| `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`             | Session (list / attach / detach)                                   |
+| `GET`                | `/api/admin/updates`                        | Session (optional `?refresh=1`)                                    |
+| `GET`                | `/api/admin/audit`                          | Session                                                            |
+| `GET`                | `/api/admin/invites`                        | Session                                                            |
+| `POST`               | `/api/admin/invites`                        | Session (returns accept URL once)                                  |
+| `DELETE`             | `/api/admin/invites/:id`                    | Session                                                            |
+| `POST`               | `/api/admin/invites/accept`                 | Public (rate-limited); invite + Turnstile                          |
+| `PUT`                | `/api/admin/branding`                       | Session                                                            |
+| `PUT`                | `/api/admin/origin`                         | Session                                                            |
+| `POST`               | `/api/admin/mode`                           | Session                                                            |
+| `PUT`                | `/api/admin/schedule`                       | Session                                                            |
+| `POST`               | `/api/admin/pause`                          | Session                                                            |
+| `PUT`                | `/api/admin/health`                         | Session                                                            |
+| `POST`               | `/api/admin/reset`                          | Bearer `TOKEN_SECRET` only                                         |
 
 Operator routes `/admit`, `/mode`, `/pause`, and `/metrics` accept either the admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
 
