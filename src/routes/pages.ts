@@ -1,6 +1,10 @@
-import { ApiError } from "../core/errors";
 import { sanitizeRedirectUrl } from "../core/branding";
-import { appendSetCookies, requireAdmission, withSecurityHeaders } from "../auth";
+import {
+  appendSetCookies,
+  resolveAccessGate,
+  waitingRoomRedirectUrl,
+  withSecurityHeaders,
+} from "../auth";
 import { renderProtectedDemo } from "../demo/protected";
 import { renderWaitingRoom } from "../html/waiting-room";
 import { readBranding } from "../admin/store";
@@ -71,51 +75,42 @@ export async function handleDemo(request: Request, env: Env): Promise<Response> 
   const url = new URL(request.url);
   const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
 
-  try {
-    const admission = await requireAdmission(request, env, queue);
-    const html = renderProtectedDemo({
-      queueName: admission.queue,
-      visitorId: admission.visitorId,
-    });
+  const gate = await resolveAccessGate(request, env, queue);
+  if (gate.kind === "admitted") {
     return withSecurityHeaders(
-      new Response(html, {
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "cache-control": "no-store",
-        },
+      demoHtmlResponse({
+        queueName: gate.queue,
+        visitorId: gate.visitorId,
       }),
     );
-  } catch (error) {
-    if (error instanceof ApiError && error.code === "unauthorized") {
-      const bypass = await maybeAdmitIpBypass(request, env, queue);
-      if (bypass) {
-        const html = renderProtectedDemo({
-          queueName: bypass.queue,
-          visitorId: bypass.visitorId,
-        });
-        return withSecurityHeaders(
-          appendSetCookies(
-            new Response(html, {
-              headers: {
-                "content-type": "text/html; charset=utf-8",
-                "cache-control": "no-store",
-              },
-            }),
-            [bypass.accessCookie],
-          ),
-        );
-      }
-      const geo = await evaluateGeoBlock(request, env);
-      if (geo.blocked) {
-        return withSecurityHeaders(geoBlockedResponse(geo.country));
-      }
-      const wait = new URL("/wait", url.origin);
-      wait.searchParams.set("queue", queue);
-      wait.searchParams.set("return", "/demo");
-      return withSecurityHeaders(Response.redirect(wait.toString(), 302));
-    }
-    throw error;
   }
+  if (gate.kind === "bypass") {
+    return withSecurityHeaders(
+      appendSetCookies(
+        demoHtmlResponse({
+          queueName: gate.bypass.queue,
+          visitorId: gate.bypass.visitorId,
+        }),
+        [gate.bypass.accessCookie],
+      ),
+    );
+  }
+  if (gate.kind === "geo_blocked") {
+    return withSecurityHeaders(geoBlockedResponse(gate.country));
+  }
+
+  const wait = waitingRoomRedirectUrl(url.origin, queue, "/demo");
+  return withSecurityHeaders(Response.redirect(wait.toString(), 302));
+}
+
+function demoHtmlResponse(input: { queueName: string; visitorId: string }): Response {
+  const html = renderProtectedDemo(input);
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
 }
 
 /** Prefer ?return=, else branding / proxy default. Same-origin paths only. */

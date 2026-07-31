@@ -1,68 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  Anchor,
-  Button,
-  Card,
-  Checkbox,
-  ColorInput,
-  Group,
-  List,
-  NumberInput,
-  PasswordInput,
-  SegmentedControl,
-  SimpleGrid,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-  Title,
-} from "@mantine/core";
+import { useEffect, useRef, useState } from "react";
+import { Card, Group, Stack, Text, Title } from "@mantine/core";
 import { api, ApiError } from "../lib/api";
 import type { BootstrapResponse } from "../lib/types";
-import {
-  CF_PHASE_LABELS,
-  FIELD_HELP,
-  LINKS,
-  SETUP_STEPS,
-  TOKEN_PERMISSIONS,
-  type CfPhase,
-  isPasswordReady,
-  passwordChecks,
-} from "../lib/setup-guidance";
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        el: HTMLElement,
-        opts: {
-          sitekey: string;
-          callback: (token: string) => void;
-          "expired-callback"?: () => void;
-        },
-      ) => string;
-      reset: (id?: string) => void;
-      remove: (id?: string) => void;
-    };
-  }
-}
-
-type VerifyPayload = {
-  ok?: boolean;
-  verify?: {
-    proxy?: { ok?: boolean; summary?: string; suggestions?: string[] };
-    ssl?: { mode?: string | null; isStrict?: boolean };
-    domains?: { hostnameAttached?: boolean };
-  };
-};
-
-function ExtLink({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <Anchor href={href} target="_blank" rel="noreferrer" size="sm">
-      {children}
-    </Anchor>
-  );
-}
+import { CF_PHASE_LABELS, SETUP_STEPS, type CfPhase, isPasswordReady } from "../lib/setup-guidance";
+import { StepClaim } from "../views/setup/StepClaim";
+import { StepCloudflare } from "../views/setup/StepCloudflare";
+import { StepFinish } from "../views/setup/StepFinish";
+import { StepQueue } from "../views/setup/StepQueue";
+import { StepTurnstile } from "../views/setup/StepTurnstile";
+import { ensureTurnstile, type VerifyPayload } from "../views/setup/helpers";
 
 function initialStep(bootstrap: BootstrapResponse): number {
   if (!bootstrap.claimed) return 1;
@@ -126,7 +72,6 @@ export function SetupWizard({
   const widgetRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
 
-  const pwd = passwordChecks(password, confirmPassword);
   const activeStep = SETUP_STEPS.find((s) => s.id === step);
 
   function handleApiError(e: unknown, fallback: string) {
@@ -369,426 +314,155 @@ export function SetupWizard({
         ) : null}
 
         {step === 1 ? (
-          claimed || signedInAs ? (
-            <>
-              <Text size="sm">
-                Account locked in as <strong>{signedInAs ?? bootstrap.claimedUsername}</strong>.
-                Continue Cloudflare setup, or sign in again if your session expired.
-              </Text>
-              <Group>
-                <Button
-                  onClick={() => {
-                    setStep(2);
-                    setCfPhase("token");
-                  }}
-                >
-                  Continue setup
-                </Button>
-                <Button variant="default" onClick={onNeedLogin}>
-                  Sign in
-                </Button>
-              </Group>
-            </>
-          ) : (
-            <>
-              <PasswordInput
-                label="TOKEN_SECRET"
-                description="Same value as the Worker secret (generate at tideguard.dev/token). Claim locks your admin account immediately."
-                value={tokenSecret}
-                onChange={(e) => setTokenSecret(e.currentTarget.value)}
-              />
-              <TextInput
-                label="Admin username"
-                value={username}
-                onChange={(e) => setUsername(e.currentTarget.value)}
-              />
-              <PasswordInput
-                label="Password"
-                description="8–128 chars, at least one uppercase letter, and a digit or symbol."
-                value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
-              />
-              <PasswordInput
-                label="Confirm password"
-                value={confirmPassword}
-                onChange={(e) => setConfirm(e.currentTarget.value)}
-              />
-              <List size="sm" spacing={2} c="dimmed">
-                <List.Item c={pwd.length ? "teal" : undefined}>
-                  {pwd.length ? "✓" : "○"} At least 8 characters
-                </List.Item>
-                <List.Item c={pwd.upper ? "teal" : undefined}>
-                  {pwd.upper ? "✓" : "○"} One uppercase letter
-                </List.Item>
-                <List.Item c={pwd.digitOrSymbol ? "teal" : undefined}>
-                  {pwd.digitOrSymbol ? "✓" : "○"} One digit or symbol
-                </List.Item>
-                <List.Item c={pwd.match ? "teal" : undefined}>
-                  {pwd.match ? "✓" : "○"} Passwords match
-                </List.Item>
-              </List>
-              <Button loading={busy} onClick={() => void claim()}>
-                Claim & continue
-              </Button>
-            </>
-          )
+          <StepClaim
+            claimed={claimed}
+            signedInAs={signedInAs}
+            claimedUsername={bootstrap.claimedUsername}
+            tokenSecret={tokenSecret}
+            username={username}
+            password={password}
+            confirmPassword={confirmPassword}
+            busy={busy}
+            onTokenSecretChange={setTokenSecret}
+            onUsernameChange={setUsername}
+            onPasswordChange={setPassword}
+            onConfirmChange={setConfirm}
+            onClaim={() => void claim()}
+            onContinue={() => {
+              setStep(2);
+              setCfPhase("token");
+            }}
+            onNeedLogin={onNeedLogin}
+          />
         ) : null}
 
-        {step === 2 && cfPhase === "token" ? (
-          <>
-            <Text size="sm" c="dimmed">
-              One-time connect: create a token in Cloudflare, paste it here, then TideGuard can
-              manage the rest for you.
-            </Text>
-
-            <Stack gap="xs">
-              <Text size="sm" fw={600}>
-                1. Create a Custom Token
-              </Text>
-              <Text size="sm" c="dimmed">
-                In Cloudflare: API Tokens → Create Token → Create Custom Token. Limit Zone Resources
-                to your domain.
-              </Text>
-              <div>
-                <Button
-                  component="a"
-                  href={LINKS.apiTokens}
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="light"
-                  size="compact-sm"
-                >
-                  Open API Tokens
-                </Button>
-              </div>
-            </Stack>
-
-            <Stack gap={4}>
-              <Text size="sm" fw={600}>
-                2. Add these permissions
-              </Text>
-              <List size="sm" c="dimmed" spacing={2} withPadding>
-                {TOKEN_PERMISSIONS.map((p) => (
-                  <List.Item key={p}>{p}</List.Item>
-                ))}
-              </List>
-            </Stack>
-
-            <Stack gap="xs">
-              <Text size="sm" fw={600}>
-                3. Paste and verify
-              </Text>
-              <PasswordInput
-                label={FIELD_HELP.apiToken.label}
-                placeholder="Paste the token you just created"
-                value={cfToken}
-                onChange={(e) => {
-                  setCfToken(e.currentTarget.value);
-                  setTokenVerified(false);
-                }}
-              />
-            </Stack>
-
-            <Group>
-              <Button variant="default" onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <Button
-                loading={busy}
-                onClick={() => verifyToken()}
-                disabled={cfToken.trim().length < 20}
-              >
-                Verify token
-              </Button>
-            </Group>
-            {tokenVerified ? (
-              <Text size="sm" c="teal">
-                Token ready
-              </Text>
-            ) : null}
-          </>
-        ) : null}
-
-        {step === 2 && cfPhase === "zone" ? (
-          <>
-            <Text size="sm" c="dimmed">
-              Tell TideGuard which site to protect. Hostname must be proxied (orange cloud).
-            </Text>
-            <TextInput
-              label={FIELD_HELP.hostname.label}
-              description={FIELD_HELP.hostname.hint}
-              value={hostname}
-              onChange={(e) => setHostname(e.currentTarget.value)}
-            />
-            <TextInput
-              label={FIELD_HELP.zoneId.label}
-              description={
-                <>
-                  {FIELD_HELP.zoneId.hint} <ExtLink href={LINKS.findIds}>Find Zone ID</ExtLink>
-                </>
-              }
-              value={zoneId}
-              onChange={(e) => setZoneId(e.currentTarget.value)}
-              placeholder="Leave blank to auto-detect"
-            />
-            <TextInput
-              label={FIELD_HELP.workerService.label}
-              description={FIELD_HELP.workerService.hint}
-              value={workerService}
-              onChange={(e) => setWorkerService(e.currentTarget.value)}
-            />
-            {proxySummary ? (
-              <Text size="sm" c={proxyOk ? "teal" : "orange"}>
-                {proxySummary}
-              </Text>
-            ) : null}
-            {proxySuggestions.length > 0 ? (
-              <List size="xs" c="dimmed">
-                {proxySuggestions.map((s) => (
-                  <List.Item key={s}>{s}</List.Item>
-                ))}
-              </List>
-            ) : null}
-            <Group>
-              <Button
-                variant="default"
-                onClick={() => {
-                  setCfPhase("token");
-                  setStatus(null);
-                }}
-              >
-                Back
-              </Button>
-              <Button loading={busy} onClick={() => verifyZone()} disabled={!hostname.trim()}>
-                Verify site
-              </Button>
-              {!proxyOk && proxyChecked ? (
-                <Button variant="light" loading={busy} onClick={() => fixProxy()}>
-                  Fix setup
-                </Button>
-              ) : null}
-            </Group>
-          </>
-        ) : null}
-
-        {step === 2 && cfPhase === "ssl" ? (
-          <>
-            <Text size="sm" c="dimmed">
-              Recommended when your origin has a valid certificate. Skip if you are not ready — you
-              can set this later in Admin → Cloudflare access.
-            </Text>
-            <Group>
-              <Button
-                variant="default"
-                onClick={() => {
-                  setCfPhase("zone");
-                  setStatus(null);
-                }}
-              >
-                Back
-              </Button>
-              <Button loading={busy} onClick={() => setSsl()}>
-                Set Full (strict)
-              </Button>
-              <Button
-                variant="light"
-                onClick={() => {
-                  setSslDone(true);
-                  setStatus("SSL skipped for now");
-                  setCfPhase("domain");
-                }}
-              >
-                Skip for now
-              </Button>
-            </Group>
-            {sslDone ? (
-              <Text size="sm" c="teal">
-                SSL step done
-              </Text>
-            ) : null}
-          </>
-        ) : null}
-
-        {step === 2 && cfPhase === "domain" ? (
-          <>
-            <Text size="sm" c="dimmed">
-              Link your hostname to this Worker so visitors hit the waiting room. Skip if it is
-              already linked — you can manage domains later in Admin → Cloudflare access.
-            </Text>
-            <Group>
-              <Button
-                variant="default"
-                onClick={() => {
-                  setCfPhase("ssl");
-                  setStatus(null);
-                }}
-              >
-                Back
-              </Button>
-              <Button loading={busy} onClick={() => attachDomain()}>
-                Attach domain
-              </Button>
-              <Button
-                variant="light"
-                onClick={() => {
-                  setDomainDone(true);
-                  setStatus("Domain attach skipped");
-                  setStep(3);
-                }}
-              >
-                Skip for now
-              </Button>
-            </Group>
-            {domainDone ? (
-              <Text size="sm" c="teal">
-                Domain step done
-              </Text>
-            ) : null}
-          </>
+        {step === 2 ? (
+          <StepCloudflare
+            cfPhase={cfPhase}
+            cfToken={cfToken}
+            tokenVerified={tokenVerified}
+            hostname={hostname}
+            zoneId={zoneId}
+            workerService={workerService}
+            proxyOk={proxyOk}
+            proxyChecked={proxyChecked}
+            proxySummary={proxySummary}
+            proxySuggestions={proxySuggestions}
+            sslDone={sslDone}
+            domainDone={domainDone}
+            busy={busy}
+            onCfTokenChange={(v) => {
+              setCfToken(v);
+              setTokenVerified(false);
+            }}
+            onHostnameChange={setHostname}
+            onZoneIdChange={setZoneId}
+            onWorkerServiceChange={setWorkerService}
+            onBackToStep1={() => setStep(1)}
+            onBackToPhase={(phase) => {
+              setCfPhase(phase);
+              setStatus(null);
+            }}
+            onVerifyToken={() => verifyToken()}
+            onVerifyZone={() => verifyZone()}
+            onFixProxy={() => fixProxy()}
+            onSetSsl={() => setSsl()}
+            onSkipSsl={() => {
+              setSslDone(true);
+              setStatus("SSL skipped for now");
+              setCfPhase("domain");
+            }}
+            onAttachDomain={() => attachDomain()}
+            onSkipDomain={() => {
+              setDomainDone(true);
+              setStatus("Domain attach skipped");
+              setStep(3);
+            }}
+          />
         ) : null}
 
         {step === 3 ? (
-          <>
-            <Text size="sm" c="dimmed">
-              TideGuard creates a Turnstile widget with your verified API token. Complete the
-              challenge, then verify — required for admin login after setup.
-            </Text>
-            <Group>
-              <Button
-                loading={busy}
-                onClick={() => {
-                  setBusy(true);
-                  setStatus(null);
-                  void api<{ sitekey?: string }>("/api/admin/setup/turnstile/provision", {
-                    method: "POST",
-                    body: "{}",
-                  })
-                    .then((data) => {
-                      setTsSitekey(data.sitekey ?? null);
-                      setStatus("Widget ready — complete the challenge");
-                    })
-                    .catch((e) => handleApiError(e, "Provision failed"))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                Create widget
-              </Button>
-              <Button
-                loading={busy}
-                disabled={!tsToken}
-                onClick={() => {
-                  setBusy(true);
-                  setStatus(null);
-                  void api("/api/admin/setup/turnstile/verify", {
-                    method: "POST",
-                    body: JSON.stringify({ turnstileToken: tsToken }),
-                  })
-                    .then(() => {
-                      setTsVerified(true);
-                      setStatus("Turnstile verified");
-                      setStep(4);
-                    })
-                    .catch((e) => handleApiError(e, "Verify failed"))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                Verify challenge
-              </Button>
-            </Group>
-            <div ref={widgetRef} />
-            <Group>
-              <Button
-                variant="default"
-                onClick={() => {
-                  setStep(2);
-                  setCfPhase("domain");
-                }}
-              >
-                Back
-              </Button>
-              <Button disabled={!tsVerified} onClick={() => setStep(4)}>
-                Continue
-              </Button>
-            </Group>
-          </>
+          <StepTurnstile
+            busy={busy}
+            tsToken={tsToken}
+            tsVerified={tsVerified}
+            widgetRef={widgetRef}
+            onProvision={() => {
+              setBusy(true);
+              setStatus(null);
+              void api<{ sitekey?: string }>("/api/admin/setup/turnstile/provision", {
+                method: "POST",
+                body: "{}",
+              })
+                .then((data) => {
+                  setTsSitekey(data.sitekey ?? null);
+                  setStatus("Widget ready — complete the challenge");
+                })
+                .catch((e) => handleApiError(e, "Provision failed"))
+                .finally(() => setBusy(false));
+            }}
+            onVerify={() => {
+              setBusy(true);
+              setStatus(null);
+              void api("/api/admin/setup/turnstile/verify", {
+                method: "POST",
+                body: JSON.stringify({ turnstileToken: tsToken }),
+              })
+                .then(() => {
+                  setTsVerified(true);
+                  setStatus("Turnstile verified");
+                  setStep(4);
+                })
+                .catch((e) => handleApiError(e, "Verify failed"))
+                .finally(() => setBusy(false));
+            }}
+            onBack={() => {
+              setStep(2);
+              setCfPhase("domain");
+            }}
+            onContinue={() => setStep(4)}
+          />
         ) : null}
 
         {step === 4 ? (
-          <>
-            <Text size="sm" c="dimmed">
-              Queue name and admission mode are stored when you finish setup (not at deploy time).
-            </Text>
-            <TextInput
-              label="Queue name"
-              value={queue}
-              onChange={(e) => setQueue(e.currentTarget.value)}
-            />
-            <SegmentedControl
-              value={mode}
-              onChange={(v) => setMode(v as "queue" | "lottery")}
-              data={[
-                { label: "Queue", value: "queue" },
-                { label: "Lottery", value: "lottery" },
-              ]}
-            />
-            <Checkbox
-              label="Show waiting count"
-              checked={showWaiting}
-              onChange={(e) => setShowWaiting(e.currentTarget.checked)}
-            />
-            <Checkbox
-              label="Require click to enter"
-              checked={requireClick}
-              onChange={(e) => setRequireClick(e.currentTarget.checked)}
-            />
-            <NumberInput
-              label="Admit hold (s)"
-              value={hold}
-              onChange={(v) => setHold(Number(v) || 60)}
-              min={15}
-              max={900}
-            />
-            <Group>
-              <Button variant="default" onClick={() => setStep(3)}>
-                Back
-              </Button>
-              <Button onClick={() => setStep(5)}>Continue</Button>
-            </Group>
-          </>
+          <StepQueue
+            queue={queue}
+            mode={mode}
+            showWaiting={showWaiting}
+            requireClick={requireClick}
+            hold={hold}
+            onQueueChange={setQueue}
+            onModeChange={setMode}
+            onShowWaitingChange={setShowWaiting}
+            onRequireClickChange={setRequireClick}
+            onHoldChange={setHold}
+            onBack={() => setStep(3)}
+            onContinue={() => setStep(5)}
+          />
         ) : null}
 
         {step === 5 ? (
-          <>
-            <Text size="sm" c="dimmed">
-              Preview colors client-side; nothing is written until Finish setup.
-            </Text>
-            <TextInput
-              label="Title"
-              value={title}
-              onChange={(e) => setTitle(e.currentTarget.value)}
-            />
-            <Textarea
-              label="Message"
-              value={message}
-              onChange={(e) => setMessage(e.currentTarget.value)}
-            />
-            <SimpleGrid cols={2}>
-              <ColorInput label="Primary" value={primary} onChange={setPrimary} />
-              <ColorInput label="Accent" value={accent} onChange={setAccent} />
-              <ColorInput label="Background" value={bg} onChange={setBg} />
-              <ColorInput label="Surface" value={surface} onChange={setSurface} />
-              <ColorInput label="Text" value={text} onChange={setText} />
-              <ColorInput label="Muted" value={muted} onChange={setMuted} />
-            </SimpleGrid>
-            <Group>
-              <Button variant="default" onClick={() => setStep(4)}>
-                Back
-              </Button>
-              <Button loading={busy} onClick={() => void finish()}>
-                Finish setup
-              </Button>
-            </Group>
-          </>
+          <StepFinish
+            title={title}
+            message={message}
+            primary={primary}
+            accent={accent}
+            bg={bg}
+            surface={surface}
+            text={text}
+            muted={muted}
+            busy={busy}
+            onTitleChange={setTitle}
+            onMessageChange={setMessage}
+            onPrimaryChange={setPrimary}
+            onAccentChange={setAccent}
+            onBgChange={setBg}
+            onSurfaceChange={setSurface}
+            onTextChange={setText}
+            onMutedChange={setMuted}
+            onBack={() => setStep(4)}
+            onFinish={() => void finish()}
+          />
         ) : null}
 
         {status ? (
@@ -799,22 +473,4 @@ export function SetupWizard({
       </Stack>
     </Card>
   );
-}
-
-function ensureTurnstile(): Promise<void> {
-  if (window.turnstile) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector("script[data-tg-turnstile]");
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    s.async = true;
-    s.dataset.tgTurnstile = "1";
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Failed to load Turnstile"));
-    document.head.appendChild(s);
-  });
 }

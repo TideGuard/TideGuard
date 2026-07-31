@@ -5,9 +5,11 @@ export {
   normalizeOriginUrl,
   isBlockedOriginHost,
   isTideGuardPath,
+  isStaticTideGuardPath,
   shouldRequireAdmission,
   shouldProxyToOrigin,
   buildUpstreamUrl,
+  RESERVED_EXACT,
   DEFAULT_ORIGIN_CONFIG,
 } from "./origin";
 export type { OriginProxyConfig } from "./origin";

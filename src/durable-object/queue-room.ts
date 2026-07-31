@@ -2,15 +2,11 @@ import { DurableObject } from "cloudflare:workers";
 import { defaultEtaCalculator } from "../core/eta";
 import type { AdmissionMode, QueueConfig } from "../core/types";
 import {
-  advanceHealthState,
-  DEFAULT_HEALTH_CONFIG,
   DEFAULT_HEALTH_STATE,
   healthRateMultiplier,
   isAutoPaused,
   parseHealthConfig,
-  probeOriginHealth,
   type OriginHealthConfig,
-  type OriginHealthState,
 } from "../health/origin-probe";
 import {
   QUEUE_ALARM_INTERVAL_MS,
@@ -20,12 +16,7 @@ import {
   queuePollProgress,
   waitingPosition,
 } from "../queue/engine";
-import {
-  TRAFFIC_BUCKET_MS,
-  TRAFFIC_RETENTION_MS,
-  alignTrafficBucket,
-  parseAdmitPerSecond,
-} from "../queue/traffic";
+import { TRAFFIC_BUCKET_MS, TRAFFIC_RETENTION_MS, parseAdmitPerSecond } from "../queue/traffic";
 import { buildMetrics } from "../queue/types";
 import type {
   QueueAdmitRateResponse,
@@ -46,6 +37,20 @@ import type {
   QueueTrafficResponse,
   QueueVisitorRequest,
 } from "../queue/types";
+import {
+  healthSnapshot as healthSnapshotFromMeta,
+  maybeProbeHealth as maybeProbeHealthFromMeta,
+  readHealthConfig as readHealthConfigFromMeta,
+  readHealthState as readHealthStateFromMeta,
+} from "./health-state";
+import { migrateQueueRoomSchema } from "./schema";
+import {
+  currentTrafficOpen as currentTrafficOpenFromMeta,
+  flushTrafficBucket as flushTrafficBucketImpl,
+  recordTraffic as recordTrafficImpl,
+  totalInflow as totalInflowFromMeta,
+  type TrafficBucketDeps,
+} from "./traffic-buckets";
 
 type SqlValue = string | number | null;
 
@@ -521,59 +526,12 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   private migrate(): void {
-    this.ctx.storage.sql.exec(`
-      CREATE TABLE IF NOT EXISTS meta (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    `);
-
-    let version = Number(this.getMeta("schema_version") ?? "0");
-    if (version < 1) {
-      this.ctx.storage.sql.exec(`
-        CREATE TABLE IF NOT EXISTS visitors (
-          id TEXT PRIMARY KEY,
-          status TEXT NOT NULL,
-          joined_at INTEGER NOT NULL,
-          last_heartbeat_at INTEGER NOT NULL,
-          admitted_at INTEGER,
-          sequence INTEGER NOT NULL,
-          entered INTEGER NOT NULL DEFAULT 1
-        )
-      `);
-      this.ctx.storage.sql.exec(`
-        CREATE INDEX IF NOT EXISTS idx_visitors_status_sequence
-          ON visitors (status, sequence)
-      `);
-      version = 2;
-      this.setMeta("schema_version", "2");
-    } else if (version < 2) {
-      this.ctx.storage.sql.exec(`
-        ALTER TABLE visitors ADD COLUMN entered INTEGER NOT NULL DEFAULT 1
-      `);
-      version = 2;
-      this.setMeta("schema_version", "2");
-    }
-
-    if (version < 3) {
-      this.reconcileDepth();
-      this.setMeta("schema_version", "3");
-      version = 3;
-    }
-
-    if (version < 4) {
-      this.ctx.storage.sql.exec(`
-        CREATE TABLE IF NOT EXISTS traffic_buckets (
-          t INTEGER PRIMARY KEY,
-          joins INTEGER NOT NULL DEFAULT 0,
-          admits INTEGER NOT NULL DEFAULT 0,
-          max_outflow REAL NOT NULL DEFAULT 0,
-          waiting INTEGER NOT NULL DEFAULT 0,
-          entered INTEGER NOT NULL DEFAULT 0
-        )
-      `);
-      this.setMeta("schema_version", "4");
-    }
+    migrateQueueRoomSchema({
+      sql: this.ctx.storage.sql,
+      getMeta: (key) => this.getMeta(key),
+      setMeta: (key, value) => this.setMeta(key, value),
+      reconcileDepth: () => this.reconcileDepth(),
+    });
   }
 
   private sweep(config: QueueConfig, now: number, force: boolean): void {
@@ -835,21 +793,23 @@ export class QueueRoom extends DurableObject<Env> {
     };
   }
 
+  private trafficDeps(): TrafficBucketDeps {
+    return {
+      sql: this.ctx.storage.sql,
+      getMeta: (key) => this.getMeta(key),
+      setMeta: (key, value) => this.setMeta(key, value),
+      resolveAdmitPerSecond: (config) => this.effectiveConfig(config).admitPerSecond,
+      countWaiting: () => this.countByStatus("waiting"),
+      countEntered: () => this.countEntered(),
+    };
+  }
+
   private totalInflow(): number {
-    const raw = Number(this.getMeta("total_inflow") ?? "0");
-    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+    return totalInflowFromMeta((key) => this.getMeta(key));
   }
 
   private currentTrafficOpen(now: number): { joins: number; admits: number } {
-    const bucket = alignTrafficBucket(now);
-    const openT = Number(this.getMeta("traffic_open_t") ?? "0");
-    if (openT !== bucket) {
-      return { joins: 0, admits: 0 };
-    }
-    return {
-      joins: Number(this.getMeta("traffic_open_joins") ?? "0") || 0,
-      admits: Number(this.getMeta("traffic_open_admits") ?? "0") || 0,
-    };
+    return currentTrafficOpenFromMeta(now, (key) => this.getMeta(key));
   }
 
   private recordTraffic(
@@ -857,68 +817,11 @@ export class QueueRoom extends DurableObject<Env> {
     config: QueueConfig,
     delta: { joins: number; admits: number },
   ): void {
-    this.flushTrafficBucket(now, config);
-    const bucket = alignTrafficBucket(now);
-    const openT = Number(this.getMeta("traffic_open_t") ?? "0");
-    let joins = Number(this.getMeta("traffic_open_joins") ?? "0") || 0;
-    let admits = Number(this.getMeta("traffic_open_admits") ?? "0") || 0;
-    if (openT !== bucket) {
-      joins = 0;
-      admits = 0;
-      this.setMeta("traffic_open_t", String(bucket));
-    }
-    joins += delta.joins;
-    admits += delta.admits;
-    this.setMeta("traffic_open_joins", String(joins));
-    this.setMeta("traffic_open_admits", String(admits));
-    if (delta.joins > 0) {
-      this.setMeta("total_inflow", String(this.totalInflow() + delta.joins));
-    }
+    recordTrafficImpl(this.trafficDeps(), now, config, delta);
   }
 
   private flushTrafficBucket(now: number, config: QueueConfig): void {
-    const openT = Number(this.getMeta("traffic_open_t") ?? "0");
-    if (!Number.isFinite(openT) || openT <= 0) {
-      this.setMeta("traffic_open_t", String(alignTrafficBucket(now)));
-      this.setMeta("traffic_open_joins", "0");
-      this.setMeta("traffic_open_admits", "0");
-      return;
-    }
-
-    const current = alignTrafficBucket(now);
-    if (openT >= current) {
-      return;
-    }
-
-    const joins = Number(this.getMeta("traffic_open_joins") ?? "0") || 0;
-    const admits = Number(this.getMeta("traffic_open_admits") ?? "0") || 0;
-    const maxOutflow = this.effectiveConfig(config).admitPerSecond;
-    const waiting = this.countByStatus("waiting");
-    const entered = this.countEntered();
-
-    this.ctx.storage.sql.exec(
-      `INSERT INTO traffic_buckets (t, joins, admits, max_outflow, waiting, entered)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(t) DO UPDATE SET
-         joins = joins + excluded.joins,
-         admits = admits + excluded.admits,
-         max_outflow = excluded.max_outflow,
-         waiting = excluded.waiting,
-         entered = excluded.entered`,
-      openT,
-      joins,
-      admits,
-      maxOutflow,
-      waiting,
-      entered,
-    );
-
-    const cutoff = now - TRAFFIC_RETENTION_MS;
-    this.ctx.storage.sql.exec(`DELETE FROM traffic_buckets WHERE t < ?`, cutoff);
-
-    this.setMeta("traffic_open_t", String(current));
-    this.setMeta("traffic_open_joins", "0");
-    this.setMeta("traffic_open_admits", "0");
+    flushTrafficBucketImpl(this.trafficDeps(), now, config);
   }
 
   private insertVisitor(input: {
@@ -1191,56 +1094,22 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   private readHealthConfig(): OriginHealthConfig {
-    const raw = this.getMeta("health_config");
-    if (!raw) {
-      return { ...DEFAULT_HEALTH_CONFIG };
-    }
-    try {
-      return parseHealthConfig(JSON.parse(raw) as Partial<OriginHealthConfig>);
-    } catch {
-      return { ...DEFAULT_HEALTH_CONFIG };
-    }
+    return readHealthConfigFromMeta((key) => this.getMeta(key));
   }
 
-  private readHealthState(): OriginHealthState {
-    const raw = this.getMeta("health_state");
-    if (!raw) {
-      return { ...DEFAULT_HEALTH_STATE };
-    }
-    try {
-      return { ...DEFAULT_HEALTH_STATE, ...(JSON.parse(raw) as Partial<OriginHealthState>) };
-    } catch {
-      return { ...DEFAULT_HEALTH_STATE };
-    }
+  private readHealthState() {
+    return readHealthStateFromMeta((key) => this.getMeta(key));
   }
 
   private healthSnapshot(now: number): QueueMetricsResponse["health"] {
-    const config = this.readHealthConfig();
-    const state = this.readHealthState();
-    return {
-      enabled: config.enabled,
-      level: state.level,
-      lastCheckedAt: state.lastCheckedAt,
-      lastLatencyMs: state.lastLatencyMs,
-      lastStatus: state.lastStatus,
-      lastError: state.lastError,
-      overrideUntil: config.overrideUntil,
-      autoPaused: isAutoPaused(config, state, now),
-    };
+    return healthSnapshotFromMeta(now, (key) => this.getMeta(key));
   }
 
   private async maybeProbeHealth(now: number): Promise<void> {
-    const config = this.readHealthConfig();
-    if (!config.enabled || !config.url) {
-      return;
-    }
-    const state = this.readHealthState();
-    if (state.lastCheckedAt && now - state.lastCheckedAt < config.intervalSeconds * 1000) {
-      return;
-    }
-    const probe = await probeOriginHealth(config);
-    const next = advanceHealthState(config, state, probe, now);
-    this.setMeta("health_state", JSON.stringify(next));
+    await maybeProbeHealthFromMeta(now, {
+      getMeta: (key) => this.getMeta(key),
+      setMeta: (key, value) => this.setMeta(key, value),
+    });
   }
 
   private alarmConfig(): QueueConfig | null {

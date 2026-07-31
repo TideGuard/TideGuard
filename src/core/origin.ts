@@ -24,9 +24,11 @@ export const DEFAULT_ORIGIN_CONFIG: OriginProxyConfig = {
   queue: "default",
 };
 
-/** Paths TideGuard always serves itself (never proxied). */
-const RESERVED_EXACT = new Set([
-  "/",
+/**
+ * Exact paths TideGuard always serves itself (never proxied).
+ * `/` is omitted: when origin proxy is enabled it is forwarded upstream.
+ */
+export const RESERVED_EXACT = new Set([
   "/health",
   "/wait",
   "/join",
@@ -48,13 +50,10 @@ const RESERVED_EXACT = new Set([
 const RESERVED_PREFIXES = ["/api/admin"];
 
 /**
- * When origin proxy is enabled, `/` is proxied to the origin home instead of
- * the TideGuard landing page. Other control-plane paths stay reserved.
+ * Paths that never need origin proxy config (skip KV / cache lookup).
+ * Same catalog as {@link RESERVED_EXACT}, plus `/admin/*` and `/api/admin/*`.
  */
-export function isTideGuardPath(pathname: string, originEnabled: boolean): boolean {
-  if (pathname === "/") {
-    return !originEnabled;
-  }
+export function isStaticTideGuardPath(pathname: string): boolean {
   if (RESERVED_EXACT.has(pathname)) {
     return true;
   }
@@ -64,6 +63,17 @@ export function isTideGuardPath(pathname: string, originEnabled: boolean): boole
   return RESERVED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+}
+
+/**
+ * When origin proxy is enabled, `/` is proxied to the origin home instead of
+ * the TideGuard landing page. Other control-plane paths stay reserved.
+ */
+export function isTideGuardPath(pathname: string, originEnabled: boolean): boolean {
+  if (pathname === "/") {
+    return !originEnabled;
+  }
+  return isStaticTideGuardPath(pathname);
 }
 
 export function shouldRequireAdmission(pathname: string, config: OriginProxyConfig): boolean {

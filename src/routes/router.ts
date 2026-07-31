@@ -1,7 +1,17 @@
 import { ApiError, jsonError } from "../core/errors";
-import { isTideGuardPath, shouldProxyToOrigin, shouldRequireAdmission } from "../core/origin";
+import {
+  isStaticTideGuardPath,
+  isTideGuardPath,
+  shouldProxyToOrigin,
+  shouldRequireAdmission,
+} from "../core/origin";
 import { resolveOriginConfig } from "../admin/origin-store";
-import { requireAdmission, withSecurityHeaders } from "../auth";
+import {
+  appendSetCookies,
+  resolveAccessGate,
+  waitingRoomRedirectUrl,
+  withSecurityHeaders,
+} from "../auth";
 import { proxyToOrigin } from "../proxy/origin-proxy";
 import {
   handleAdminAcceptInvite,
@@ -45,11 +55,8 @@ import {
   handleAdminState,
   handleAdminUpdates,
 } from "./admin";
-import { maybeAdmitIpBypass } from "../admin/ip-bypass";
-import { evaluateGeoBlock } from "../admin/geo-block";
-import { isAdminSetupComplete } from "../admin/store";
 import { geoBlockedResponse } from "../html/geo-blocked";
-import { appendSetCookies } from "../auth";
+import { isAdminSetupComplete } from "../admin/store";
 import { handleCostEstimateApi, handleCostPage } from "./cost";
 import { handleHealth } from "./health";
 import { handleDemo, handleWaitingRoom } from "./pages";
@@ -66,29 +73,6 @@ import {
 } from "./queue";
 import { handleNotificationSound } from "./sounds";
 import { serveAdminAssets } from "./admin-assets";
-
-/**
- * Paths that never need origin proxy config (skip KV / cache lookup).
- * `/` is excluded because origin-enabled Workers proxy the homepage.
- */
-const STATIC_TIDEGUARD = new Set([
-  "/health",
-  "/wait",
-  "/join",
-  "/status",
-  "/leave",
-  "/heartbeat",
-  "/enter",
-  "/admit",
-  "/mode",
-  "/pause",
-  "/metrics",
-  "/admin",
-  "/cost",
-  "/demo",
-  "/api/cost-estimate",
-  "/sounds/notification.mp3",
-]);
 
 /**
  * HTTP router for the TideGuard Worker.
@@ -110,37 +94,33 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
     if (shouldProxyToOrigin(url.pathname, originConfig)) {
       if (shouldRequireAdmission(url.pathname, originConfig)) {
-        try {
-          const admission = await requireAdmission(request, env, originConfig.queue);
+        const gate = await resolveAccessGate(request, env, originConfig.queue);
+        if (gate.kind === "admitted") {
           return withSecurityHeaders(
             await proxyToOrigin(request, originConfig, {
-              visitorId: admission.visitorId,
+              visitorId: gate.visitorId,
             }),
           );
-        } catch (error) {
-          if (error instanceof ApiError && error.code === "unauthorized") {
-            const bypass = await maybeAdmitIpBypass(request, env, originConfig.queue);
-            if (bypass) {
-              return withSecurityHeaders(
-                appendSetCookies(
-                  await proxyToOrigin(request, originConfig, {
-                    visitorId: bypass.visitorId,
-                  }),
-                  [bypass.accessCookie],
-                ),
-              );
-            }
-            const geo = await evaluateGeoBlock(request, env);
-            if (geo.blocked) {
-              return withSecurityHeaders(geoBlockedResponse(geo.country));
-            }
-            const wait = new URL("/wait", url.origin);
-            wait.searchParams.set("queue", originConfig.queue);
-            wait.searchParams.set("return", `${url.pathname}${url.search}`);
-            return withSecurityHeaders(Response.redirect(wait.toString(), 302));
-          }
-          throw error;
         }
+        if (gate.kind === "bypass") {
+          return withSecurityHeaders(
+            appendSetCookies(
+              await proxyToOrigin(request, originConfig, {
+                visitorId: gate.bypass.visitorId,
+              }),
+              [gate.bypass.accessCookie],
+            ),
+          );
+        }
+        if (gate.kind === "geo_blocked") {
+          return withSecurityHeaders(geoBlockedResponse(gate.country));
+        }
+        const wait = waitingRoomRedirectUrl(
+          url.origin,
+          originConfig.queue,
+          `${url.pathname}${url.search}`,
+        );
+        return withSecurityHeaders(Response.redirect(wait.toString(), 302));
       }
 
       return withSecurityHeaders(await proxyToOrigin(request, originConfig));
@@ -157,16 +137,6 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       jsonError(new ApiError("internal_error", "Unexpected server error", 500)),
     );
   }
-}
-
-function isStaticTideGuardPath(pathname: string): boolean {
-  if (STATIC_TIDEGUARD.has(pathname)) {
-    return true;
-  }
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    return true;
-  }
-  return pathname === "/api/admin" || pathname.startsWith("/api/admin/");
 }
 
 async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promise<Response> {

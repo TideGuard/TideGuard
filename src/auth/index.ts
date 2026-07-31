@@ -14,6 +14,14 @@ export {
 } from "./cookies";
 export { rateLimitOrThrow } from "./rate-limit";
 export { requireAdmission } from "./admission";
+export { resolveAccessGate, waitingRoomRedirectUrl } from "./access-gate";
+export type {
+  AccessGateResult,
+  AccessGateAdmitted,
+  AccessGateBypass,
+  AccessGateGeoBlocked,
+  AccessGateRedirectWait,
+} from "./access-gate";
 export { hashPassword, verifyPassword } from "./password";
 export {
   signAdminSession,
