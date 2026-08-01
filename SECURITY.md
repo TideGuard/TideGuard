@@ -31,6 +31,7 @@ Include:
 - Prefer strong per-admin passwords (PBKDF2-hashed and salted in KV); use Team invites instead of sharing one password
 - Review the Activity panel after launch changes; consequential toggles ask for confirmation
 - For production origins: Full (strict) SSL + Authenticated Origin Pulls so the upstream cannot be hit bypassing TideGuard ([protecting-origin.md](docs/protecting-origin.md)) — set Full (strict) from the admin Cloudflare panel when the origin cert is ready
+- Keep Bot Fight Mode / WAF enabled; if waiting-room API polls get challenged, use a cookie-scoped Skip rule for TideGuard control paths — do not disable zone bot protection wholesale ([protecting-origin.md](docs/protecting-origin.md#cloudflare-bot-fight-mode-and-waf))
 - Consider Cloudflare Access / Zero Trust in front of `/admin` for high-stakes deployments (in addition to Turnstile)
 - Rotate `TOKEN_SECRET` if it may have leaked (invalidates outstanding visitor tokens, tickets, and admin sessions)
 - Prefer adaptive waiting-room polling (default). Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended — they raise Durable Object request volume

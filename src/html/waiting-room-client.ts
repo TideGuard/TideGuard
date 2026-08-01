@@ -152,12 +152,6 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           return m + "m " + String(s).padStart(2, "0") + "s";
         }
 
-        function formatOdds(odds) {
-          if (!Number.isFinite(odds) || odds <= 0) return "—";
-          const n = Math.max(1, Math.round(1 / odds));
-          return "1 in " + n;
-        }
-
         function redirectNow() {
           setStatus("You’re in. Redirecting…", "ok");
           stopPolling();
@@ -166,8 +160,14 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
 
         function updateProgress(data) {
           if (data.admissionMode === "lottery") {
-            const odds = data.lotteryOdds;
-            const pct = !odds ? 8 : Math.max(8, Math.min(92, Math.round(odds * 100)));
+            // Fill rises as ETA shrinks (no meaningful per-visitor odds at scale).
+            const eta = Number(data.estimatedWaitSeconds);
+            if (!Number.isFinite(eta) || eta <= 0) {
+              el.progress.style.setProperty("--progress", "100%");
+              el.progress.setAttribute("aria-valuenow", "100");
+              return;
+            }
+            const pct = Math.max(8, Math.min(96, Math.round(100 / Math.sqrt(1 + eta / 30))));
             el.progress.style.setProperty("--progress", pct + "%");
             el.progress.setAttribute("aria-valuenow", String(pct));
             return;
@@ -187,9 +187,9 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           el.enterPanel.hidden = true;
           if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
           if (data.admissionMode === "lottery") {
-            el.primaryLabel.textContent = "Lottery odds";
-            el.position.textContent = formatOdds(data.lotteryOdds);
-            setStatus("Lottery Mode · waiting in “" + queue + "”", "ok");
+            el.primaryLabel.textContent = "Chance";
+            el.position.textContent = "Equal";
+            setStatus("Lottery · everyone has an equal chance", "ok");
             if (showWaitingCount && el.depthA) {
               el.depthALabel.textContent = "In pool";
               el.depthA.textContent = Number.isFinite(data.waiting) ? String(data.waiting) : "—";

@@ -40,7 +40,7 @@ Every successful join sets cookie `tg_ticket` (visitor ownership proof). `/statu
 Waiting responses include `admissionMode` (`queue` | `lottery`) and, while waiting, `nextPollAfterMs` (adaptive status poll hint). Depth fields (`waiting`, `ahead`, `behind`, `lotteryOdds`) are included **only** when branding `showWaitingCount` is enabled for that queue (synced to the DO on branding save). Public join/status never expose pause, health, `opensAt`, or capacity.
 
 - **Queue Mode** — `position` (1-based FIFO), optional `ahead` / `behind`, `estimatedWaitSeconds`, `nextPollAfterMs`
-- **Lottery Mode** — `position` omitted, optional `lotteryOdds` (`1 / waitingCount`) and `waiting`, plus `nextPollAfterMs`
+- **Lottery Mode** — `position` omitted, `estimatedWaitSeconds`, optional `lotteryOdds` (`1 / waitingCount`) and `waiting` for API clients, plus `nextPollAfterMs`. The built-in waiting room emphasizes equal chance + ETA rather than raw odds.
 
 The built-in waiting room schedules the next `/status` from `nextPollAfterMs` (relative to place in line: faster near the front, slower far back). Status renews liveness, so dedicated heartbeats are usually unnecessary. Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended.
 

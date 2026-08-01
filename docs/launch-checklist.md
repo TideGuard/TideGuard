@@ -42,6 +42,7 @@ Use `/cost` for Cloudflare Workers paid-plan estimates (adaptive by default).
 - [ ] Origin only accepts traffic from Cloudflare — **Full (strict)** SSL + **Authenticated Origin Pulls** (see [protecting-origin.md](protecting-origin.md))
 - [ ] Protected path smoke-test: unauthenticated → `/wait`; admitted → origin content
 - [ ] Confirmed TideGuard cookies (`tg_*`) are **not** forwarded upstream
+- [ ] Bot Fight / WAF left **on**; if waiting-room polls fail, add a Skip rule for ticketed `/join` `/status` `/leave` `/heartbeat` `/enter` (see [protecting-origin.md](protecting-origin.md#cloudflare-bot-fight-mode-and-waf))
 
 ## Traffic controls
 

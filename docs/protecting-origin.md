@@ -107,6 +107,40 @@ Without AOP (or equivalent mutual TLS / private networking), a leaked `ORIGIN_UR
 
 **Later:** Custom Origin Trust Store and post-quantum (ML-DSA) certificates can harden the same Cloudflare↔origin hop further — see [Cloudflare’s PQ origin auth announcement](https://blog.cloudflare.com/post-quantum-authentication-to-origins/).
 
+## Cloudflare Bot Fight Mode and WAF
+
+Keep Bot Fight Mode, Super Bot Fight Mode, and WAF rules **on**. TideGuard is a Worker in front of your site — zone security and the waiting room stack, they do not replace each other.
+
+Admin login already uses **Turnstile**. The waiting room uses signed tickets and capacity limits for surge control. Bot Fight Mode still helps against scrapers and automated abuse hitting your hostname.
+
+### When waiting-room polls look broken
+
+Bot Fight Mode may challenge traffic that looks automated. Real browsers on `/wait` are usually fine. Problems show up when challenges hit TideGuard **control paths** used by `fetch` from the waiting room (or by custom clients):
+
+`/join`, `/status`, `/leave`, `/heartbeat`, `/enter`
+
+Symptoms: waiting UI stuck on “Connecting…”, status polls returning challenge HTML instead of JSON, or heartbeats failing in Security Events.
+
+### Coexistence (preferred): Skip rule for ticketed visitors
+
+In **Security → WAF → Custom rules**, add a **Skip** action (skip Bot Fight / Super Bot Fight / relevant managed checks) when the visitor already has a TideGuard cookie:
+
+```text
+(http.request.uri.path in {"/join" "/status" "/leave" "/heartbeat" "/enter"})
+and (
+  http.cookie contains "tg_ticket="
+  or http.cookie contains "tg_access="
+)
+```
+
+That keeps Bot Fight on the rest of the site (marketing, checkout, APIs) while the waiting room’s machine-looking polls are not challenged mid-line.
+
+Narrower alternative: Skip only `/status` and `/heartbeat` if join still needs a challenge at first contact.
+
+### If you use Managed Challenges elsewhere
+
+Prefer path- or cookie-scoped rules over turning Bot Fight off for the whole zone. Check **Security → Events** for the TideGuard hostname when debugging; challenge or block actions there usually explain a silent waiting-room failure faster than Worker logs.
+
 ## Patterns
 
 ### Full site gate

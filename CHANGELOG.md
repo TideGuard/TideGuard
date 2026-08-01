@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Lottery waiting room shows **equal chance + ETA** (progress from ETA); raw `lotteryOdds` remain on the API for custom clients
+
 ### Added
+
+- Docs: Bot Fight Mode / WAF coexistence — keep zone security on; Skip rule for ticketed TideGuard control paths if polls are challenged
 
 - Setup Cloudflare **token-verify** gate (`POST /api/admin/setup/cloudflare/token-verify`) before zone/hostname
 - In-wizard roadmap, per-step guides, Cloudflare deeplinks, and progressive 2a→2d substeps (token → zone → SSL → domain)
@@ -35,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cost guidance: no KV writes on the queue hot path
 - Typed REST API (`/join`, `/status`, `/leave`, `/heartbeat`, `/admit`, `/mode`, `/metrics`)
 - HMAC-SHA256 admission tokens with timing-safe verification
-- Waiting room page (`/wait`) with embed mode, polling, and heartbeats (odds in Lottery Mode)
+- Waiting room page (`/wait`) with embed mode, polling, and heartbeats (equal-chance + ETA in Lottery Mode)
 - Optional waiting-room depth display (`showWaitingCount` branding)
 - Opening schedule (`opensAt`), silent pause, and graduated origin health throttle
 - Admin Traffic panel + `/api/admin/schedule` / `pause` / `health`

@@ -93,7 +93,7 @@ Runtime **admit rate overrides** and **traffic buckets** live in QueueRoom SQLit
 | Mode      | Selection                                                                                      | Visitor UI                       |
 | --------- | ---------------------------------------------------------------------------------------------- | -------------------------------- |
 | `queue`   | Oldest `sequence` first (FIFO)                                                                 | Position in line + ETA           |
-| `lottery` | Uniform index sample (`OFFSET`) among waiters; large admin batches may use `ORDER BY RANDOM()` | Equal odds (`1 / waiting`) + ETA |
+| `lottery` | Uniform index sample (`OFFSET`) among waiters; large admin batches may use `ORDER BY RANDOM()` | Equal chance + ETA (optional pool size); API may expose `lotteryOdds` |
 
 Default: `ADMISSION_MODE` Worker var (`queue`). Operators can switch live with `POST /mode`.
 
