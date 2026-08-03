@@ -11,3 +11,4 @@ coverage/
 !.env.example
 !.dev.vars.example
 worker-configuration.d.ts
+README.local.md

@@ -9,9 +9,11 @@ import {
   Text,
   Textarea,
   Title,
+  Anchor,
 } from "@mantine/core";
 import { api } from "../../lib/api";
 import type { AdminState } from "../../lib/types";
+import { LINKS } from "../../lib/setup-guidance";
 import { notifyError, notifyOk } from "./notify";
 
 export function BypassGeoPanel({
@@ -31,7 +33,18 @@ export function BypassGeoPanel({
   return (
     <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
       <Stack>
-        <Title order={4}>IP allowlist & country block</Title>
+        <div>
+          <Title order={4}>IP allowlist & country block</Title>
+          <Text size="sm" c="dimmed">
+            <Anchor href={LINKS.docsBypass} target="_blank" rel="noreferrer" size="sm">
+              IP allowlist
+            </Anchor>
+            {" · "}
+            <Anchor href={LINKS.docsGeo} target="_blank" rel="noreferrer" size="sm">
+              Country block
+            </Anchor>
+          </Text>
+        </div>
         <Text size="sm" c="dimmed">
           Your IP: {String(bypass.clientIp ?? "—")}
           {bypass.clientMatched ? " (matched)" : ""}

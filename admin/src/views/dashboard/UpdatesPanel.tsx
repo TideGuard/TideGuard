@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Group, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Button, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { api, ApiError } from "../../lib/api";
+import { LINKS } from "../../lib/setup-guidance";
 
 export function UpdatesPanel() {
   const [summary, setSummary] = useState("—");
@@ -23,7 +24,14 @@ export function UpdatesPanel() {
     <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
       <Stack>
         <Group justify="space-between">
-          <Title order={4}>Updates</Title>
+          <div>
+            <Title order={4}>Updates</Title>
+            <Text size="sm" c="dimmed">
+              <Anchor href={LINKS.docsUpgrading} target="_blank" rel="noreferrer" size="sm">
+                Upgrading guide
+              </Anchor>
+            </Text>
+          </div>
           <Button size="xs" variant="default" onClick={() => check(true)}>
             Check
           </Button>

@@ -1,5 +1,5 @@
-import { Button, Group, List, PasswordInput, Text, TextInput } from "@mantine/core";
-import { passwordChecks } from "../../lib/setup-guidance";
+import { Button, Group, List, PasswordInput, Text, TextInput, Anchor } from "@mantine/core";
+import { LINKS, passwordChecks } from "../../lib/setup-guidance";
 
 export function StepClaim({
   claimed,
@@ -57,7 +57,15 @@ export function StepClaim({
     <>
       <PasswordInput
         label="TOKEN_SECRET"
-        description="Same value as the Worker secret (generate at tideguard.dev/token). Claim locks your admin account immediately."
+        description={
+          <>
+            Same value as the Worker secret (generate at tideguard.dev/token). Claim locks your admin
+            account immediately.{" "}
+            <Anchor href={LINKS.docsGettingStarted} target="_blank" rel="noreferrer" size="sm">
+              Getting started
+            </Anchor>
+          </>
+        }
         value={tokenSecret}
         onChange={(e) => onTokenSecretChange(e.currentTarget.value)}
       />

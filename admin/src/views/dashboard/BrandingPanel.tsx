@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Anchor,
   Button,
   Card,
   Checkbox,
@@ -9,12 +10,14 @@ import {
   SegmentedControl,
   SimpleGrid,
   Stack,
+  Text,
   Textarea,
   TextInput,
   Title,
 } from "@mantine/core";
 import { api } from "../../lib/api";
 import type { AdminState } from "../../lib/types";
+import { LINKS } from "../../lib/setup-guidance";
 import { notifyError, notifyOk } from "./notify";
 
 export function BrandingPanel({
@@ -45,7 +48,14 @@ export function BrandingPanel({
   return (
     <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
       <Stack>
-        <Title order={4}>Branding & mode</Title>
+        <div>
+          <Title order={4}>Branding & mode</Title>
+          <Text size="sm" c="dimmed">
+            <Anchor href={LINKS.docsAdmin} target="_blank" rel="noreferrer" size="sm">
+              Admin guide
+            </Anchor>
+          </Text>
+        </div>
         <TextInput label="Queue" value={queue} onChange={(e) => setQueue(e.currentTarget.value)} />
         <SegmentedControl
           value={mode}

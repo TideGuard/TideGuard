@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Docs: [custom domain guide](docs/custom-domain.md) — full nameserver setup vs partial CNAME (Business/Enterprise), Custom Domain vs Route attach order
+- Docs published at [tideguard.dev/docs](https://tideguard.dev/docs/); admin control room deep-links to matching guides
+
 - Docs: Bot Fight Mode / WAF coexistence — keep zone security on; Skip rule for ticketed TideGuard control paths if polls are challenged
 
 - Setup Cloudflare **token-verify** gate (`POST /api/admin/setup/cloudflare/token-verify`) before zone/hostname

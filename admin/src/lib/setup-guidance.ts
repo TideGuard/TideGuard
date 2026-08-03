@@ -25,6 +25,15 @@ export const CF_PHASE_LABELS: Record<CfPhase, string> = {
 export const LINKS = {
   apiTokens: "https://dash.cloudflare.com/profile/api-tokens",
   findIds: "https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/",
+  docs: "https://tideguard.dev/docs/",
+  docsGettingStarted: "https://tideguard.dev/docs/getting-started/",
+  docsAdmin: "https://tideguard.dev/docs/admin/",
+  docsOrigin: "https://tideguard.dev/docs/protecting-origin/",
+  docsCustomDomain: "https://tideguard.dev/docs/custom-domain/",
+  docsBypass: "https://tideguard.dev/docs/ip-allowlist/",
+  docsGeo: "https://tideguard.dev/docs/geo-block/",
+  docsAnalytics: "https://tideguard.dev/docs/analytics/",
+  docsUpgrading: "https://tideguard.dev/docs/upgrading/",
 } as const;
 
 /** Short labels for the permission checklist (Cloudflare UI wording). */

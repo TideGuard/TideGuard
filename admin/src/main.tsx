@@ -22,6 +22,10 @@ createRoot(document.getElementById("root")!).render(
           <a href="https://tideguard.dev" target="_blank" rel="noreferrer">
             tideguard.dev
           </a>
+          <span aria-hidden="true"> · </span>
+          <a href="https://tideguard.dev/docs/" target="_blank" rel="noreferrer">
+            Docs
+          </a>
         </footer>
       </div>
     </MantineProvider>

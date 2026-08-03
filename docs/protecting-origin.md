@@ -50,9 +50,15 @@ Admin KV overrides env when both are set.
 
 ## Put TideGuard on your hostname
 
+You need an active Cloudflare zone for the hostname, then a Workers custom domain on the TideGuard Worker.
+
+**DNS choice (read this first):** [custom-domain.md](custom-domain.md) — full setup (move nameservers, Free/Pro OK) vs partial CNAME setup (Business/Enterprise; keep your current DNS provider).
+
+Short path once the zone is ready:
+
 1. Deploy the Worker.
-2. Cloudflare dashboard → Worker → **Domains & Routes** → add custom domain or route.
-3. Point DNS at Cloudflare (orange cloud) for that hostname.
+2. Attach the hostname (TideGuard **Cloudflare access** → Attach custom domain, or Worker → **Domains & Routes**).
+3. Confirm DNS is proxied (orange cloud).
 4. Open `https://your-host/admin`, enable origin proxy, smoke-test.
 
 Docs: [Custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) · [Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/)

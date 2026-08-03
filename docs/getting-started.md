@@ -84,7 +84,7 @@ Placeholder KV IDs in `wrangler.jsonc` are intentional. Deploy-to-Cloudflare / W
 
 After deploy:
 
-1. Attach a custom domain or route (see [protecting-origin.md](protecting-origin.md)).
+1. Attach a custom domain or route (see [custom-domain.md](custom-domain.md), then [protecting-origin.md](protecting-origin.md)).
 2. Open `https://<your-host>/admin` (or `*.workers.dev/admin` if you have not attached a domain yet).
 3. Finish the setup wizard (claim → Cloudflare → Turnstile → queue → branding).
 4. Smoke-test `/wait`, `/demo`, and `/cost`.

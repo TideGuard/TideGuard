@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Button, Card, Checkbox, Stack, TextInput, Title } from "@mantine/core";
 import { api } from "../../lib/api";
 import type { AdminState } from "../../lib/types";
+import { LINKS } from "../../lib/setup-guidance";
+import { DocHint } from "./DocHint";
 import { notifyError, notifyOk } from "./notify";
 
 export function OriginPanel({
@@ -24,7 +26,10 @@ export function OriginPanel({
   return (
     <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
       <Stack>
-        <Title order={4}>Origin proxy</Title>
+        <div>
+          <Title order={4}>Origin proxy</Title>
+          <DocHint href={LINKS.docsOrigin} label="Protecting a domain" />
+        </div>
         <Checkbox
           label="Enable origin proxy"
           checked={enabled}

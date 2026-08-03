@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
+  Anchor,
   Button,
   Card,
   Group,
@@ -26,6 +27,7 @@ import {
 import { Line } from "react-chartjs-2";
 import { api } from "../lib/api";
 import type { QueueMetrics, TrafficBucket, TrafficResponse } from "../lib/types";
+import { LINKS } from "../lib/setup-guidance";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
@@ -237,7 +239,10 @@ export function TrafficPanel({
             </Button>
           </Group>
           <Text size="sm" c="dimmed">
-            Adaptive max outflow · live traffic
+            Adaptive max outflow · live traffic ·{" "}
+            <Anchor href={LINKS.docsAnalytics} target="_blank" rel="noreferrer" size="sm">
+              Analytics guide
+            </Anchor>
           </Text>
         </Group>
 

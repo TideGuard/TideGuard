@@ -34,11 +34,20 @@ export function CloudflarePanel({
   return (
     <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
       <Stack>
-        <Title order={4}>Cloudflare access</Title>
-        <Text size="sm" c="dimmed">
-          Connect once with an API token. After that, check DNS, SSL, and domains here — without
-          living in the Cloudflare dashboard.
-        </Text>
+        <div>
+          <Title order={4}>Cloudflare access</Title>
+          <Text size="sm" c="dimmed">
+            Connect once with an API token. After that, check DNS, SSL, and domains here — without
+            living in the Cloudflare dashboard.{" "}
+            <Anchor href={LINKS.docsAdmin} target="_blank" rel="noreferrer" size="sm">
+              Admin guide
+            </Anchor>
+            {" · "}
+            <Anchor href={LINKS.docsCustomDomain} target="_blank" rel="noreferrer" size="sm">
+              Custom domain
+            </Anchor>
+          </Text>
+        </div>
         <PasswordInput
           label={FIELD_HELP.apiToken.label}
           description={

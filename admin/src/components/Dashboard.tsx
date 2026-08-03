@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Code, Group, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Button, Code, Group, Stack, Text, Title } from "@mantine/core";
 import { api } from "../lib/api";
 import type { AdminState, QueueMetrics } from "../lib/types";
+import { LINKS } from "../lib/setup-guidance";
 import { TrafficPanel } from "./TrafficPanel";
 import { ActivityPanel } from "../views/dashboard/ActivityPanel";
 import { BrandingPanel } from "../views/dashboard/BrandingPanel";
@@ -46,6 +47,10 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
           <Title order={2}>Control room</Title>
           <Text c="dimmed" size="sm">
             Signed in as {state.me.username} · v{state.version} · queue <Code>{queue}</Code>
+            {" · "}
+            <Anchor href={LINKS.docs} target="_blank" rel="noreferrer" size="sm">
+              Docs
+            </Anchor>
           </Text>
         </div>
         <Button

@@ -9,7 +9,8 @@ Use this before pointing production traffic at TideGuard.
 - [ ] Strong per-admin passwords stored offline; session cookie is HttpOnly; login protected by Turnstile after finish
 - [ ] Confirmed `POST /api/admin/reset` only works with `Authorization: Bearer <TOKEN_SECRET>`
 - [ ] Extra operators invited via Team panel (72h links), not by sharing one password
-- [ ] Cloudflare panel: DNS proxied, IP Geolocation as needed, SSL Full (strict) if origin is ready, custom domain attached
+- [ ] Custom domain attached ([custom-domain.md](custom-domain.md)) — full NS or partial CNAME as applicable
+- [ ] Cloudflare panel: DNS proxied, IP Geolocation as needed, SSL Full (strict) if origin is ready
 
 ## Capacity
 
