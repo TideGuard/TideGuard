@@ -59,22 +59,22 @@ Deep guides: [custom domain](https://tideguard.dev/docs/custom-domain/), [protec
 
 Operator guides are authored in this repo under `docs/` and published at [tideguard.dev/docs](https://tideguard.dev/docs/).
 
-| Guide                                              | Start here if you want to…                               |
-| -------------------------------------------------- | -------------------------------------------------------- |
-| [Getting started](docs/getting-started.md) · [web](https://tideguard.dev/docs/getting-started/) | Clone, run locally, deploy, first `/admin` setup |
-| [Upgrading](docs/upgrading.md) · [web](https://tideguard.dev/docs/upgrading/) | Update an existing deploy without losing KV / secrets |
-| [Launch checklist](docs/launch-checklist.md) · [web](https://tideguard.dev/docs/launch-checklist/) | Pre-production go-live review |
-| [Custom domain](docs/custom-domain.md) · [web](https://tideguard.dev/docs/custom-domain/) | Full NS setup or partial CNAME (Business) to put TideGuard on a hostname |
-| [Protecting a domain](docs/protecting-origin.md) · [web](https://tideguard.dev/docs/protecting-origin/) | Origin proxy, AOP, Cloudflare in front of origin |
-| [Verifying admission](docs/verifying-admission.md) · [web](https://tideguard.dev/docs/verifying-admission/) | Redirect URL, click-to-enter, how origins trust tokens |
-| [Architecture](docs/architecture.md) · [web](https://tideguard.dev/docs/architecture/) | Understand Workers / DO / KV choices and cost rules |
-| [API](docs/api.md) · [web](https://tideguard.dev/docs/api/) | Integrate `/join`, `/status`, tokens, operator routes |
-| [Admin](docs/admin.md) · [web](https://tideguard.dev/docs/admin/) | Wizard, team invites, audit log, branding, traffic |
-| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/) | Control-room charts (queue depth, wait, geo hits) |
-| [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/) | Staff bypass + Pass queue + Cloudflare access helper |
-| [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/) | Temporary geo gate via `CF-IPCountry` |
-| [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/) | Prove FIFO / lottery behavior at 1k–100k simulated users |
-| [Security](SECURITY.md)                            | Secrets, tokens, and what not to put in git              |
+| Guide                                                                                                       | Start here if you want to…                                               |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Getting started](docs/getting-started.md) · [web](https://tideguard.dev/docs/getting-started/)             | Clone, run locally, deploy, first `/admin` setup                         |
+| [Upgrading](docs/upgrading.md) · [web](https://tideguard.dev/docs/upgrading/)                               | Update an existing deploy without losing KV / secrets                    |
+| [Launch checklist](docs/launch-checklist.md) · [web](https://tideguard.dev/docs/launch-checklist/)          | Pre-production go-live review                                            |
+| [Custom domain](docs/custom-domain.md) · [web](https://tideguard.dev/docs/custom-domain/)                   | Full NS setup or partial CNAME (Business) to put TideGuard on a hostname |
+| [Protecting a domain](docs/protecting-origin.md) · [web](https://tideguard.dev/docs/protecting-origin/)     | Origin proxy, AOP, Cloudflare in front of origin                         |
+| [Verifying admission](docs/verifying-admission.md) · [web](https://tideguard.dev/docs/verifying-admission/) | Redirect URL, click-to-enter, how origins trust tokens                   |
+| [Architecture](docs/architecture.md) · [web](https://tideguard.dev/docs/architecture/)                      | Understand Workers / DO / KV choices and cost rules                      |
+| [API](docs/api.md) · [web](https://tideguard.dev/docs/api/)                                                 | Integrate `/join`, `/status`, tokens, operator routes                    |
+| [Admin](docs/admin.md) · [web](https://tideguard.dev/docs/admin/)                                           | Wizard, team invites, audit log, branding, traffic                       |
+| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                               | Control-room charts (queue depth, wait, geo hits)                        |
+| [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/)                      | Staff bypass + Pass queue + Cloudflare access helper                     |
+| [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/)                           | Temporary geo gate via `CF-IPCountry`                                    |
+| [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/)                      | Prove FIFO / lottery behavior at 1k–100k simulated users                 |
+| [Security](SECURITY.md)                                                                                     | Secrets, tokens, and what not to put in git                              |
 
 ## Quick start (local)
 

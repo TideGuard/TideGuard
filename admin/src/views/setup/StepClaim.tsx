@@ -59,8 +59,8 @@ export function StepClaim({
         label="TOKEN_SECRET"
         description={
           <>
-            Same value as the Worker secret (generate at tideguard.dev/token). Claim locks your admin
-            account immediately.{" "}
+            Same value as the Worker secret (generate at tideguard.dev/token). Claim locks your
+            admin account immediately.{" "}
             <Anchor href={LINKS.docsGettingStarted} target="_blank" rel="noreferrer" size="sm">
               Getting started
             </Anchor>

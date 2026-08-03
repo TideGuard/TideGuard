@@ -6,10 +6,10 @@ TideGuard needs an **active Cloudflare zone** for that hostname, then a **Worker
 
 ## Choose a zone setup
 
-| Path | What you do | Cloudflare plan | When to use |
-| ---- | ----------- | --------------- | ----------- |
-| **Full setup (nameservers)** | Point the domain’s NS records at Cloudflare | Free, Pro, Business, or Enterprise | Default. Simplest and cheapest. |
-| **Partial setup (CNAME)** | Keep your current DNS provider; CNAME individual hostnames into Cloudflare | **Business or Enterprise only** | You cannot (or must not) change authoritative nameservers. |
+| Path                         | What you do                                                                | Cloudflare plan                    | When to use                                                |
+| ---------------------------- | -------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------- |
+| **Full setup (nameservers)** | Point the domain’s NS records at Cloudflare                                | Free, Pro, Business, or Enterprise | Default. Simplest and cheapest.                            |
+| **Partial setup (CNAME)**    | Keep your current DNS provider; CNAME individual hostnames into Cloudflare | **Business or Enterprise only**    | You cannot (or must not) change authoritative nameservers. |
 
 Cloudflare’s overview: [DNS setups](https://developers.cloudflare.com/dns/zone-setups/).
 
