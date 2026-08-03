@@ -35,8 +35,9 @@ export async function evaluateGeoBlock(
 
   if (isCountryBlocked(country, blockedList)) {
     if (options.recordHit !== false) {
-      // Best-effort counter for the admin live dashboard.
-      void recordGeoBlockHit(env, country).catch(() => {});
+      // Await so the KV write is not cancelled when the response returns
+      // (void + no waitUntil surfaces workerd "client disconnected" noise in tests).
+      await recordGeoBlockHit(env, country).catch(() => {});
     }
     return { blocked: true, country, reason: "country" };
   }
