@@ -34,6 +34,10 @@ export const LINKS = {
   docsGeo: "https://tideguard.dev/docs/geo-block/",
   docsAnalytics: "https://tideguard.dev/docs/analytics/",
   docsUpgrading: "https://tideguard.dev/docs/upgrading/",
+  docsSecurity: "https://tideguard.dev/security",
+  docsTokenRotation: "https://tideguard.dev/docs/token-secret-rotation/",
+  docsWebhooks: "https://tideguard.dev/docs/webhooks/",
+  docsEmbed: "https://tideguard.dev/docs/verifying-admission/",
 } as const;
 
 /** Short labels for the permission checklist (Cloudflare UI wording). */

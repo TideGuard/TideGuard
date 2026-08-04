@@ -4,7 +4,8 @@
  */
 
 export const TRAFFIC_BUCKET_MS = 15_000;
-export const TRAFFIC_RETENTION_MS = 2 * 60 * 60 * 1000;
+/** Retain ~24h of 15s buckets in the Durable Object for post-event export. */
+export const TRAFFIC_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const MAX_ADMIT_PER_SECOND = 1_000;
 export const MIN_ADMIT_PER_SECOND = 0.01;
 

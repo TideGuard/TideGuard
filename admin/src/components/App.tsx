@@ -1,10 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Card, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
+import {
+  Anchor,
+  Button,
+  Card,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+  Title,
+} from "@mantine/core";
 import { api, ApiError } from "../lib/api";
 import type { AdminState, BootstrapResponse } from "../lib/types";
 import { isPasswordReady } from "../lib/setup-guidance";
 import { ensureTurnstile } from "../views/setup/helpers";
 import { PasswordChecklist } from "../views/dashboard/PasswordChecklist";
+import { RecoveryPhraseModal } from "../views/setup/RecoveryPhraseModal";
 import { Dashboard } from "./Dashboard";
 import { SetupWizard } from "./SetupWizard";
 
@@ -160,8 +171,11 @@ function LoginView({
   incompleteSetup: boolean;
   onSuccess: () => Promise<void>;
 }) {
+  const [mode, setMode] = useState<"login" | "recover">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirm] = useState("");
+  const [mnemonic, setMnemonic] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(error);
@@ -179,7 +193,7 @@ function LoginView({
         "expired-callback": () => setTurnstileToken(null),
       });
     });
-  }, [sitekey, requireTurnstile]);
+  }, [sitekey, requireTurnstile, mode]);
 
   return (
     <Card
@@ -191,11 +205,13 @@ function LoginView({
       style={{ borderColor: "rgba(232,241,245,0.14)" }}
     >
       <Stack>
-        <Title order={3}>TideGuard Admin</Title>
+        <Title order={3}>{mode === "login" ? "TideGuard Admin" : "Reset password"}</Title>
         <Text size="sm" c="dimmed">
-          {incompleteSetup
-            ? "Sign in to finish first-time setup."
-            : "Sign in to manage the waiting room."}
+          {mode === "recover"
+            ? "Enter your username, 12-word recovery phrase, and a new password."
+            : incompleteSetup
+              ? "Sign in to finish first-time setup."
+              : "Sign in to manage the waiting room."}
         </Text>
         <TextInput
           label="Username"
@@ -203,12 +219,39 @@ function LoginView({
           onChange={(e) => setUsername(e.currentTarget.value)}
           autoComplete="username"
         />
-        <PasswordInput
-          label="Password"
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-          autoComplete="current-password"
-        />
+        {mode === "login" ? (
+          <PasswordInput
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+            autoComplete="current-password"
+          />
+        ) : (
+          <>
+            <Textarea
+              label="Recovery phrase"
+              description="12 BIP39 English words in order"
+              value={mnemonic}
+              onChange={(e) => setMnemonic(e.currentTarget.value)}
+              autosize
+              minRows={3}
+              styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+            />
+            <PasswordInput
+              label="New password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+              autoComplete="new-password"
+            />
+            <PasswordInput
+              label="Confirm new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirm(e.currentTarget.value)}
+              autoComplete="new-password"
+            />
+            <PasswordChecklist password={password} confirm={confirmPassword} />
+          </>
+        )}
         {requireTurnstile ? <div ref={widgetRef} /> : null}
         {msg ? (
           <Text size="sm" c="red">
@@ -217,28 +260,56 @@ function LoginView({
         ) : null}
         <Button
           loading={busy}
+          disabled={mode === "recover" && !isPasswordReady(password, confirmPassword)}
           onClick={() => {
             setBusy(true);
             setMsg(null);
-            void api("/api/admin/login", {
+            const path = mode === "login" ? "/api/admin/login" : "/api/admin/password/recover";
+            const body =
+              mode === "login"
+                ? {
+                    username,
+                    password,
+                    ...(requireTurnstile ? { turnstileToken } : {}),
+                  }
+                : {
+                    username,
+                    mnemonic,
+                    password,
+                    confirmPassword,
+                    ...(requireTurnstile ? { turnstileToken } : {}),
+                  };
+            void api(path, {
               method: "POST",
-              body: JSON.stringify({
-                username,
-                password,
-                ...(requireTurnstile ? { turnstileToken } : {}),
-              }),
+              body: JSON.stringify(body),
             })
               .then(() => onSuccess())
               .catch((e) => {
-                setMsg(e instanceof Error ? e.message : "Login failed");
+                setMsg(e instanceof Error ? e.message : "Request failed");
                 if (widgetId.current && window.turnstile) window.turnstile.reset(widgetId.current);
                 setTurnstileToken(null);
               })
               .finally(() => setBusy(false));
           }}
         >
-          Sign in
+          {mode === "login" ? "Sign in" : "Reset password"}
         </Button>
+        {!incompleteSetup ? (
+          <Anchor
+            component="button"
+            type="button"
+            size="sm"
+            onClick={() => {
+              setMode(mode === "login" ? "recover" : "login");
+              setMsg(null);
+              setPassword("");
+              setConfirm("");
+              setMnemonic("");
+            }}
+          >
+            {mode === "login" ? "Forgot password?" : "Back to sign in"}
+          </Anchor>
+        ) : null}
       </Stack>
     </Card>
   );
@@ -259,6 +330,7 @@ function InviteView({
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [recoveryMnemonic, setRecoveryMnemonic] = useState<string | null>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
 
@@ -283,6 +355,14 @@ function InviteView({
       mt="xl"
       style={{ borderColor: "rgba(232,241,245,0.14)" }}
     >
+      <RecoveryPhraseModal
+        opened={Boolean(recoveryMnemonic)}
+        mnemonic={recoveryMnemonic ?? ""}
+        onConfirm={() => {
+          setRecoveryMnemonic(null);
+          void onSuccess();
+        }}
+      />
       <Stack>
         <Title order={3}>Join team</Title>
         <TextInput
@@ -317,7 +397,7 @@ function InviteView({
           onClick={() => {
             setBusy(true);
             setMsg(null);
-            void api("/api/admin/invites/accept", {
+            void api<{ recoveryMnemonic?: string }>("/api/admin/invites/accept", {
               method: "POST",
               body: JSON.stringify({
                 token,
@@ -327,7 +407,13 @@ function InviteView({
                 turnstileToken,
               }),
             })
-              .then(() => onSuccess())
+              .then((result) => {
+                if (result.recoveryMnemonic) {
+                  setRecoveryMnemonic(result.recoveryMnemonic);
+                } else {
+                  return onSuccess();
+                }
+              })
               .catch((e) => {
                 setMsg(e instanceof Error ? e.message : "Invite failed");
                 if (widgetId.current && window.turnstile) window.turnstile.reset(widgetId.current);

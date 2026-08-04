@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Button,
   Checkbox,
   Group,
@@ -50,11 +51,27 @@ export function ScheduleHealthPanel({
     <Panel
       id="admission"
       title="Admission schedule & health"
-      description="Opening time and origin health throttle. Pause and admit rate live in the event toolbar above."
+      description="Schedule when the room opens for the public. Until then, /wait shows a countdown and admissions stay closed. Pause and admit rate live in the event toolbar."
     >
       <Stack>
+        <Alert color="teal" title="Scheduled room open">
+          <Text size="sm">
+            Set a future opening time for drops and onsales. Visitors can join early and see the
+            countdown; nobody is admitted until that moment (unless you clear the schedule). The
+            event toolbar Status chip mirrors this schedule.
+          </Text>
+        </Alert>
+        {metrics.opensAt && metrics.opensAt > Date.now() ? (
+          <Alert color="orange" title="Currently scheduled">
+            <Text size="sm">
+              Admissions open at <strong>{new Date(metrics.opensAt).toLocaleString()}</strong>.
+              Visitors on <code>/wait</code> see a countdown until then.
+            </Text>
+          </Alert>
+        ) : null}
         <TextInput
           label="Opening time (local)"
+          description="Leave empty and use Open now to admit immediately."
           type="datetime-local"
           value={opensAt}
           onChange={(e) => setOpensAt(e.currentTarget.value)}

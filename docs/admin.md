@@ -52,7 +52,7 @@ Admins can create invite links from the **Team** panel:
 3. Invitee sets their own username + password (same strength rules as first admin) within **72 hours**
 4. Unused or revoked invites expire; create a new one if needed
 
-Raw invite tokens are never stored — only a SHA-256 hash in KV with `expirationTtl`. There is no password-reset flow; emergency wipe is still `POST /api/admin/reset` with Bearer `TOKEN_SECRET`.
+Raw invite tokens are never stored — only a SHA-256 hash in KV with `expirationTtl`. Password recovery uses a **12-word BIP39 English phrase** shown once at claim / invite accept as a numbered list (copy / download), then a random 3-word quiz before continuing. Forgot password on `/admin` requires Turnstile after setup. Emergency wipe is still `POST /api/admin/reset` with Bearer `TOKEN_SECRET`.
 
 ## Activity audit log
 
@@ -67,7 +67,7 @@ Toggles that change visitor-visible or security-sensitive behavior (pause, mode,
 React SPA (Mantine + Chart.js) served from Workers Static Assets under `/admin/`. Dark teal theme (Source Sans). Layout:
 
 - **Sticky event toolbar** — waiting/admitted chips, pause, admit rate (+ clear override), force-admit, Pass queue
-- **Tabs** — Live (metrics + 2h traffic chart), Admission (schedule + health), Branding (preview + fonts), Access, Cloudflare (+ Turnstile status), Team, System (activity, updates, factory reset)
+- **Tabs** — Live (metrics + 24h traffic chart / CSV), Admission (schedule + health), Branding (preview + embed snippet), Access (origin + Cloudflare Access guidance), Cloudflare (+ Turnstile), Team, System (activity, updates, webhooks, TOKEN_SECRET rotation, factory reset)
 
 Build with `npm run build:admin` (also runs before `npm run dev` / `npm run deploy`).
 
@@ -80,9 +80,11 @@ Operators can change admit rate without redeploying:
 3. Clear the override with **Clear override** (`DELETE /api/admin/rate`) to fall back to `ADMIT_PER_SECOND`
 4. Force-admit waiting visitors via **Force admit** (`POST /admit`)
 
-The chart shows joins per interval (inflow) vs the setpoint (max outflow). Series come from the Durable Object (`GET /api/admin/traffic`, ~15s buckets, ~2h retention).
+The chart shows joins per interval (inflow) vs the setpoint (max outflow). Series come from the Durable Object (`GET /api/admin/traffic`, ~15s buckets, ~**24h** retention). Export with `?format=csv`. Range presets in the UI: 2h / 12h / 24h.
 
-Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). Traffic charts: [analytics.md](analytics.md). Origin lock-down including Authenticated Origin Pulls: [protecting-origin.md](protecting-origin.md).
+**Queues vs paths:** path prefixes choose which URLs require admission; they do not create separate queues. One Worker has one default queue from setup. Multiple named queues need separate `/join?queue=` clients or separate Workers.
+
+Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). Traffic charts: [analytics.md](analytics.md). Origin lock-down including Authenticated Origin Pulls: [protecting-origin.md](protecting-origin.md). Operator callbacks: [webhooks.md](webhooks.md). Secret rotation: [token-secret-rotation.md](token-secret-rotation.md). Cloudflare Access in front of `/admin`: see **Access** tab + [SECURITY.md](../SECURITY.md).
 
 ## API (admin)
 
@@ -102,9 +104,10 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `POST`               | `/api/admin/logout`                         | Session                                                            |
 | `GET`                | `/api/admin/state`                          | Session (includes `me`, `team`, `turnstile`, traffic)              |
 | `GET`                | `/api/admin/metrics`                        | Session                                                            |
-| `GET`                | `/api/admin/traffic`                        | Session (inflow/outflow time series)                               |
+| `GET`                | `/api/admin/traffic`                        | Session (inflow/outflow; `format=csv` optional)                    |
 | `PUT`                | `/api/admin/rate`                           | Session (set max outflow override)                                 |
 | `DELETE`             | `/api/admin/rate`                           | Session (clear override → env/code default)                        |
+| `PUT`                | `/api/admin/webhooks`                       | Session (operator outbound webhooks)                               |
 | `PUT`                | `/api/admin/cloudflare/ip-geolocation`      | Session                                                            |
 | `PUT`                | `/api/admin/cloudflare/ssl`                 | Session (set Full strict)                                          |
 | `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`             | Session (list / attach / detach)                                   |
@@ -115,6 +118,8 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `DELETE`             | `/api/admin/invites/:id`                    | Session                                                            |
 | `POST`               | `/api/admin/invites/accept`                 | Public (rate-limited); invite + Turnstile                          |
 | `PUT`                | `/api/admin/password`                       | Session (change own password)                                      |
+| `POST`               | `/api/admin/password/recover`               | Public (rate-limited); BIP39 phrase + Turnstile → new password     |
+| `POST`               | `/api/admin/recovery/regenerate`            | Session + current password; returns new phrase once                |
 | `DELETE`             | `/api/admin/users/:id`                      | Session (remove another admin)                                     |
 | `PUT`                | `/api/admin/branding`                       | Session                                                            |
 | `PUT`                | `/api/admin/origin`                         | Session                                                            |
@@ -135,4 +140,4 @@ curl -X POST https://<host>/api/admin/reset \
   -H "Authorization: Bearer $TOKEN_SECRET"
 ```
 
-Then reopen `/admin` and run the wizard again. This clears admin users, invites, audit log, origin override, bypass, geo, Turnstile, and setup-pending; branding keys are left as-is unless you overwrite them in the next setup.
+Then reopen `/admin` and run the wizard again. This clears admin users, invites, audit log, origin override, bypass, geo, Turnstile, webhooks, and setup-pending; branding keys are left as-is unless you overwrite them in the next setup.

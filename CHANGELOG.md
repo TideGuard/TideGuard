@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-04
+
+### Added
+
+- **OpenAPI 3.1** contract at [`openapi.yaml`](openapi.yaml)
+- **Demo mode** — post-setup origin stays ungated; control-room banner + **Go live**; smoke-test `/demo`
+- **BIP39 English recovery** (12 words via `@scure/bip39`) — shown at claim/invite; Forgot password with Turnstile; Team regenerate
+- **Rolling-throughput ETA (v1.5)** — blends setpoint admit rate with recent observed admits from traffic buckets
+- **24h traffic retention** + Live chart range presets (2h / 12h / 24h) and **CSV export** (`GET /api/admin/traffic?format=csv`)
+- **TOKEN_SECRET rotation** guide (`docs/token-secret-rotation.md`) + `npm run rotate:token-secret`; System panel checklist
+- **Cloudflare Access / Zero Trust** guidance for `/admin` (Access tab + SECURITY.md)
+- **Operator webhooks** — pause, health config, waiting-depth threshold (`PUT /api/admin/webhooks`)
+- **Load-test CI smoke** — `LOAD_TEST_USERS=50` job on every PR
+- Waiting-room **embed height** `postMessage`, tighter embed CSS, Branding snippet; **a11y** (`aria-live` / progressbar) + **`?lang=`** i18n stubs
+- Clearer **queues vs path prefixes** copy; scheduled-room discoverability (Admission alert + toolbar Status)
+- First-run **time to green** alert + Finish-step Demo mode tip
+- Docs: Demo mode in getting-started / protecting-origin / launch checklist; recovery, webhooks, rotation guides
+
+### Changed
+
+- Traffic docs / OpenAPI / admin copy: retention **2h → 24h**
+- Path prefixes accept newlines as well as commas
+
 ## [0.2.0] - 2026-08-04
 
 ### Added

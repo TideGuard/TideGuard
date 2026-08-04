@@ -21,6 +21,15 @@ import { clientCountryCode, isCountryBlocked } from "../../auth/geo-country";
 import { normalizeOriginUrl, parsePathPrefixes } from "../../core/origin";
 import { configFromEnv, getQueueRoom } from "../../queue/client";
 import { parseQueueName, readJsonBody } from "../validation";
+import {
+  DEFAULT_WEBHOOK_SETTINGS,
+  parseWebhookEvents,
+  readWebhookSettings,
+  sealWebhookSecret,
+  toPublicWebhooks,
+  writeWebhookSettings,
+  type WebhookSettings,
+} from "../../admin/webhook-store";
 
 export async function handleAdminSaveBypass(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
@@ -180,4 +189,65 @@ export async function handleAdminSaveOrigin(request: Request, env: Env): Promise
   });
 
   return jsonOk({ ok: true, origin });
+}
+
+export async function handleAdminSaveWebhooks(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+  const enabled = body.enabled === true || body.enabled === "true";
+  const urlRaw = typeof body.url === "string" ? body.url.trim() : "";
+  let url: string | null = null;
+  if (urlRaw) {
+    try {
+      const parsed = new URL(urlRaw);
+      if (parsed.protocol !== "https:") {
+        throw new Error("https only");
+      }
+      url = parsed.toString();
+    } catch {
+      throw new ApiError("bad_request", "url must be a public https:// endpoint", 400);
+    }
+  }
+  if (enabled && !url) {
+    throw new ApiError("bad_request", "url is required when webhooks are enabled", 400);
+  }
+
+  const depthThreshold = Number(body.depthThreshold);
+  const existing = await readWebhookSettings(env);
+  let sealedSecret = existing.sealedSecret;
+  if (typeof body.signingSecret === "string" && body.signingSecret.length > 0) {
+    sealedSecret = await sealWebhookSecret(env, body.signingSecret);
+  }
+  if (body.clearSecret === true) {
+    sealedSecret = undefined;
+  }
+
+  const settings: WebhookSettings = {
+    enabled,
+    url,
+    events: parseWebhookEvents(body.events),
+    depthThreshold:
+      Number.isFinite(depthThreshold) && depthThreshold >= 1
+        ? Math.floor(depthThreshold)
+        : DEFAULT_WEBHOOK_SETTINGS.depthThreshold,
+    updatedAt: Date.now(),
+  };
+  if (sealedSecret) {
+    settings.sealedSecret = sealedSecret;
+  }
+  if (existing.lastDepthFiredAt) {
+    settings.lastDepthFiredAt = existing.lastDepthFiredAt;
+  }
+
+  await writeWebhookSettings(env, settings);
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "webhooks.save",
+    summary: enabled
+      ? "Updated operator webhooks (enabled)"
+      : "Updated operator webhooks (disabled)",
+    meta: { enabled },
+  });
+  return jsonOk({ ok: true, webhooks: toPublicWebhooks(settings) });
 }

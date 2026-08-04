@@ -14,6 +14,9 @@ export interface AdminUser {
   username: string;
   passwordHash: string;
   passwordSalt: string;
+  /** PBKDF2 of normalized BIP39 English mnemonic; never store the phrase. */
+  recoveryHash?: string;
+  recoverySalt?: string;
   createdAt: number;
 }
 

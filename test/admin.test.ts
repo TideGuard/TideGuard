@@ -265,7 +265,7 @@ describe("admin setup wizard and dashboard", () => {
     const html = await wait.text();
     expect(html).toContain("Updated title");
     expect(html).toContain("Updated message");
-    expect(html).toContain("Play a sound when it’s my turn");
+    expect(html).toContain("Play a sound when it is your turn");
     expect(html).toContain("const playTurnSound = true");
 
     const sound = await exports.default.fetch(

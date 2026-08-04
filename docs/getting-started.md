@@ -47,12 +47,12 @@ After setup (or `npm run dev`):
 ### First-run admin
 
 1. Open `/` or `/admin` (unfinished setups redirect from `/`).
-2. **Claim:** paste your `TOKEN_SECRET` (from `.dev.vars` / setup output), choose a **username** and a strong password (8+, uppercase, digit or symbol). This locks the account in and signs you in — browser Back cannot recreate the password.
+2. **Claim:** paste your `TOKEN_SECRET` (from `.dev.vars` / setup output), choose a **username** and a strong password (8+, uppercase, digit or symbol). Write down the **12-word BIP39 recovery phrase** shown once — you need it for Forgot password. Claim locks the account in and signs you in — browser Back cannot recreate the password.
 3. **Cloudflare:** create an API token ([link in the wizard](https://dash.cloudflare.com/profile/api-tokens)) → **verify token** → zone/hostname verify (+ Fix if needed) → **SSL** Set/Skip → **domain** Attach/Skip.
 4. **Turnstile:** create the widget, complete the challenge → **Click to verify**.
 5. Choose queue / mode, then branding → Finish setup.
 6. Later logins use username + password + Turnstile. If you leave mid-wizard, **Sign in** resumes setup (claim is not shown again).
-7. Visit `/demo` (or `/wait`) as a visitor to exercise the line.
+7. **Demo mode:** after setup, origin proxy stays off — smoke-test at `/demo` (or `/wait?return=/demo` in an incognito window). When ready, use **Go live** in the control room (or Access → Origin) to enable the proxy and protect paths. See [protecting-origin.md](protecting-origin.md).
 
 Claim requires `Authorization: Bearer <TOKEN_SECRET>` so a public Workers URL cannot be taken by a stranger. Localhost is included on the Turnstile widget domains for `npm run dev`.
 

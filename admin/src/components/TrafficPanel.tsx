@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Anchor, SimpleGrid, Text, Title, useMantineTheme } from "@mantine/core";
+import {
+  Anchor,
+  Button,
+  Group,
+  SegmentedControl,
+  SimpleGrid,
+  Text,
+  Title,
+  useMantineTheme,
+} from "@mantine/core";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,8 +26,15 @@ import { api } from "../lib/api";
 import type { QueueMetrics, TrafficBucket, TrafficResponse } from "../lib/types";
 import { LINKS } from "../lib/setup-guidance";
 import { Panel } from "../views/dashboard/Panel";
+import { notifyError, notifyOk } from "../views/dashboard/notify";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
+
+const RANGE_OPTIONS = [
+  { label: "2h", value: String(2 * 60 * 60 * 1000) },
+  { label: "12h", value: String(12 * 60 * 60 * 1000) },
+  { label: "24h", value: String(24 * 60 * 60 * 1000) },
+] as const;
 
 function formatWait(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
@@ -54,6 +70,7 @@ export function TrafficPanel({
   const [buckets, setBuckets] = useState<TrafficBucket[]>([]);
   const [totalInflow, setTotalInflow] = useState(metrics.totalInflow);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [rangeMs, setRangeMs] = useState(String(2 * 60 * 60 * 1000));
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const reduceMotion =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -64,11 +81,31 @@ export function TrafficPanel({
 
   async function loadTraffic() {
     const data = await api<TrafficResponse>(
-      `/api/admin/traffic?queue=${encodeURIComponent(queue)}&rangeMs=${2 * 60 * 60 * 1000}`,
+      `/api/admin/traffic?queue=${encodeURIComponent(queue)}&rangeMs=${rangeMs}`,
     );
     setBuckets(data.buckets);
     setTotalInflow(data.totalInflow);
     setLoadError(null);
+  }
+
+  async function exportCsv() {
+    try {
+      const res = await fetch(
+        `/api/admin/traffic?queue=${encodeURIComponent(queue)}&rangeMs=${rangeMs}&format=csv`,
+        { credentials: "same-origin" },
+      );
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tideguard-traffic-${queue}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notifyOk("Traffic CSV downloaded");
+    } catch (e) {
+      notifyError(e);
+    }
   }
 
   useEffect(() => {
@@ -88,7 +125,7 @@ export function TrafficPanel({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [queue]);
+  }, [queue, rangeMs]);
 
   const chartData: ChartData<"line"> = useMemo(() => {
     const labels = buckets.map((b) => formatTime(b.t));
@@ -169,13 +206,24 @@ export function TrafficPanel({
       title="Traffic"
       description={
         <>
-          Adaptive max outflow · last 2 hours ·{" "}
+          Server-backed series (~15s buckets, up to 24h) ·{" "}
           <Anchor href={LINKS.docsAnalytics} target="_blank" rel="noreferrer" size="sm">
             Analytics guide
           </Anchor>
         </>
       }
     >
+      <Group justify="space-between" mb="sm" wrap="wrap">
+        <SegmentedControl
+          size="xs"
+          value={rangeMs}
+          onChange={setRangeMs}
+          data={[...RANGE_OPTIONS]}
+        />
+        <Button size="xs" variant="default" onClick={() => void exportCsv()}>
+          Export CSV
+        </Button>
+      </Group>
       <div className="tg-chart-wrap" style={{ height: 280 }}>
         {!hasTraffic && buckets.length > 0 ? (
           <div className="tg-chart-empty">

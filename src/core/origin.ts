@@ -234,7 +234,7 @@ function isPrivateIpv6(host: string): boolean {
 
 export function parsePathPrefixes(value: string): string[] {
   return value
-    .split(",")
+    .split(/[,\n]+/)
     .map((part) => part.trim())
     .filter((part) => part.startsWith("/") && !part.startsWith("//"))
     .map((part) => (part.length > 1 && part.endsWith("/") ? part.slice(0, -1) : part));

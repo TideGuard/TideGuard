@@ -45,3 +45,27 @@ jobs:
 
       - name: Test with coverage
         run: npm run test:coverage
+
+  load-smoke:
+    name: Load-test smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: In-memory load smoke
+        run: LOAD_TEST_USERS=50 npm run test:load
+        env:
+          LOAD_TEST_CAPACITY: "10"
+          LOAD_TEST_ADMIT_PER_SECOND: "50"

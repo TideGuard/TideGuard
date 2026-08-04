@@ -1,6 +1,7 @@
 import { ApiError, jsonOk } from "../../core/errors";
 import { hashPassword, verifyPassword } from "../../auth/password";
 import { assertAdminPassword } from "../../auth/password-policy";
+import { createRecoveryVerifier, verifyRecoveryMnemonic } from "../../auth/recovery";
 import { signAdminSession } from "../../auth/admin-session";
 import {
   buildAdminSessionCookie,
@@ -11,11 +12,13 @@ import { rateLimitOrThrow } from "../../auth";
 import {
   addAdminUser,
   findUserById,
+  findUserByUsername,
   isAdminSetupComplete,
   newAdminUserId,
   readAdminConfig,
   removeAdminUser,
   updateAdminUserPassword,
+  updateAdminUserRecovery,
 } from "../../admin/store";
 import { appendAuditEvent } from "../../admin/audit-store";
 import {
@@ -118,6 +121,7 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
   }
 
   const { hash, salt } = await hashPassword(password);
+  const recovery = await createRecoveryVerifier();
   const userId = newAdminUserId();
   try {
     await addAdminUser(env, {
@@ -125,6 +129,8 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
       username,
       passwordHash: hash,
       passwordSalt: salt,
+      recoveryHash: recovery.hash,
+      recoverySalt: recovery.salt,
       createdAt: Date.now(),
     });
   } catch (error) {
@@ -147,7 +153,12 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
   const admin = await readAdminConfig(env);
   const session = await signAdminSession(requireTokenSecret(env), actor);
   return withCookie(
-    jsonOk({ ok: true, username, queue: admin?.defaultQueue ?? "default" }),
+    jsonOk({
+      ok: true,
+      username,
+      queue: admin?.defaultQueue ?? "default",
+      recoveryMnemonic: recovery.mnemonic,
+    }),
     buildAdminSessionCookie(session, request),
   );
 }
@@ -191,6 +202,90 @@ export async function handleAdminChangePassword(request: Request, env: Env): Pro
     summary: "Changed own password",
   });
   return jsonOk({ ok: true });
+}
+
+/** Public: reset password with BIP39 phrase + Turnstile (after setup). */
+export async function handleAdminPasswordRecover(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "password-recover"), { limit: 10, windowMs: 60_000 });
+
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
+  }
+
+  const body = await readJsonBody(request);
+  await requireTurnstileResponse(request, env, body);
+
+  const usernameRaw = typeof body.username === "string" ? body.username : "";
+  const username = usernameRaw.trim() ? usernameRaw : "admin";
+  const user = findUserByUsername(admin, username);
+  if (!user?.recoveryHash || !user.recoverySalt) {
+    throw new ApiError("unauthorized", "Invalid username or recovery phrase", 401);
+  }
+
+  const mnemonic = typeof body.mnemonic === "string" ? body.mnemonic : "";
+  const phraseOk = await verifyRecoveryMnemonic(mnemonic, user.recoveryHash, user.recoverySalt);
+  if (!phraseOk) {
+    throw new ApiError("unauthorized", "Invalid username or recovery phrase", 401);
+  }
+
+  let password: string;
+  try {
+    password = assertAdminPassword(body.password, body.confirmPassword);
+  } catch (error) {
+    throw new ApiError(
+      "bad_request",
+      error instanceof Error ? error.message : "Invalid password",
+      400,
+    );
+  }
+
+  const { hash, salt } = await hashPassword(password);
+  await updateAdminUserPassword(env, user.id, hash, salt);
+  await appendAuditEvent(env, {
+    actorId: user.id,
+    actorUsername: user.username,
+    action: "password.recover",
+    summary: "Reset password with recovery phrase",
+  });
+
+  const actor = { id: user.id, username: user.username };
+  const session = await signAdminSession(requireTokenSecret(env), actor);
+  return withCookie(
+    jsonOk({ ok: true, username: user.username }),
+    buildAdminSessionCookie(session, request),
+  );
+}
+
+/** Session: regenerate BIP39 phrase (invalidates old). Requires current password. */
+export async function handleAdminRecoveryRegenerate(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  rateLimitOrThrow(clientKey(request, "recovery-regenerate"), { limit: 10, windowMs: 60_000 });
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
+  }
+  const user = findUserById(admin, actor.id);
+  if (!user) {
+    throw new ApiError("not_found", "User not found", 404);
+  }
+
+  const body = await readJsonBody(request);
+  const currentPassword = parsePassword(body.currentPassword);
+  const ok = await verifyPassword(currentPassword, user.passwordHash, user.passwordSalt);
+  if (!ok) {
+    throw new ApiError("unauthorized", "Current password is incorrect", 401);
+  }
+
+  const recovery = await createRecoveryVerifier();
+  await updateAdminUserRecovery(env, actor.id, recovery.hash, recovery.salt);
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "recovery.regenerate",
+    summary: "Regenerated recovery phrase",
+  });
+  return jsonOk({ ok: true, recoveryMnemonic: recovery.mnemonic });
 }
 
 export async function handleAdminRemoveUser(request: Request, env: Env): Promise<Response> {

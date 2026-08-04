@@ -1,0 +1,699 @@
+openapi: 3.1.0
+info:
+  title: TideGuard API
+  version: 0.2.0
+  description: |
+    HTTP contracts for TideGuard waiting-room Workers.
+    See docs/api.md for narrative detail. Base URL is your Worker hostname.
+  license:
+    name: MIT
+    url: https://github.com/TideGuard/TideGuard/blob/main/LICENSE
+  contact:
+    name: TideGuard
+    url: https://tideguard.dev
+servers:
+  - url: https://{workerHost}
+    variables:
+      workerHost:
+        default: localhost:8787
+tags:
+  - name: Public
+  - name: Queue
+  - name: Operator
+  - name: Admin
+  - name: Cost
+paths:
+  /health:
+    get:
+      tags: [Public]
+      summary: Liveness check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Worker is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+
+  /join:
+    post:
+      tags: [Queue]
+      summary: Enter a queue
+      operationId: joinQueue
+      description: |
+        Successful joins set HttpOnly `tg_ticket`. Admitted joins also set `tg_access`.
+        Depth fields appear only when branding `showWaitingCount` is enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinRequest"
+      responses:
+        "200":
+          description: Admitted immediately
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueueStatusResponse"
+        "202":
+          description: Waiting in line / lottery pool
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueueStatusResponse"
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /status:
+    get:
+      tags: [Queue]
+      summary: Current visitor status
+      operationId: getStatus
+      parameters:
+        - name: queue
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Visitor id
+      responses:
+        "200":
+          description: Current status (requires matching `tg_ticket` cookie)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueueStatusResponse"
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /leave:
+    post:
+      tags: [Queue]
+      summary: Leave the queue
+      operationId: leaveQueue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisitorQueueRequest"
+      responses:
+        "200":
+          description: Left
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /heartbeat:
+    post:
+      tags: [Queue]
+      summary: Keep a waiting visitor alive
+      operationId: heartbeat
+      description: Usually unnecessary for the built-in waiting room (status renews liveness).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisitorQueueRequest"
+      responses:
+        "200":
+          description: Heartbeat accepted
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /enter:
+    post:
+      tags: [Queue]
+      summary: Confirm entry after click-to-enter admit
+      operationId: enterQueue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisitorQueueRequest"
+      responses:
+        "200":
+          description: Entered; issues access token / `tg_access`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueueStatusResponse"
+        "409":
+          description: Not admitted yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /admit:
+    post:
+      tags: [Operator]
+      summary: Force-admit waiters into open slots
+      operationId: admitVisitors
+      security:
+        - AdminSession: []
+        - TokenSecretBearer: []
+        - TokenSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue]
+              properties:
+                queue:
+                  type: string
+                count:
+                  type: integer
+                  minimum: 1
+                  default: 1
+      responses:
+        "200":
+          description: Admit result
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /mode:
+    post:
+      tags: [Operator]
+      summary: Switch admission mode for a queue
+      operationId: setMode
+      security:
+        - AdminSession: []
+        - TokenSecretBearer: []
+        - TokenSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue, mode]
+              properties:
+                queue:
+                  type: string
+                mode:
+                  $ref: "#/components/schemas/AdmissionMode"
+      responses:
+        "200":
+          description: Mode updated
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /pause:
+    post:
+      tags: [Operator]
+      summary: Silent pause or resume admissions
+      operationId: setPause
+      security:
+        - AdminSession: []
+        - TokenSecretBearer: []
+        - TokenSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue, paused]
+              properties:
+                queue:
+                  type: string
+                paused:
+                  type: boolean
+      responses:
+        "200":
+          description: Pause state updated
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /metrics:
+    get:
+      tags: [Operator]
+      summary: Queue metrics
+      operationId: getMetrics
+      security:
+        - AdminSession: []
+        - TokenSecretBearer: []
+        - TokenSecretHeader: []
+      parameters:
+        - name: queue
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Metrics snapshot from the Durable Object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/cost-estimate:
+    get:
+      tags: [Cost]
+      summary: Estimate Cloudflare spend for one surge
+      operationId: costEstimate
+      parameters:
+        - name: visitors
+          in: query
+          schema:
+            type: number
+            default: 5000000
+        - name: averageWaitSeconds
+          in: query
+          schema:
+            type: number
+            default: 900
+        - name: pollingMode
+          in: query
+          schema:
+            type: string
+            enum: [adaptive, fixed]
+            default: adaptive
+        - name: pollIntervalSeconds
+          in: query
+          schema:
+            type: number
+        - name: heartbeatIntervalSeconds
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Cost estimate
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/bootstrap:
+    get:
+      tags: [Admin]
+      summary: Public admin bootstrap
+      operationId: adminBootstrap
+      responses:
+        "200":
+          description: Setup flags, Turnstile sitekey, version
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/claim:
+    post:
+      tags: [Admin]
+      summary: Claim Worker with first admin account
+      operationId: adminClaim
+      security:
+        - TokenSecretBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+      responses:
+        "200":
+          description: Claimed; session cookie set; setupComplete still false
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/login:
+    post:
+      tags: [Admin]
+      summary: Admin login
+      operationId: adminLogin
+      description: Rate-limited. After setup, requires Turnstile siteverify.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                turnstileToken:
+                  type: string
+      responses:
+        "200":
+          description: Session cookie set
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/logout:
+    post:
+      tags: [Admin]
+      summary: Clear admin session
+      operationId: adminLogout
+      security:
+        - AdminSession: []
+      responses:
+        "200":
+          description: Logged out
+
+  /api/admin/state:
+    get:
+      tags: [Admin]
+      summary: Control-room state
+      operationId: adminState
+      security:
+        - AdminSession: []
+      responses:
+        "200":
+          description: Branding, metrics, me, team, turnstile
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/metrics:
+    get:
+      tags: [Admin]
+      summary: Live queue metrics + geo-block stats
+      operationId: adminMetrics
+      security:
+        - AdminSession: []
+      responses:
+        "200":
+          description: Live metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/traffic:
+    get:
+      tags: [Admin]
+      summary: Inflow/outflow time series
+      operationId: adminTraffic
+      description: "~15s buckets, ~24h retention in the Durable Object. Pass format=csv for download."
+      security:
+        - AdminSession: []
+      parameters:
+        - name: queue
+          in: query
+          schema:
+            type: string
+        - name: rangeMs
+          in: query
+          schema:
+            type: integer
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+      responses:
+        "200":
+          description: Traffic series for Chart.js (JSON) or CSV attachment
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+            text/csv:
+              schema:
+                type: string
+
+  /api/admin/webhooks:
+    put:
+      tags: [Admin]
+      summary: Save operator webhooks
+      operationId: adminWebhooks
+      security:
+        - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                url:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [pause, health, depth]
+                depthThreshold:
+                  type: integer
+                signingSecret:
+                  type: string
+                clearSecret:
+                  type: boolean
+      responses:
+        "200":
+          description: Webhooks saved
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/pass:
+    post:
+      tags: [Admin]
+      summary: Mint admission cookie for this browser
+      operationId: adminPass
+      security:
+        - AdminSession: []
+      responses:
+        "200":
+          description: Pass issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirectTo:
+                    type: string
+
+  /api/admin/geo-block:
+    put:
+      tags: [Admin]
+      summary: Temporary country block
+      operationId: adminGeoBlock
+      security:
+        - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                countriesText:
+                  type: string
+                ttlHours:
+                  type: number
+      responses:
+        "200":
+          description: Geo block saved
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/reset:
+    post:
+      tags: [Admin]
+      summary: Factory reset
+      operationId: adminReset
+      description: Clears admin, Cloudflare link, Turnstile, pending setup, origin override. Rate-limited 10/IP/min.
+      security:
+        - TokenSecretBearer: []
+      responses:
+        "200":
+          description: Reset complete; setupComplete false
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/password/recover:
+    post:
+      tags: [Admin]
+      summary: Reset password with BIP39 recovery phrase
+      operationId: adminPasswordRecover
+      description: |
+        Rate-limited. After setup, requires Turnstile. Does not replace TOKEN_SECRET factory reset.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, mnemonic, password, confirmPassword]
+              properties:
+                username:
+                  type: string
+                mnemonic:
+                  type: string
+                  description: 12-word BIP39 English phrase
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+                confirmPassword:
+                  type: string
+                turnstileToken:
+                  type: string
+      responses:
+        "200":
+          description: Password updated; session cookie set
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+components:
+  securitySchemes:
+    AdminSession:
+      type: apiKey
+      in: cookie
+      name: tg_admin
+    TokenSecretBearer:
+      type: http
+      scheme: bearer
+      description: Worker TOKEN_SECRET
+    TokenSecretHeader:
+      type: apiKey
+      in: header
+      name: X-TideGuard-Operator
+      description: Worker TOKEN_SECRET
+
+  responses:
+    ApiError:
+      description: Structured API error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+
+  schemas:
+    AdmissionMode:
+      type: string
+      enum: [queue, lottery]
+
+    JoinRequest:
+      type: object
+      required: [queue]
+      properties:
+        queue:
+          type: string
+        visitorId:
+          type: string
+          description: Optional; ignored when a matching tg_ticket cookie resumes the visitor
+
+    VisitorQueueRequest:
+      type: object
+      required: [queue, visitorId]
+      properties:
+        queue:
+          type: string
+        visitorId:
+          type: string
+
+    QueueStatusResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        status:
+          type: string
+          enum: [waiting, admitted, left]
+        visitorId:
+          type: string
+        queue:
+          type: string
+        admissionMode:
+          $ref: "#/components/schemas/AdmissionMode"
+        position:
+          type: integer
+        estimatedWaitSeconds:
+          type: number
+        nextPollAfterMs:
+          type: integer
+        accessToken:
+          type: string
+        waiting:
+          type: integer
+        ahead:
+          type: integer
+        behind:
+          type: integer
+        lotteryOdds:
+          type: number
+
+    MetricsResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        waiting:
+          type: integer
+        admitted:
+          type: integer
+        capacity:
+          type: integer
+        admissionMode:
+          $ref: "#/components/schemas/AdmissionMode"
+        paused:
+          type: boolean
+        admitPerSecond:
+          type: number
+
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true

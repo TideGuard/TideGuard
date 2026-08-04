@@ -4,6 +4,8 @@ HTTP contracts for TideGuard. Base URL is your Worker hostname (local: `http://l
 
 For first deploy and `/admin` setup, see [getting-started.md](getting-started.md). For the wizard and branding control room, see [admin.md](admin.md).
 
+Machine-readable contract: [openapi.yaml](../openapi.yaml) (OpenAPI 3.1).
+
 ## Errors
 
 All JSON error responses use:
@@ -129,7 +131,7 @@ Operator-only: silent pause / resume. Visitors are not told; admissions stop whi
 
 Operator-only (same auth as `/admit`). Queue depth, capacity, ETA, pause state, opening time, effective admit rate, health snapshot, `admissionMode`, plus ops fields: `entered`, `holding`, `openSlots`, `averageWaitSeconds`, `oldestWaitSeconds`. Computed in the Durable Object (no KV write).
 
-Admin UI also polls `GET /api/admin/metrics` every 5s (admin session) for the live metric strip and geo-block hit stats. The **traffic chart** uses `GET /api/admin/traffic` (server-backed ~15s buckets, ~2h retention) — see [analytics.md](analytics.md).
+Admin UI also polls `GET /api/admin/metrics` every 5s (admin session) for the live metric strip and geo-block hit stats. The **traffic chart** uses `GET /api/admin/traffic` (server-backed ~15s buckets, ~24h retention; `format=csv` for export) — see [analytics.md](analytics.md).
 
 ### `POST /api/admin/pass`
 
@@ -202,6 +204,8 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `DELETE` | `/api/admin/invites/:id` | session | Revoke invite |
 | `POST` | `/api/admin/invites/accept` | public (rate-limited) | Token + username + password + Turnstile → session |
 | `PUT` | `/api/admin/password` | session | Change own password (current + new + confirm) |
+| `POST` | `/api/admin/password/recover` | public (rate-limited) | BIP39 phrase + Turnstile → new password + session |
+| `POST` | `/api/admin/recovery/regenerate` | session | Regenerate BIP39 phrase (current password); returns phrase once |
 | `DELETE` | `/api/admin/users/:id` | session | Remove another admin (not self / not last) |
 | `PUT` | `/api/admin/branding` | session | KV write |
 | `PUT` | `/api/admin/origin` | session | Origin proxy override in KV |
@@ -210,7 +214,8 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `POST` | `/api/admin/pause` | session | Silent pause / resume |
 | `PUT` | `/api/admin/rate` | session | Set max outflow (`admitPerSecond` override) |
 | `DELETE` | `/api/admin/rate` | session | Clear rate override (env `ADMIT_PER_SECOND`) |
-| `GET` | `/api/admin/traffic` | session | Inflow/outflow time series (~15s buckets, ~2h) |
+| `GET` | `/api/admin/traffic` | session | Inflow/outflow (~15s buckets, ~24h; `format=csv`) |
+| `PUT` | `/api/admin/webhooks` | session | Operator outbound webhooks |
 | `PUT` | `/api/admin/health` | session | Origin health config / override / clear override |
 | `POST` | `/api/admin/reset` | `TOKEN_SECRET` bearer only | Clears admin, CF link, Turnstile, pending, origin |
 

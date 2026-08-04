@@ -42,8 +42,20 @@ export function waitingRoomStyles(vars: WaitingRoomStyleVars): string {
       }
       html.is-embed body {
         min-height: 100%;
-        padding: 1rem;
+        padding: 0.75rem 1rem 1rem;
         background: var(--tg-surface);
+      }
+      html.is-embed main {
+        width: min(100%, 24rem);
+      }
+      html.is-embed .tide {
+        display: none;
+      }
+      html.is-embed h1 {
+        font-size: clamp(1.5rem, 5vw, 2rem);
+      }
+      html.is-embed .message {
+        margin-bottom: 1rem;
       }
       main {
         width: min(100%, 28rem);

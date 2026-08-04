@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   ColorInput,
   Group,
@@ -56,6 +57,12 @@ export function StepFinish({
       <Text size="sm" c="dimmed">
         Preview updates live. Nothing is written until Finish setup.
       </Text>
+      <Alert color="teal" title="After Finish — time to green">
+        <Text size="sm">
+          You land in Demo mode (origin ungated). Smoke-test <code>/wait?return=/demo</code>, tune
+          admit rate, then Go live from Access when the launch checklist is ready.
+        </Text>
+      </Alert>
       <div className="tg-branding-layout">
         <Stack>
           <TextInput

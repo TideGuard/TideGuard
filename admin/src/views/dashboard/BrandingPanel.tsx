@@ -1,14 +1,17 @@
 import { useState } from "react";
 import {
+  Alert,
   Anchor,
   Button,
   Checkbox,
+  Code,
   ColorInput,
   Group,
   NumberInput,
   SegmentedControl,
   SimpleGrid,
   Stack,
+  Text,
   TextInput,
   Textarea,
 } from "@mantine/core";
@@ -206,9 +209,22 @@ export function BrandingPanel({
               target="_blank"
               rel="noreferrer"
             >
-              Open live waiting room
+              Open embed preview
             </Button>
           </Group>
+          <Alert color="gray" title="Embed widget">
+            <Text size="sm" mb="xs">
+              Iframe the waiting room on a marketing page. The embed posts{" "}
+              <Code>tideguard-embed-height</Code> so the parent can resize. Optional{" "}
+              <Code>?lang=en</Code> selects locale stubs (English today).
+            </Text>
+            <Code block>
+              {`<iframe\n  src="/wait?embed=1&return=/checkout&queue=${queue}"\n  title="Waiting room"\n  style="width:100%;border:0;min-height:28rem"\n></iframe>\n<script>\nwindow.addEventListener("message", (e) => {\n  if (e.data?.type === "tideguard-embed-height") {\n    const el = document.querySelector("iframe[title='Waiting room']");\n    if (el) el.style.height = e.data.height + "px";\n  }\n});\n</script>`}
+            </Code>
+            <Anchor href={LINKS.docsEmbed} target="_blank" rel="noreferrer" size="sm" mt="xs">
+              Verifying admission →
+            </Anchor>
+          </Alert>
         </Stack>
         <WaitingRoomPreview branding={draft} />
       </div>

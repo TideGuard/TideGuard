@@ -97,6 +97,7 @@ describe("origin proxy config", () => {
 
   it("parses path prefix lists", () => {
     expect(parsePathPrefixes(" /a , /b/ ,nope")).toEqual(["/a", "/b"]);
+    expect(parsePathPrefixes("/checkout\n/account/\n")).toEqual(["/checkout", "/account"]);
   });
 });
 

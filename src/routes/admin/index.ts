@@ -20,6 +20,8 @@ export {
   handleAdminRevokeInvite,
   handleAdminAcceptInvite,
   handleAdminChangePassword,
+  handleAdminPasswordRecover,
+  handleAdminRecoveryRegenerate,
   handleAdminRemoveUser,
 } from "./team";
 
@@ -28,6 +30,7 @@ export {
   handleAdminSaveOrigin,
   handleAdminSaveBypass,
   handleAdminSaveGeoBlock,
+  handleAdminSaveWebhooks,
 } from "./settings";
 
 export {

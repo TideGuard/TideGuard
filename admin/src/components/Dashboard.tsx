@@ -10,12 +10,16 @@ import { BrandingPanel } from "../views/dashboard/BrandingPanel";
 import { BypassGeoPanel } from "../views/dashboard/BypassGeoPanel";
 import { CloudflarePanel } from "../views/dashboard/CloudflarePanel";
 import { DangerZonePanel } from "../views/dashboard/DangerZonePanel";
+import { DemoModeBanner } from "../views/dashboard/DemoModeBanner";
 import { LiveMetrics } from "../views/dashboard/LiveMetrics";
 import { OriginPanel } from "../views/dashboard/OriginPanel";
+import { AccessGuidancePanel } from "../views/dashboard/AccessGuidancePanel";
 import { ScheduleHealthPanel } from "../views/dashboard/ScheduleHealthPanel";
+import { SecretRotationPanel } from "../views/dashboard/SecretRotationPanel";
 import { TeamPanel } from "../views/dashboard/TeamPanel";
 import { TurnstilePanel } from "../views/dashboard/TurnstilePanel";
 import { UpdatesPanel } from "../views/dashboard/UpdatesPanel";
+import { WebhooksPanel } from "../views/dashboard/WebhooksPanel";
 import { notifyError } from "../views/dashboard/notify";
 
 const SECTIONS: Array<{ value: DashboardSection; label: string }> = [
@@ -108,9 +112,21 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
       </Group>
 
       {showFirstRun ? (
-        <Alert color="teal" title="Ready for traffic" withCloseButton onClose={dismissFirstRun}>
-          Set an admit rate in the toolbar before you open the door. Use Live for the chart,
-          Branding for the waiting room look.
+        <Alert
+          color="teal"
+          title="Ready for traffic — time to green"
+          withCloseButton
+          onClose={dismissFirstRun}
+        >
+          <ol style={{ margin: "0.5rem 0 0", paddingLeft: "1.25rem" }}>
+            <li>
+              Smoke-test Demo mode: open <code>/wait?return=/demo</code> in an incognito window.
+            </li>
+            <li>
+              Set admit rate in the toolbar; optionally schedule an opening time under Admission.
+            </li>
+            <li>When ready, Go live (origin URL + protect-all) and walk the launch checklist.</li>
+          </ol>
         </Alert>
       ) : null}
 
@@ -119,6 +135,12 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
           {pollError}. Retrying every 5s.
         </Alert>
       ) : null}
+
+      <DemoModeBanner
+        state={state}
+        onGoLive={refreshState}
+        onOpenAccess={() => setSection("access")}
+      />
 
       <EventToolbar queue={queue} metrics={metrics} onRefresh={refreshMetrics} />
 
@@ -154,6 +176,7 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
         <Tabs.Panel value="access" pt="md">
           <Stack gap="lg">
             <OriginPanel state={state} onSaved={refreshState} />
+            <AccessGuidancePanel />
             <BypassGeoPanel
               state={{ ...state, geoBlock }}
               onSaved={refreshState}
@@ -177,6 +200,8 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
           <Stack gap="lg">
             <ActivityPanel refreshKey={auditTick} />
             <UpdatesPanel />
+            <WebhooksPanel state={state} onSaved={refreshState} />
+            <SecretRotationPanel />
             <DangerZonePanel onReset={onLogout} />
           </Stack>
         </Tabs.Panel>

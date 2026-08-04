@@ -18,15 +18,21 @@ TideGuard Worker
    └─ valid token              → fetch(ORIGIN + path)  (origin proxy)
 ```
 
+## Demo mode (smoke-test without gating the site)
+
+After setup finishes, TideGuard stays in **demo mode** until you enable origin protection: the Worker does not gate real site paths. Exercise the line at `/demo` or `/wait?return=/demo` (incognito is best). The control room shows a **Demo mode** banner with **Go live** (enables proxy + protect-all once an Origin URL is set).
+
+Demo mode is on when origin proxy is disabled, or when proxy is enabled but protect-all is off and no path prefixes are configured.
+
 ## Enable the origin proxy
 
 ### Option A: Admin UI (recommended)
 
-1. Deploy TideGuard and finish `/admin` setup.
-2. Open **Origin proxy** on the control room.
+1. Deploy TideGuard and finish `/admin` setup (you start in demo mode).
+2. Open **Access → Origin proxy**, or use **Go live** from the demo-mode banner.
 3. Set **Origin URL** to your upstream, e.g. `https://shop.example.com`.
 4. Leave **Protect all non-TideGuard paths** on (or list prefixes like `/checkout,/account`).
-5. **Save origin proxy**.
+5. **Save origin proxy** (or confirm **Go live**).
 
 Settings are stored in KV (`admin:origin`) and apply without redeploying.
 

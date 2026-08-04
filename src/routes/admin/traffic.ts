@@ -22,6 +22,8 @@ import {
 } from "../../queue/traffic";
 import { parseQueueName, readJsonBody } from "../validation";
 import { clientKey, requireSetupBearer, withCookie } from "./helpers";
+import { dispatchWebhook } from "../../admin/webhook-dispatch";
+import { clearWebhookSettings } from "../../admin/webhook-store";
 
 /**
  * Issue an admission cookie for this admin browser and skip the waiting room.
@@ -117,6 +119,7 @@ export async function handleAdminPause(request: Request, env: Env): Promise<Resp
     summary: paused ? "Enabled silent pause" : "Cleared silent pause",
     meta: { queue },
   });
+  void dispatchWebhook(env, "pause", queue, { paused });
   return jsonOk(result);
 }
 
@@ -192,6 +195,7 @@ export async function handleAdminTraffic(request: Request, env: Env): Promise<Re
   if (rangeMs !== undefined && (!Number.isFinite(rangeMs) || rangeMs < 1)) {
     throw new ApiError("bad_request", "rangeMs must be a positive number", 400);
   }
+  const format = (url.searchParams.get("format") || "json").toLowerCase();
 
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
@@ -200,6 +204,31 @@ export async function handleAdminTraffic(request: Request, env: Env): Promise<Re
     config,
     ...(rangeMs !== undefined ? { rangeMs } : {}),
   });
+
+  if (format === "csv") {
+    const header = "t,iso,joins,admits,maxOutflow,waiting,entered";
+    const lines = traffic.buckets.map((b) =>
+      [
+        b.t,
+        new Date(b.t).toISOString(),
+        b.joins,
+        b.admits,
+        b.maxOutflow,
+        b.waiting,
+        b.entered,
+      ].join(","),
+    );
+    const body = `${header}\n${lines.join("\n")}\n`;
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="tideguard-traffic-${queue}.csv"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
+
   return jsonOk({ ok: true, ...traffic, refreshedAt: Date.now() });
 }
 
@@ -309,6 +338,10 @@ export async function handleAdminHealth(request: Request, env: Env): Promise<Res
       : "Updated origin health throttle (disabled)",
     meta: { queue },
   });
+  void dispatchWebhook(env, "health", queue, {
+    enabled,
+    url: typeof healthInput.url === "string" ? healthInput.url : null,
+  });
   return jsonOk(result);
 }
 
@@ -326,6 +359,7 @@ export async function handleAdminReset(request: Request, env: Env): Promise<Resp
   await clearAuditLog(env);
   await clearTurnstileSettings(env);
   await clearSetupPending(env);
+  await clearWebhookSettings(env);
   await env.CONFIG_KV.delete(UPDATE_CHECK_CACHE_KEY);
   return jsonOk({ ok: true, setupComplete: false });
 }

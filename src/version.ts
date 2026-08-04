@@ -1,5 +1,5 @@
 /** Package version surfaced by `/health`, admin, and update checks. */
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 /** Upstream GitHub repository used for release checks. */
 export const GITHUB_REPO = "TideGuard/TideGuard";

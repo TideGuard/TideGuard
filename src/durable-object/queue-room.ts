@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { defaultEtaCalculator } from "../core/eta";
+import { createEtaCalculator } from "../core/eta";
 import type { AdmissionMode, QueueConfig } from "../core/types";
 import {
   DEFAULT_HEALTH_STATE,
@@ -919,6 +919,26 @@ export class QueueRoom extends DurableObject<Env> {
     this.setMeta("count_admitted", String(this.depth.admitted));
   }
 
+  private recentObservedAdmitPerSecond(now: number): number | null {
+    const windowMs = 5 * 60 * 1000;
+    const since = now - windowMs;
+    try {
+      const row = this.ctx.storage.sql
+        .exec<{ total: number }>(
+          `SELECT COALESCE(SUM(admits), 0) AS total FROM traffic_buckets WHERE t >= ?`,
+          since,
+        )
+        .one();
+      let admits = Number(row?.total ?? 0) || 0;
+      const open = this.currentTrafficOpen(now);
+      admits += open.admits;
+      if (admits <= 0) return null;
+      return admits / (windowMs / 1000);
+    } catch {
+      return null;
+    }
+  }
+
   private toView(visitor: VisitorRow, config: QueueConfig, now: number) {
     const status = visitor.status as "waiting" | "admitted" | "expired" | "left";
     const mode = this.admissionMode(config);
@@ -932,9 +952,11 @@ export class QueueRoom extends DurableObject<Env> {
     let holdSecondsRemaining: number | null = null;
 
     if (status === "waiting") {
+      const observed = this.recentObservedAdmitPerSecond(now);
+      const eta = createEtaCalculator(observed);
       if (mode === "lottery") {
         lotteryOdds = waiting > 0 ? 1 / waiting : null;
-        estimatedWaitSeconds = defaultEtaCalculator.estimateWaitSeconds(waiting, {
+        estimatedWaitSeconds = eta.estimateWaitSeconds(waiting, {
           ...config,
           admitPerSecond: Math.max(this.effectiveAdmitPerSecond(config, now), 0.0001),
         });
@@ -942,7 +964,7 @@ export class QueueRoom extends DurableObject<Env> {
         position = waitingPosition(this.waitingAhead(visitor.sequence));
         ahead = position - 1;
         behind = Math.max(0, waiting - position);
-        estimatedWaitSeconds = defaultEtaCalculator.estimateWaitSeconds(position, {
+        estimatedWaitSeconds = eta.estimateWaitSeconds(position, {
           ...config,
           admitPerSecond: Math.max(this.effectiveAdmitPerSecond(config, now), 0.0001),
         });

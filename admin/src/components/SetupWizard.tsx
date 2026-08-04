@@ -8,6 +8,7 @@ import { StepCloudflare } from "../views/setup/StepCloudflare";
 import { StepFinish } from "../views/setup/StepFinish";
 import { StepQueue } from "../views/setup/StepQueue";
 import { StepTurnstile } from "../views/setup/StepTurnstile";
+import { RecoveryPhraseModal } from "../views/setup/RecoveryPhraseModal";
 import { ensureTurnstile, type VerifyPayload } from "../views/setup/helpers";
 
 /** Resume wizard from flat bootstrap.setupPending (matches toSetupPendingPublic). */
@@ -47,6 +48,7 @@ export function SetupWizard({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
   const [signedInAs, setSignedInAs] = useState(bootstrap.claimedUsername);
+  const [recoveryMnemonic, setRecoveryMnemonic] = useState<string | null>(null);
   const [cfToken, setCfToken] = useState("");
   const [tokenVerified, setTokenVerified] = useState(() => Boolean(pending?.apiTokenReady));
   const [zoneId, setZoneId] = useState(() => pending?.zoneId ?? "");
@@ -116,22 +118,29 @@ export function SetupWizard({
     setBusy(true);
     setStatus(null);
     try {
-      const result = await api<{ username: string }>("/api/admin/claim", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${tokenSecret}` },
-        body: JSON.stringify({
-          username,
-          password,
-          confirmPassword,
-          queue: bootstrap.defaultQueue || "default",
-        }),
-      });
+      const result = await api<{ username: string; recoveryMnemonic?: string }>(
+        "/api/admin/claim",
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${tokenSecret}` },
+          body: JSON.stringify({
+            username,
+            password,
+            confirmPassword,
+            queue: bootstrap.defaultQueue || "default",
+          }),
+        },
+      );
       setSignedInAs(result.username);
       setTokenSecret("");
       setPassword("");
       setConfirm("");
-      setStep(2);
-      setCfPhase("token");
+      if (result.recoveryMnemonic) {
+        setRecoveryMnemonic(result.recoveryMnemonic);
+      } else {
+        setStep(2);
+        setCfPhase("token");
+      }
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "Claim failed");
     } finally {
@@ -300,6 +309,15 @@ export function SetupWizard({
       style={{ borderColor: "rgba(232,241,245,0.14)" }}
     >
       <Stack>
+        <RecoveryPhraseModal
+          opened={Boolean(recoveryMnemonic)}
+          mnemonic={recoveryMnemonic ?? ""}
+          onConfirm={() => {
+            setRecoveryMnemonic(null);
+            setStep(2);
+            setCfPhase("token");
+          }}
+        />
         <Title order={3}>First-time setup</Title>
         <Text size="sm" c="dimmed">
           Step {step} of 5{step === 2 ? ` · ${CF_PHASE_LABELS[cfPhase]}` : ""}

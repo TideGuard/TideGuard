@@ -33,6 +33,8 @@ import {
   handleAdminPass,
   handleAdminPause,
   handleAdminChangePassword,
+  handleAdminPasswordRecover,
+  handleAdminRecoveryRegenerate,
   handleAdminRate,
   handleAdminClearRate,
   handleAdminRemoveUser,
@@ -44,6 +46,7 @@ import {
   handleAdminSaveCloudflare,
   handleAdminSaveGeoBlock,
   handleAdminSaveOrigin,
+  handleAdminSaveWebhooks,
   handleAdminSchedule,
   handleAdminSetMode,
   handleAdminSetup,
@@ -250,6 +253,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminSaveOrigin(request, env);
   }
 
+  if (request.method === "PUT" && url.pathname === "/api/admin/webhooks") {
+    return await handleAdminSaveWebhooks(request, env);
+  }
+
   if (request.method === "PUT" && url.pathname === "/api/admin/bypass") {
     return await handleAdminSaveBypass(request, env);
   }
@@ -339,6 +346,14 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "PUT" && url.pathname === "/api/admin/password") {
     return await handleAdminChangePassword(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/password/recover") {
+    return await handleAdminPasswordRecover(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/recovery/regenerate") {
+    return await handleAdminRecoveryRegenerate(request, env);
   }
 
   if (request.method === "DELETE" && url.pathname.startsWith("/api/admin/users/")) {

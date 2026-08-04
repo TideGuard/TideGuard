@@ -56,6 +56,7 @@ export async function handleWaitingRoom(request: Request, env: Env): Promise<Res
     returnTo,
     branding,
     opensAt,
+    locale: url.searchParams.get("lang"),
     heartbeatTimeoutSeconds: queueConfig.heartbeatTimeoutSeconds,
     ...(fixedPollMs !== undefined ? { pollIntervalMs: fixedPollMs } : {}),
     ...(fixedHeartbeatMs !== undefined ? { heartbeatIntervalMs: fixedHeartbeatMs } : {}),

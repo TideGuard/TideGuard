@@ -4,6 +4,7 @@ import { IconCopy } from "@tabler/icons-react";
 import { api } from "../../lib/api";
 import type { AdminState } from "../../lib/types";
 import { isPasswordReady } from "../../lib/setup-guidance";
+import { RecoveryPhraseModal } from "../setup/RecoveryPhraseModal";
 import { Panel } from "./Panel";
 import { PasswordChecklist } from "./PasswordChecklist";
 import { notifyError, notifyOk } from "./notify";
@@ -13,6 +14,8 @@ export function TeamPanel({ state, onSaved }: { state: AdminState; onSaved: () =
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryMnemonic, setRecoveryMnemonic] = useState<string | null>(null);
 
   return (
     <Panel
@@ -20,6 +23,12 @@ export function TeamPanel({ state, onSaved }: { state: AdminState; onSaved: () =
       title="Team"
       description={`Signed in as ${state.me.username}. Invites expire in 72 hours and are shown once.`}
     >
+      <RecoveryPhraseModal
+        opened={Boolean(recoveryMnemonic)}
+        mnemonic={recoveryMnemonic ?? ""}
+        title="New recovery phrase"
+        onConfirm={() => setRecoveryMnemonic(null)}
+      />
       <Stack>
         <Text fw={600} size="sm">
           Members
@@ -174,6 +183,41 @@ export function TeamPanel({ state, onSaved }: { state: AdminState; onSaved: () =
           }}
         >
           Update password
+        </Button>
+
+        <Text fw={600} size="sm" mt="md">
+          Recovery phrase
+        </Text>
+        <Text size="sm" c="dimmed">
+          Regenerate your 12-word BIP39 phrase. The old phrase stops working immediately.
+        </Text>
+        <PasswordInput
+          label="Current password"
+          value={recoveryPassword}
+          onChange={(e) => setRecoveryPassword(e.currentTarget.value)}
+          autoComplete="current-password"
+        />
+        <Button
+          variant="default"
+          disabled={recoveryPassword.length < 8}
+          onClick={() => {
+            if (!window.confirm("Regenerate recovery phrase? The old phrase will stop working.")) {
+              return;
+            }
+            void api<{ recoveryMnemonic: string }>("/api/admin/recovery/regenerate", {
+              method: "POST",
+              body: JSON.stringify({ currentPassword: recoveryPassword }),
+            })
+              .then((result) => {
+                setRecoveryPassword("");
+                setRecoveryMnemonic(result.recoveryMnemonic);
+                notifyOk("Recovery phrase regenerated — save it now");
+                return onSaved();
+              })
+              .catch(notifyError);
+          }}
+        >
+          Regenerate recovery phrase
         </Button>
       </Stack>
     </Panel>

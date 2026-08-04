@@ -67,3 +67,32 @@ Flow:
 4. If the hold expires, the spot is released and they rejoin the line
 
 Server enforces the hold (Durable Object sweep), not only the browser timer.
+
+## Embed / iframe widget
+
+Use `/wait?embed=1&return=/checkout` inside an iframe on a marketing host while the gated host runs TideGuard.
+
+- Compact layout (no full-bleed tide background); `html.is-embed`
+- Posts `postMessage({ type: "tideguard-embed-height", height })` so the parent can resize
+- Optional `?lang=en` selects waiting-room locale stubs (English ships today; keys are stable for future locales)
+- Progressbar / status regions use `aria-live="polite"` and a labeled progressbar
+
+Example:
+
+```html
+<iframe
+  src="https://gate.example.com/wait?embed=1&return=/checkout"
+  title="Waiting room"
+  style="width:100%;border:0;min-height:28rem"
+></iframe>
+<script>
+  window.addEventListener("message", (e) => {
+    if (e.data?.type === "tideguard-embed-height") {
+      const el = document.querySelector("iframe[title='Waiting room']");
+      if (el) el.style.height = `${e.data.height}px`;
+    }
+  });
+</script>
+```
+
+The Branding tab in `/admin` shows the same snippet for your queue.

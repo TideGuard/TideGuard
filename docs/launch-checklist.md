@@ -39,6 +39,7 @@ Use `/cost` for Cloudflare Workers paid-plan estimates (adaptive by default).
 
 ## Origin proxy
 
+- [ ] Left demo mode: origin proxy enabled with protect-all or path prefixes ([protecting-origin.md](protecting-origin.md#demo-mode-smoke-test-without-gating-the-site))
 - [ ] Origin URL is a **public** `https://` host (loopback / private IPs are rejected)
 - [ ] Origin only accepts traffic from Cloudflare — **Full (strict)** SSL + **Authenticated Origin Pulls** (see [protecting-origin.md](protecting-origin.md))
 - [ ] Protected path smoke-test: unauthenticated → `/wait`; admitted → origin content

@@ -136,6 +136,15 @@ export interface TurnstileSettings {
   domains: string[];
 }
 
+export interface WebhookSettingsPublic {
+  enabled: boolean;
+  url: string | null;
+  events: string[];
+  depthThreshold: number;
+  updatedAt: number;
+  hasSecret: boolean;
+}
+
 export interface HealthConfig {
   enabled?: boolean;
   url?: string;
@@ -163,6 +172,7 @@ export interface AdminState {
   bypass: BypassSettings;
   geoBlock: GeoBlockSettings;
   turnstile: TurnstileSettings;
+  webhooks: WebhookSettingsPublic;
   traffic: {
     opensAt: number | null;
     paused: boolean;

@@ -116,7 +116,7 @@ Token permissions for the in-admin Cloudflare flow: Zone DNS Edit, Zone Read, Zo
 
 1. Redeploy the previous known-good git revision (`git checkout <sha>` → `npm run deploy`, or revert the commit on the Builds branch and push).
 2. Do **not** delete the KV namespace or Durable Object class to “roll back.”
-3. Only rotate `TOKEN_SECRET` if you believe it leaked — rotation invalidates admission tokens and admin sessions.
+3. Only rotate `TOKEN_SECRET` if you believe it leaked — see [token-secret-rotation.md](token-secret-rotation.md) (`npm run rotate:token-secret`). Rotation invalidates admission tokens and admin sessions.
 
 ## Related
 

@@ -59,13 +59,18 @@ function normalizeUsers(config: Partial<AdminConfig>): AdminUser[] {
         typeof user.passwordHash === "string" &&
         typeof user.passwordSalt === "string"
       ) {
-        out.push({
+        const next: AdminUser = {
           id: user.id,
           username: normalizeUsername(user.username),
           passwordHash: user.passwordHash,
           passwordSalt: user.passwordSalt,
           createdAt: typeof user.createdAt === "number" ? user.createdAt : 0,
-        });
+        };
+        if (typeof user.recoveryHash === "string" && typeof user.recoverySalt === "string") {
+          next.recoveryHash = user.recoveryHash;
+          next.recoverySalt = user.recoverySalt;
+        }
+        out.push(next);
       }
     }
     return out;
@@ -149,6 +154,52 @@ export async function updateAdminUserPassword(
   const users = [...config.users];
   const current = users[idx]!;
   users[idx] = { ...current, passwordHash, passwordSalt };
+  const next: AdminConfig = { ...config, users };
+  await writeAdminConfig(env, next);
+  return next;
+}
+
+export async function updateAdminUserRecovery(
+  env: Env,
+  userId: string,
+  recoveryHash: string,
+  recoverySalt: string,
+): Promise<AdminConfig> {
+  const config = await readAdminConfig(env);
+  if (!config) {
+    throw new Error("Admin has not been claimed");
+  }
+  const idx = config.users.findIndex((u) => u.id === userId);
+  if (idx < 0) {
+    throw new Error("User not found");
+  }
+  const users = [...config.users];
+  const current = users[idx]!;
+  users[idx] = { ...current, recoveryHash, recoverySalt };
+  const next: AdminConfig = { ...config, users };
+  await writeAdminConfig(env, next);
+  return next;
+}
+
+export async function updateAdminUserPasswordAndRecovery(
+  env: Env,
+  userId: string,
+  passwordHash: string,
+  passwordSalt: string,
+  recoveryHash: string,
+  recoverySalt: string,
+): Promise<AdminConfig> {
+  const config = await readAdminConfig(env);
+  if (!config) {
+    throw new Error("Admin has not been claimed");
+  }
+  const idx = config.users.findIndex((u) => u.id === userId);
+  if (idx < 0) {
+    throw new Error("User not found");
+  }
+  const users = [...config.users];
+  const current = users[idx]!;
+  users[idx] = { ...current, passwordHash, passwordSalt, recoveryHash, recoverySalt };
   const next: AdminConfig = { ...config, users };
   await writeAdminConfig(env, next);
   return next;

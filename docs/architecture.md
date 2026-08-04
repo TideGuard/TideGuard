@@ -98,14 +98,14 @@ Runtime **admit rate overrides** and **traffic buckets** live in QueueRoom SQLit
 
 Default: `ADMISSION_MODE` Worker var (`queue`). Operators can switch live with `POST /mode`.
 
-## ETA model (v1)
+## ETA model (v1.5)
 
 ```text
-Queue Mode:   estimatedWaitSeconds = ceil(position / admitPerSecond)
-Lottery Mode: estimatedWaitSeconds = ceil(waitingCount / admitPerSecond)
+Queue Mode:   estimatedWaitSeconds = ceil(position / effectiveRate)
+Lottery Mode: estimatedWaitSeconds = ceil(waitingCount / effectiveRate)
 ```
 
-The calculator is an interface (`EtaCalculator`) so more advanced estimators can replace the simple model without changing the Durable Object or routes.
+`effectiveRate` starts as the configured admit setpoint. When recent traffic buckets show observed admits, TideGuard blends setpoint with observed throughput (never faster than the setpoint) via `RollingThroughputEtaCalculator`. The calculator is an interface (`EtaCalculator`) so estimators can be swapped without changing routes.
 
 ## Cost discipline
 

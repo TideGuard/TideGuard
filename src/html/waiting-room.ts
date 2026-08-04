@@ -2,6 +2,11 @@ import type { WaitingRoomBranding } from "../core/branding";
 import { mergeBranding } from "../core/branding";
 import { waitingRoomClientScript } from "./waiting-room-client";
 import { waitingRoomStyles } from "./waiting-room-styles";
+import {
+  resolveWaitingRoomLocale,
+  waitingRoomStrings,
+  type WaitingRoomLocale,
+} from "./waiting-room-i18n";
 
 export interface WaitingRoomRenderOptions {
   queue: string;
@@ -23,6 +28,8 @@ export interface WaitingRoomRenderOptions {
   heartbeatTimeoutSeconds?: number;
   /** Unix ms when admissions begin; null/undefined = already open. */
   opensAt?: number | null;
+  /** BCP-47 language tag stub; only `en` is shipped today. */
+  locale?: string | null;
 }
 
 /**
@@ -32,6 +39,8 @@ export interface WaitingRoomRenderOptions {
 export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   const branding = mergeBranding(options.branding);
   const embed = options.embed === true;
+  const locale: WaitingRoomLocale = resolveWaitingRoomLocale(options.locale);
+  const copy = waitingRoomStrings(locale);
   const fixedPoll =
     options.pollIntervalMs !== undefined ? Math.max(2000, options.pollIntervalMs) : null;
   const fixedHeartbeat =
@@ -72,7 +81,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   });
 
   return `<!DOCTYPE html>
-<html lang="en" class="${embed ? "is-embed" : ""}">
+<html lang="${escapeHtml(locale)}" class="${embed ? "is-embed" : ""}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -84,26 +93,26 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   </head>
   <body>
     <main>
-      <p class="brand">TideGuard</p>
+      <p class="brand">${escapeHtml(copy.brand)}</p>
       <div class="tide" aria-hidden="true"></div>
       <h1>${escapeHtml(branding.title)}</h1>
       <p class="message">${escapeHtml(branding.message)}</p>
-      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress">
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Queue progress" id="progress">
         <span></span>
       </div>
-      <div class="stats" id="stats" data-cols="${showWaitingCount ? 3 : 2}">
+      <div class="stats" id="stats" data-cols="${showWaitingCount ? 3 : 2}" aria-live="polite">
         <div class="stat">
-          <span class="label" id="primary-label">Position</span>
+          <span class="label" id="primary-label">${escapeHtml(copy.positionLabel)}</span>
           <span class="value" id="position">—</span>
         </div>
         <div class="stat">
-          <span class="label">Est. wait</span>
+          <span class="label">${escapeHtml(copy.waitLabel)}</span>
           <span class="value" id="eta">—</span>
         </div>
         ${
           showWaitingCount
             ? `<div class="stat" id="depth-a-stat">
-          <span class="label" id="depth-a-label">In pool</span>
+          <span class="label" id="depth-a-label">${escapeHtml(copy.depthLabel)}</span>
           <span class="value" id="depth-a">—</span>
         </div>
         <div class="stat" id="depth-b-stat" hidden>
@@ -113,17 +122,34 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
             : ""
         }
       </div>
-      <p class="status" id="status" data-tone="ok">Connecting to queue…</p>
-      <p class="status" id="open-status" data-tone="ok" hidden></p>
+      <p class="status" id="status" data-tone="ok" role="status" aria-live="polite">Connecting to queue…</p>
+      <p class="status" id="open-status" data-tone="ok" role="status" aria-live="polite" hidden></p>
       <div class="enter-panel" id="enter-panel" hidden>
-        <p class="hold" id="hold-text">Your spot is ready. Continue before the timer ends.</p>
+        <p class="hold" id="hold-text">${escapeHtml(copy.statusHold)}</p>
         <button type="button" id="enter-btn">${escapeHtml(branding.enterButtonLabel)}</button>
       </div>
       <label class="sound-opt" id="sound-opt" ${playTurnSound ? "" : "hidden"}>
         <input type="checkbox" id="sound-toggle" />
-        Play a sound when it’s my turn
+        ${escapeHtml(copy.soundLabel)}
       </label>
     </main>
+    ${
+      embed
+        ? `<script>
+      (function () {
+        function postHeight() {
+          var h = Math.ceil(document.documentElement.scrollHeight);
+          try { parent.postMessage({ type: "tideguard-embed-height", height: h }, "*"); } catch (e) {}
+        }
+        postHeight();
+        if (typeof ResizeObserver !== "undefined") {
+          new ResizeObserver(postHeight).observe(document.body);
+        }
+        window.addEventListener("load", postHeight);
+      })();
+    </script>`
+        : ""
+    }
     ${script}
   </body>
 </html>`;

@@ -47,7 +47,8 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 | **Temporary country block** | Event-window geo gate via `CF-IPCountry`.                                                     |
 | **Cloudflare from admin**   | Verify API token, fix proxied DNS, toggle IP Geolocation, set Full (strict), manage domains.  |
 | **Turnstile on admin auth** | Setup provisions a widget; login and invites require siteverify (not rate limits alone).      |
-| **Live traffic**            | Live metrics + 2h inflow/outflow chart; geo-block hit counts in the control room.             |
+| **Live traffic**            | Live metrics + 24h inflow/outflow chart + CSV export; geo-block hits.                         |
+| **Operator webhooks**       | HTTPS callbacks for pause, health config changes, and waiting-depth thresholds.               |
 | **Cost calculator**         | Ballpark Cloudflare spend before the launch.                                                  |
 | **Adaptive max outflow**    | Live admit-rate control + inflow/outflow chart (no redeploy).                                 |
 | **Team invites**            | 72-hour invite links for additional admins (no email).                                        |
@@ -59,22 +60,24 @@ Deep guides: [custom domain](https://tideguard.dev/docs/custom-domain/), [protec
 
 Operator guides are authored in this repo under `docs/` and published at [tideguard.dev/docs](https://tideguard.dev/docs/).
 
-| Guide                                                                                                       | Start here if you want to…                                               |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [Getting started](docs/getting-started.md) · [web](https://tideguard.dev/docs/getting-started/)             | Clone, run locally, deploy, first `/admin` setup                         |
-| [Upgrading](docs/upgrading.md) · [web](https://tideguard.dev/docs/upgrading/)                               | Update an existing deploy without losing KV / secrets                    |
-| [Launch checklist](docs/launch-checklist.md) · [web](https://tideguard.dev/docs/launch-checklist/)          | Pre-production go-live review                                            |
-| [Custom domain](docs/custom-domain.md) · [web](https://tideguard.dev/docs/custom-domain/)                   | Full NS setup or partial CNAME (Business) to put TideGuard on a hostname |
-| [Protecting a domain](docs/protecting-origin.md) · [web](https://tideguard.dev/docs/protecting-origin/)     | Origin proxy, AOP, Cloudflare in front of origin                         |
-| [Verifying admission](docs/verifying-admission.md) · [web](https://tideguard.dev/docs/verifying-admission/) | Redirect URL, click-to-enter, how origins trust tokens                   |
-| [Architecture](docs/architecture.md) · [web](https://tideguard.dev/docs/architecture/)                      | Understand Workers / DO / KV choices and cost rules                      |
-| [API](docs/api.md) · [web](https://tideguard.dev/docs/api/)                                                 | Integrate `/join`, `/status`, tokens, operator routes                    |
-| [Admin](docs/admin.md) · [web](https://tideguard.dev/docs/admin/)                                           | Wizard, team invites, audit log, branding, traffic                       |
-| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                               | Live metrics + 2h traffic chart (inflow / max outflow)                   |
-| [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/)                      | Staff bypass + Pass queue + Cloudflare access helper                     |
-| [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/)                           | Temporary geo gate via `CF-IPCountry`                                    |
-| [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/)                      | Prove FIFO / lottery behavior at 1k–100k simulated users                 |
-| [Security](SECURITY.md)                                                                                     | Secrets, tokens, and what not to put in git                              |
+| Guide                                                                                                             | Start here if you want to…                                                      |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [Getting started](docs/getting-started.md) · [web](https://tideguard.dev/docs/getting-started/)                   | Clone, run locally, deploy, first `/admin` setup                                |
+| [Upgrading](docs/upgrading.md) · [web](https://tideguard.dev/docs/upgrading/)                                     | Update an existing deploy without losing KV / secrets                           |
+| [Launch checklist](docs/launch-checklist.md) · [web](https://tideguard.dev/docs/launch-checklist/)                | Pre-production go-live review                                                   |
+| [Custom domain](docs/custom-domain.md) · [web](https://tideguard.dev/docs/custom-domain/)                         | Full NS setup or partial CNAME (Business) to put TideGuard on a hostname        |
+| [Protecting a domain](docs/protecting-origin.md) · [web](https://tideguard.dev/docs/protecting-origin/)           | Origin proxy, AOP, Cloudflare in front of origin                                |
+| [Verifying admission](docs/verifying-admission.md) · [web](https://tideguard.dev/docs/verifying-admission/)       | Redirect URL, click-to-enter, how origins trust tokens                          |
+| [Architecture](docs/architecture.md) · [web](https://tideguard.dev/docs/architecture/)                            | Understand Workers / DO / KV choices and cost rules                             |
+| [API](docs/api.md) · [web](https://tideguard.dev/docs/api/)                                                       | Integrate `/join`, `/status`, tokens, operator routes ([OpenAPI](openapi.yaml)) |
+| [Admin](docs/admin.md) · [web](https://tideguard.dev/docs/admin/)                                                 | Wizard, team invites, audit log, branding, traffic                              |
+| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                                     | Live metrics + 24h traffic chart / CSV export                                   |
+| [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/)                            | Staff bypass + Pass queue + Cloudflare access helper                            |
+| [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/)                                 | Temporary geo gate via `CF-IPCountry`                                           |
+| [Operator webhooks](docs/webhooks.md) · [web](https://tideguard.dev/docs/webhooks/)                               | Pause / health / depth HTTPS callbacks                                          |
+| [TOKEN_SECRET rotation](docs/token-secret-rotation.md) · [web](https://tideguard.dev/docs/token-secret-rotation/) | Rotate the master secret safely                                                 |
+| [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/)                            | Prove FIFO / lottery behavior at 1k–100k simulated users                        |
+| [Security](SECURITY.md)                                                                                           | Secrets, tokens, and what not to put in git                                     |
 
 ## Quick start (local)
 
@@ -99,6 +102,7 @@ npm run setup   # types + .dev.vars TOKEN_SECRET + handoff (optional: starts dev
 npm run ci              # format, lint, typecheck, tests
 npm run test:coverage   # Istanbul coverage with CI thresholds (~75% lines on src/)
 npm run test:load       # in-memory scale test (see docs/load-testing.md)
+npm run rotate:token-secret  # generate TOKEN_SECRET + rotation checklist
 ```
 
 ## Configuration
@@ -168,8 +172,16 @@ test/               Vitest + Workers pool tests
 - [x] Configurable origin proxy (gate + forward to upstream)
 - [x] Opening schedule, silent pause, origin health throttle
 - [x] Multi-admin invites + activity audit log
-- [ ] OpenAPI spec
+- [x] OpenAPI spec
 - [x] Richer operator controls in UI (pause / force-admit / sticky event toolbar)
+- [x] Demo mode (smoke-test `/demo` without gating origin; Go live)
+- [x] BIP39 English admin recovery phrase (Turnstile on forgot-password)
+- [x] Rolling-throughput ETA (blend setpoint with recent admits)
+- [x] 24h traffic retention + CSV export
+- [x] TOKEN_SECRET rotation guide + `npm run rotate:token-secret`
+- [x] Cloudflare Access guidance for `/admin`
+- [x] Operator webhooks (pause / health / depth)
+- [x] Waiting-room embed height postMessage + a11y / i18n hooks
 
 ## Contributing
 

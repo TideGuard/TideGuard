@@ -21,6 +21,8 @@ import { configFromEnv, getQueueRoom } from "../../queue/client";
 import { VERSION } from "../../version";
 import { parseQueueName } from "../validation";
 import { clientKey } from "./helpers";
+import { maybeDispatchDepthWebhook } from "../../admin/webhook-dispatch";
+import { readWebhookSettings, toPublicWebhooks } from "../../admin/webhook-store";
 
 export async function handleAdminState(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
@@ -45,6 +47,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     geoStats,
     invites,
     turnstile,
+    webhooksSettings,
   ] = await Promise.all([
     readBranding(env, queue),
     room.metrics({ queue, config }),
@@ -55,6 +58,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     readGeoBlockStats(env),
     listInvites(env),
     readTurnstileSettings(env),
+    readWebhookSettings(env),
   ]);
 
   const clientIp = clientConnectingIp(request);
@@ -76,6 +80,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
       stats: toGeoBlockStatsPublic(geoStats),
     }),
     turnstile: toTurnstilePublicView(turnstile),
+    webhooks: toPublicWebhooks(webhooksSettings),
     traffic: {
       opensAt: metrics.opensAt,
       paused: metrics.paused,
@@ -137,6 +142,7 @@ export async function handleAdminMetrics(request: Request, env: Env): Promise<Re
   ]);
   const clientCountry = clientCountryCode(request);
   const blockedCountries = effectiveBlockedCountries(geoSettings);
+  void maybeDispatchDepthWebhook(env, queue, metrics.waiting);
   return jsonOk({
     ok: true,
     metrics,

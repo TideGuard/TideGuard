@@ -5,8 +5,9 @@ The control room **Live** tab shows live queue metrics and a **server-backed tra
 ## Traffic series (server)
 
 - QueueRoom Durable Object records joins and admits into ~**15-second** buckets.
-- Buckets retain about **2 hours** in DO SQLite (`traffic_buckets`).
-- `GET /api/admin/traffic?queue=&rangeMs=` returns the series for Chart.js.
+- Buckets retain about **24 hours** in DO SQLite (`traffic_buckets`).
+- `GET /api/admin/traffic?queue=&rangeMs=` returns the series for Chart.js (UI presets: **2h / 12h / 24h**).
+- `GET /api/admin/traffic?queue=&rangeMs=&format=csv` downloads the same series as CSV (`t,iso,joins,admits,maxOutflow,waiting,entered`).
 - Chart series:
   - **Total inflow** — joins per bucket
   - **Max outflow** — admit/s setpoint during that bucket (stepped when operators update rate)

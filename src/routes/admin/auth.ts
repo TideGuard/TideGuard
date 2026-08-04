@@ -3,6 +3,7 @@ import { ApiError, jsonOk } from "../../core/errors";
 import type { WaitingRoomBranding } from "../../core/branding";
 import { hashPassword, verifyPassword } from "../../auth/password";
 import { assertAdminPassword } from "../../auth/password-policy";
+import { createRecoveryVerifier } from "../../auth/recovery";
 import { signAdminSession } from "../../auth/admin-session";
 import {
   buildAdminSessionCookie,
@@ -109,6 +110,7 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
   }
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const { hash, salt } = await hashPassword(password);
+  const recovery = await createRecoveryVerifier();
   const userId = newAdminUserId();
   const now = Date.now();
   await writeAdminConfig(env, {
@@ -119,6 +121,8 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
         username,
         passwordHash: hash,
         passwordSalt: salt,
+        recoveryHash: recovery.hash,
+        recoverySalt: recovery.salt,
         createdAt: now,
       },
     ],
@@ -136,7 +140,13 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
 
   const session = await signAdminSession(requireTokenSecret(env), actor);
   return withCookie(
-    jsonOk({ ok: true, claimed: true, username, queue }),
+    jsonOk({
+      ok: true,
+      claimed: true,
+      username,
+      queue,
+      recoveryMnemonic: recovery.mnemonic,
+    }),
     buildAdminSessionCookie(session, request),
   );
 }
