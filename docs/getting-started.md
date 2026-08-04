@@ -4,7 +4,7 @@ Deploy TideGuard on Cloudflare, or run it locally with Wrangler.
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 24+
 - A Cloudflare account (for deploy)
 - `npm` (Wrangler is a local project dependency)
 

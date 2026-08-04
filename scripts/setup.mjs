@@ -19,7 +19,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DEV_VARS = join(ROOT, ".dev.vars");
 const DEV_VARS_EXAMPLE = join(ROOT, ".dev.vars.example");
 const PLACEHOLDER = "replace-me-with-openssl-rand-hex-32";
-const MIN_NODE = 20;
+const MIN_NODE = 24;
 
 const args = new Set(process.argv.slice(2));
 const yes = args.has("--yes") || args.has("-y");
