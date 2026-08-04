@@ -173,7 +173,8 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | -------------------- | ------------------------------------------- | ---------------------------- | ---------------------------------------------------------- |
 | `GET`                | `/api/admin/bootstrap`                      | public                       | `{ setupComplete, claimed, turnstileSitekey, version, … }` |
 | `POST`               | `/api/admin/claim`                          | `TOKEN_SECRET` bearer (once) | Locks first admin + session; `setupComplete` stays false   |
-| `POST`               | `/api/admin/setup/cloudflare/token-verify`  | admin session                | Validates API token only (no zone write)                   |
+| `POST`               | `/api/admin/setup/cloudflare/token-verify`  | admin session                | Validates API token and seals it in setup-pending (no zone write) |
+
 | `POST`               | `/api/admin/setup/cloudflare/verify`        | admin session                | Token + zone verify; stores setup pending                  |
 | `POST`               | `/api/admin/setup/cloudflare/fix`           | admin session                | Orange-cloud DNS + IP Geolocation                          |
 | `PUT`                | `/api/admin/setup/cloudflare/ssl`           | admin session                | Set Full (strict) during wizard (or skip)                  |

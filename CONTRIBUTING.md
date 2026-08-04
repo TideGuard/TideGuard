@@ -37,7 +37,7 @@ Operators follow [docs/upgrading.md](docs/upgrading.md). Keep that path honest:
 2. **Durable Object class changes** — append a new tag under `migrations` in `wrangler.jsonc`; never rewrite or delete old migration tags. SQL shape changes go through `QueueRoom.migrate()` + `schema_version`.
 3. **KV / admin config** — prefer additive fields with defaults / soft merges so existing installs do not wipe on read. Breaking key renames need Upgrade notes and, when practical, a one-time read-fallback.
 4. **Placeholder KV IDs** — leave `0000…` IDs in upstream `wrangler.jsonc` so Deploy-to-Cloudflare can provision; never commit a personal account’s real namespace IDs.
-5. **Version** — bump `package.json` and `src/version.ts` together when cutting a release so `/health` and the admin Updates panel match the tag. Publish a **GitHub Release** (e.g. `v0.1.0`) so `GET /api/admin/updates` can see it via `releases/latest`.
+5. **Version** — bump `package.json` and `src/version.ts` together when cutting a release so `/health` and the admin Updates panel match the tag. Publish a **GitHub Release** (e.g. `v0.2.0`) so `GET /api/admin/updates` can see it via `releases/latest`.
 
 ## Pull requests
 

@@ -7,71 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-04
+
 ### Added
 
 - Admin control room: sticky **event toolbar** (rate, pause, force-admit, Pass queue, clear rate override), section tabs, waiting-room branding preview + font family, geo-block hit stats, Cloudflare domains / Fix proxy / IP Geolocation UI, Turnstile status, factory reset, password change, remove teammate
 - `PUT /api/admin/password` and `DELETE /api/admin/users/:id`
+- TOKEN_SECRET acknowledgment modal before claim / factory reset; Cloudflare API token sealed on verify and cleared from the SPA
+- Shared `src/auth/crypto.ts` primitives; QueueRoom `visitor-sql` helpers; CI Istanbul coverage thresholds
 - Docs: [custom domain guide](docs/custom-domain.md) — full nameserver setup vs partial CNAME (Business/Enterprise), Custom Domain vs Route attach order
 - Docs published at [tideguard.dev/docs](https://tideguard.dev/docs/); admin control room deep-links to matching guides
-
 - Docs: Bot Fight Mode / WAF coexistence — keep zone security on; Skip rule for ticketed TideGuard control paths if polls are challenged
-
 - Setup Cloudflare **token-verify** gate (`POST /api/admin/setup/cloudflare/token-verify`) before zone/hostname
-- In-wizard roadmap, per-step guides, Cloudflare deeplinks, and progressive 2a→2d substeps (token → zone → SSL → domain)
-- Cloudflare setup **2a/2b/2c** sub-steps (verify+Fix → SSL Set/Skip → domain Attach/Skip) with Verified/Skipped gates
+- In-wizard roadmap, per-step guides, Cloudflare deeplinks, and progressive token → zone → SSL → domain substeps
 - Admin password policy (8+, uppercase, digit or symbol, match) with live checklist on Account + invite
 - After setup, browser Back / bfcache never re-opens the claim wizard
 - **`npm run setup`** — interactive local bootstrap (Wrangler types, `.dev.vars` / `TOKEN_SECRET`, handoff to `/admin`; `--yes` / `--dev` flags)
 - Clearer setup-wizard errors — per-failure Cloudflare/Turnstile copy, proxy fix suggestions under verify status
-- **Guided 5-step `/admin` setup** — Account → Cloudflare verify → Turnstile → Queue → Branding (with in-wizard roadmap and per-step guides)
+- **Guided 5-step `/admin` setup** — Account → Cloudflare verify → Turnstile → Queue → Branding
 - **Required Cloudflare API verify** during setup (token + zone); Fix proxied DNS / IP Geolocation; optional Full (strict) SSL and custom-domain attach
-- **Turnstile for admin auth** — wizard provisions a widget via Cloudflare API; login and invite accept require siteverify (plus existing rate limits)
-- **Cloudflare control plane in admin** — IP Geolocation toggle (off clears country block), Set Full (strict), list/add/remove Workers custom domains; verify-on-save for new API tokens
+- **Turnstile for admin auth** — wizard provisions a widget via Cloudflare API; login and invite accept require siteverify
+- **Cloudflare control plane in admin** — IP Geolocation toggle, Set Full (strict), Workers custom domains
 - Sticky admin footer (TideGuard · version · © 2026 · MIT · docs / GitHub / waiting room)
-- Multi-admin accounts (username + PBKDF2 password), 72h hashed invite links, Activity audit log, and confirm dialogs for consequential toggles
+- Multi-admin accounts (username + PBKDF2 password), 72h hashed invite links, Activity audit log
 - First-run `GET /` → `/admin` redirect until setup is complete
 - Docs: Authenticated Origin Pulls + Full (strict) as required origin lock-down
-- README restructured into What / Basic features / Extended features
-- Admin **Updates** panel + `GET /api/admin/updates` — compare running `0.1.0` to GitHub `releases/latest` (KV-cached)
-- Istanbul coverage via `npm run test:coverage` (~80% lines on `src/`); README badge + sales row
-- Operator [upgrading guide](docs/upgrading.md) for Deploy-to-Cloudflare forks and CLI redeploys (preserve KV IDs, secrets, queue state)
+- Admin **Updates** panel + `GET /api/admin/updates` — compare running `VERSION` to GitHub `releases/latest` (KV-cached)
+- Istanbul coverage via `npm run test:coverage`; CI enforces thresholds (~75% lines)
+- Operator [upgrading guide](docs/upgrading.md) for Deploy-to-Cloudflare forks and CLI redeploys
 - FIFO `QueueRoom` Durable Object with join, leave, status, heartbeat, metrics, and pause
 - **Lottery Mode** — uniform random admission among waiters (`ADMISSION_MODE` / `POST /mode`)
 - Rate-limited admission via a single per-queue alarm (cleared when idle)
-- Pure queue helpers for ETA ticks, expiry, and capacity math
-- Cost guidance: no KV writes on the queue hot path
 - Typed REST API (`/join`, `/status`, `/leave`, `/heartbeat`, `/admit`, `/mode`, `/metrics`)
 - HMAC-SHA256 admission tokens with timing-safe verification
-- Waiting room page (`/wait`) with embed mode, polling, and heartbeats (equal-chance + ETA in Lottery Mode)
-- Optional waiting-room depth display (`showWaitingCount` branding)
+- Waiting room page (`/wait`) with embed mode, polling, and heartbeats
 - Opening schedule (`opensAt`), silent pause, and graduated origin health throttle
-- Admin Traffic panel + `/api/admin/schedule` / `pause` / `health`
-- Admin setup wizard (PBKDF2 password in KV) + session login
-- Admin control room with live branding preview (KV write on Save only)
-- **Live queue** panel (≈5s refresh) with waiting / admitted / wait times / open slots / geo hits
-- **Traffic chart** — server-backed ~15s buckets for ~2 hours (inflow joins + max outflow setpoint)
-- **IP allowlist** — staff bypass via `CF-Connecting-IP` without consuming queue capacity
-- **Pass queue** — admin-issued admission cookie for this browser (`POST /api/admin/pass`)
-- **Country block** — temporary `CF-IPCountry` gate with TTL, hit counters, and allowlist/Pass overrides
+- **Live queue** panel + **traffic chart** (server-backed ~15s buckets, ~2h)
+- **IP allowlist**, **Pass queue**, **Country block**
 - Operator auth accepts admin session cookie or `TOKEN_SECRET` bearer
-- Protected demo (`/demo`) gated by admission token cookie
-- Configurable in-memory load tests (100 → 100k users) plus optional DO load suite
-- Public cost calculator (`/cost` + `/api/cost-estimate`) for launch ballpark spend
+- Protected demo (`/demo`), cost calculator (`/cost`), configurable origin proxy
 - Docs hub: getting started, architecture, API, admin, analytics, IP allowlist, country block, load testing
-- Configurable origin proxy: gate non-TideGuard paths and forward to upstream (`ORIGIN_URL` / admin UI)
 
 ### Changed
 
 - Lottery waiting room shows **equal chance + ETA** (progress from ETA); raw `lotteryOdds` remain on the API for custom clients
-- Docs/README analytics copy aligned with the live traffic chart (2h inflow/outflow), not legacy multi-range depth charts
-- Deploy-to-Cloudflare / `wrangler.jsonc` no longer templates `ORIGIN_*`, `DEFAULT_QUEUE`, or `ADMISSION_MODE` — those are set in `/admin` after deploy
-- Cloudflare access is no longer “optional Check/Fix later only” — required in first-run setup; dashboard panel expanded into zone controls
+- Docs/README analytics copy aligned with the live traffic chart (2h inflow/outflow)
+- Deploy-to-Cloudflare / `wrangler.jsonc` no longer templates `ORIGIN_*`, `DEFAULT_QUEUE`, or `ADMISSION_MODE` — set in `/admin` after deploy
+- Cloudflare access required in first-run setup; dashboard panel expanded into zone controls
 - Admin login / invite accept fail closed when Turnstile is configured
-- Initial project scaffold for Cloudflare Workers
-- Typed configuration validation and simple ETA calculator
-- `GET /health` and landing page
-- Vitest Workers pool tests, ESLint, Prettier, and GitHub Actions CI
-- Open-source docs: README, architecture, contributing, code of conduct, security policy
 - `GET /metrics` requires operator auth; public join/status omit depth unless `showWaitingCount`
 - `POST /join` resumes existing `tg_ticket` (same-browser multi-tab); removed `?showWaiting=1`
 

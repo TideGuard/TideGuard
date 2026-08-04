@@ -83,7 +83,7 @@ After login, the control room **Updates** panel compares the running `VERSION` (
 
 - Results are cached in KV for about 6 hours (`admin:update-check`).
 - **Check for updates** forces a fresh lookup (`GET /api/admin/updates?refresh=1`).
-- A published GitHub Release (e.g. `v0.1.0`) is required; until one exists, the panel reports that no releases are published yet.
+- A published GitHub Release (e.g. `v0.2.0`) is required; until one exists, the panel reports that no releases are published yet.
 - Seeing an update does **not** auto-deploy — follow Path A or B above (and any CHANGELOG **Upgrade notes**).
 
 ## What the project migrates for you
