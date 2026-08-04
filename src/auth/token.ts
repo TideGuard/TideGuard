@@ -3,11 +3,9 @@
  *
  * Format: base64url(payload).base64url(signature)
  * Algorithm: HMAC-SHA256 over the payload segment only.
- *
- * We avoid a full JWT library to keep the Worker dependency-free and easy to
- * explain. Claims are still JWT-shaped (sub, queue, iat, exp) so they can be
- * migrated to standard JWTs later if needed.
  */
+
+import { decodeJson, encodeJson, hmacSign, timingSafeEqual } from "./crypto";
 
 export interface AccessTokenClaims {
   /** Visitor id. */
@@ -103,76 +101,4 @@ function isClaimsShape(value: unknown): value is AccessTokenClaims {
     typeof claims.exp === "number" &&
     typeof claims.iat === "number"
   );
-}
-
-const hmacKeyCache = new Map<string, CryptoKey>();
-
-async function hmacSign(secret: string, payload: string): Promise<string> {
-  const key = await getHmacKey(secret);
-  const signature = await crypto.subtle.sign("HMAC", key, textEncode(payload));
-  return base64UrlEncode(new Uint8Array(signature));
-}
-
-async function getHmacKey(secret: string): Promise<CryptoKey> {
-  const cached = hmacKeyCache.get(secret);
-  if (cached) {
-    return cached;
-  }
-  const key = await crypto.subtle.importKey(
-    "raw",
-    textEncode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  hmacKeyCache.set(secret, key);
-  return key;
-}
-
-async function timingSafeEqual(a: string, b: string): Promise<boolean> {
-  const aBytes = textEncode(a);
-  const bBytes = textEncode(b);
-  if (aBytes.byteLength !== bBytes.byteLength) {
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < aBytes.byteLength; i += 1) {
-    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
-  }
-  return diff === 0;
-}
-
-function encodeJson(value: unknown): string {
-  return base64UrlEncode(textEncode(JSON.stringify(value)));
-}
-
-function decodeJson<T>(value: string): T {
-  return JSON.parse(textDecode(base64UrlDecode(value))) as T;
-}
-
-function textEncode(value: string): Uint8Array {
-  return new TextEncoder().encode(value);
-}
-
-function textDecode(value: Uint8Array): string {
-  return new TextDecoder().decode(value);
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
-
-function base64UrlDecode(value: string): Uint8Array {
-  const padded = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padLength = (4 - (padded.length % 4)) % 4;
-  const binary = atob(padded + "=".repeat(padLength));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }

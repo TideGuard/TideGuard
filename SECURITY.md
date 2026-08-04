@@ -27,6 +27,7 @@ Include:
 
 - Keep `TOKEN_SECRET` long, random, and unique per deployment (`openssl rand -hex 32`)
 - Set it via Wrangler secrets / Deploy-to-Cloudflare prompts, never in git
+- **Blast radius:** the same `TOKEN_SECRET` signs visitor admission tokens and tickets, signs admin session cookies, seals Cloudflare API tokens / Turnstile secrets in KV, and authorizes Bearer operator routes (`/admit`, `/mode`, `/pause`, `/metrics`, factory reset). A leak compromises the whole deployment — rotate immediately
 - Complete `/admin` setup promptly; first claim requires `Authorization: Bearer TOKEN_SECRET`, Cloudflare API verify, and Turnstile (rate limits alone are not enough for login)
 - Prefer strong per-admin passwords (PBKDF2-hashed and salted in KV); use Team invites instead of sharing one password
 - Review the Activity panel after launch changes; consequential toggles ask for confirmation

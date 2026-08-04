@@ -12,7 +12,6 @@ import { clearGeoBlockSettings } from "../../admin/geo-block-store";
 import {
   attachWorkerDomain,
   checkHostnameProxy,
-  CloudflareApiError,
   detachWorkerDomain,
   enableHostnameProxy,
   findZoneIdByHostname,
@@ -22,7 +21,7 @@ import {
   setSslMode,
   verifyCloudflareAccess,
 } from "../../admin/cloudflare-api";
-import { formatCloudflareOperatorError } from "../../admin/operator-errors";
+import { rethrowCloudflareAsApiError } from "../../admin/operator-errors";
 import { clientConnectingIp, hasConnectingIpHeader } from "../../auth/client-ip";
 import { readJsonBody } from "../validation";
 import { requireSavedCloudflare } from "./helpers";
@@ -92,10 +91,7 @@ export async function handleAdminSaveCloudflare(request: Request, env: Env): Pro
     if (error instanceof BypassConfigError) {
       throw new ApiError("bad_request", error.message, 400);
     }
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -154,10 +150,7 @@ async function runCloudflareProxyAction(
         : await checkHostnameProxy({ apiToken, zoneId, hostname });
     return jsonOk({ ok: result.ok, check: result });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -188,10 +181,7 @@ export async function handleAdminCloudflareIpGeolocation(
     });
     return jsonOk({ ok: true, ipGeolocation: { on } });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -209,10 +199,7 @@ export async function handleAdminCloudflareSsl(request: Request, env: Env): Prom
     });
     return jsonOk({ ok: true, ssl });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -232,10 +219,7 @@ export async function handleAdminCloudflareDomains(request: Request, env: Env): 
       });
       return jsonOk({ ok: true, domains, workerService });
     } catch (error) {
-      if (error instanceof CloudflareApiError) {
-        throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-      }
-      throw error;
+      rethrowCloudflareAsApiError(error);
     }
   }
 
@@ -271,10 +255,7 @@ export async function handleAdminCloudflareDomains(request: Request, env: Env): 
       });
       return jsonOk({ ok: true, domain });
     } catch (error) {
-      if (error instanceof CloudflareApiError) {
-        throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-      }
-      throw error;
+      rethrowCloudflareAsApiError(error);
     }
   }
 
@@ -299,10 +280,7 @@ export async function handleAdminCloudflareDomains(request: Request, env: Env): 
       });
       return jsonOk({ ok: true });
     } catch (error) {
-      if (error instanceof CloudflareApiError) {
-        throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-      }
-      throw error;
+      rethrowCloudflareAsApiError(error);
     }
   }
 

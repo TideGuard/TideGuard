@@ -1,6 +1,6 @@
 # Admin analytics & traffic
 
-The control room shows live queue metrics and a **server-backed traffic chart** for adaptive max-outflow control.
+The control room **Live** tab shows live queue metrics and a **server-backed traffic chart** for adaptive max-outflow control. Geo-block hit counts appear with live metrics when a country block is active.
 
 ## Traffic series (server)
 
@@ -11,7 +11,7 @@ The control room shows live queue metrics and a **server-backed traffic chart** 
   - **Total inflow** — joins per bucket
   - **Max outflow** — admit/s setpoint during that bucket (stepped when operators update rate)
 
-Metrics also expose `totalInflow`, `inflowCurrent`, `outflowCurrent`, `admitPerSecond`, and `admitPerSecondOverride`.
+Metrics also expose `totalInflow`, `inflowCurrent`, `outflowCurrent`, `admitPerSecond`, and `admitPerSecondOverride`. Event-day controls (rate, pause, force-admit) live in the sticky toolbar.
 
 ## Related
 

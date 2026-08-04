@@ -7,12 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Lottery waiting room shows **equal chance + ETA** (progress from ETA); raw `lotteryOdds` remain on the API for custom clients
-
 ### Added
 
+- Admin control room: sticky **event toolbar** (rate, pause, force-admit, Pass queue, clear rate override), section tabs, waiting-room branding preview + font family, geo-block hit stats, Cloudflare domains / Fix proxy / IP Geolocation UI, Turnstile status, factory reset, password change, remove teammate
+- `PUT /api/admin/password` and `DELETE /api/admin/users/:id`
 - Docs: [custom domain guide](docs/custom-domain.md) — full nameserver setup vs partial CNAME (Business/Enterprise), Custom Domain vs Route attach order
 - Docs published at [tideguard.dev/docs](https://tideguard.dev/docs/); admin control room deep-links to matching guides
 
@@ -51,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin setup wizard (PBKDF2 password in KV) + session login
 - Admin control room with live branding preview (KV write on Save only)
 - **Live queue** panel (≈5s refresh) with waiting / admitted / wait times / open slots / geo hits
-- **Analytics** panel — 5-minute client-side charts for queue depth, average wait, and geo-block hits (1h / 12h / 24h)
+- **Traffic chart** — server-backed ~15s buckets for ~2 hours (inflow joins + max outflow setpoint)
 - **IP allowlist** — staff bypass via `CF-Connecting-IP` without consuming queue capacity
 - **Pass queue** — admin-issued admission cookie for this browser (`POST /api/admin/pass`)
 - **Country block** — temporary `CF-IPCountry` gate with TTL, hit counters, and allowlist/Pass overrides
@@ -64,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Lottery waiting room shows **equal chance + ETA** (progress from ETA); raw `lotteryOdds` remain on the API for custom clients
+- Docs/README analytics copy aligned with the live traffic chart (2h inflow/outflow), not legacy multi-range depth charts
 - Deploy-to-Cloudflare / `wrangler.jsonc` no longer templates `ORIGIN_*`, `DEFAULT_QUEUE`, or `ADMISSION_MODE` — those are set in `/admin` after deploy
 - Cloudflare access is no longer “optional Check/Fix later only” — required in first-run setup; dashboard panel expanded into zone controls
 - Admin login / invite accept fail closed when Turnstile is configured

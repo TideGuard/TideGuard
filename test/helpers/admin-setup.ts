@@ -15,12 +15,13 @@ export function cookieFrom(response: Response): string {
 }
 
 export async function resetAdmin(): Promise<void> {
-  await exports.default.fetch(
+  const response = await exports.default.fetch(
     new Request("https://example.com/api/admin/reset", {
       method: "POST",
       headers: { authorization: `Bearer ${ADMIN_SECRET}` },
     }),
   );
+  expect(response.status).toBe(200);
 }
 
 export const ADMIN_PASSWORD = "Correct-horse1";

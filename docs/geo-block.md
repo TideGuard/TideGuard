@@ -30,7 +30,7 @@ Checked on protected origin paths, `/wait`, `/demo`, and `POST /join` — before
 6. **Live queue** shows **Geo blocks** total + per-country hits (refreshes every 5s)
 7. **Disable now** clears the active gate (keeps the code list in the form)
 
-Hit stats live in KV (`admin:geo-block-stats`) separately from the block list so saves keep history until you enable a new window. Totals feed the admin Analytics charts in the browser (see [analytics.md](analytics.md)).
+Hit stats live in KV (`admin:geo-block-stats`) separately from the block list so saves keep history until you enable a new window. Totals appear in the admin Live metrics strip and Access tab (see [analytics.md](analytics.md)).
 
 ## Clients (full page, widget, API)
 

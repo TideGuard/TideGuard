@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   Button,
-  Card,
   Checkbox,
   Group,
   NumberInput,
@@ -9,10 +8,10 @@ import {
   Stack,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
 import { api } from "../../lib/api";
 import type { AdminState, QueueMetrics } from "../../lib/types";
+import { Panel } from "./Panel";
 import { notifyError, notifyOk } from "./notify";
 
 export function ScheduleHealthPanel({
@@ -24,9 +23,8 @@ export function ScheduleHealthPanel({
   metrics: QueueMetrics;
   onSaved: () => Promise<void>;
 }) {
-  const hc = state.traffic.healthConfig as Record<string, unknown>;
+  const hc = state.traffic.healthConfig;
   const [opensAt, setOpensAt] = useState("");
-  const [paused, setPaused] = useState(metrics.paused);
   const [enabled, setEnabled] = useState(Boolean(hc.enabled));
   const [url, setUrl] = useState(String(hc.url ?? ""));
   const [interval, setIntervalSec] = useState(Number(hc.intervalSeconds ?? 30));
@@ -37,20 +35,24 @@ export function ScheduleHealthPanel({
   const [recover, setRecover] = useState(Number(hc.recoverThreshold ?? 2));
 
   useEffect(() => {
-    setPaused(metrics.paused);
     if (metrics.opensAt) {
       const d = new Date(metrics.opensAt);
       const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
         .toISOString()
         .slice(0, 16);
       setOpensAt(local);
+    } else {
+      setOpensAt("");
     }
-  }, [metrics.paused, metrics.opensAt]);
+  }, [metrics.opensAt]);
 
   return (
-    <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
+    <Panel
+      id="admission"
+      title="Admission schedule & health"
+      description="Opening time and origin health throttle. Pause and admit rate live in the event toolbar above."
+    >
       <Stack>
-        <Title order={4}>Traffic controls</Title>
         <TextInput
           label="Opening time (local)"
           type="datetime-local"
@@ -92,31 +94,10 @@ export function ScheduleHealthPanel({
             Open now
           </Button>
         </Group>
-        <Checkbox
-          label="Silent pause (stop admissions)"
-          checked={paused}
-          onChange={(e) => setPaused(e.currentTarget.checked)}
-        />
-        <Button
-          onClick={() => {
-            if (!window.confirm(paused ? "Pause admissions?" : "Resume admissions?")) return;
-            void api("/api/admin/pause", {
-              method: "POST",
-              body: JSON.stringify({ queue: state.queue, paused }),
-            })
-              .then(() => {
-                notifyOk(paused ? "Paused" : "Resumed");
-                return onSaved();
-              })
-              .catch(notifyError);
-          }}
-        >
-          Apply pause
-        </Button>
 
-        <Title order={5} mt="sm">
+        <Text fw={600} size="sm" mt="sm">
           Origin health throttle
-        </Title>
+        </Text>
         <Text size="sm" c="dimmed">
           Health: {metrics.health.level}
           {metrics.health.lastLatencyMs != null ? ` · ${metrics.health.lastLatencyMs}ms` : ""}
@@ -221,6 +202,6 @@ export function ScheduleHealthPanel({
           </Button>
         </Group>
       </Stack>
-    </Card>
+    </Panel>
   );
 }

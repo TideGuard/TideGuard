@@ -1,4 +1,14 @@
-import { Button, ColorInput, Group, SimpleGrid, Text, TextInput, Textarea } from "@mantine/core";
+import {
+  Button,
+  ColorInput,
+  Group,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+} from "@mantine/core";
+import { WaitingRoomPreview } from "../dashboard/WaitingRoomPreview";
 
 export function StepFinish({
   title,
@@ -42,36 +52,56 @@ export function StepFinish({
   onFinish: () => void;
 }) {
   return (
-    <>
+    <Stack>
       <Text size="sm" c="dimmed">
-        Preview colors client-side; nothing is written until Finish setup.
+        Preview updates live. Nothing is written until Finish setup.
       </Text>
-      <TextInput
-        label="Title"
-        value={title}
-        onChange={(e) => onTitleChange(e.currentTarget.value)}
-      />
-      <Textarea
-        label="Message"
-        value={message}
-        onChange={(e) => onMessageChange(e.currentTarget.value)}
-      />
-      <SimpleGrid cols={2}>
-        <ColorInput label="Primary" value={primary} onChange={onPrimaryChange} />
-        <ColorInput label="Accent" value={accent} onChange={onAccentChange} />
-        <ColorInput label="Background" value={bg} onChange={onBgChange} />
-        <ColorInput label="Surface" value={surface} onChange={onSurfaceChange} />
-        <ColorInput label="Text" value={text} onChange={onTextChange} />
-        <ColorInput label="Muted" value={muted} onChange={onMutedChange} />
-      </SimpleGrid>
-      <Group>
-        <Button variant="default" onClick={onBack}>
-          Back
-        </Button>
-        <Button loading={busy} onClick={onFinish}>
-          Finish setup
-        </Button>
-      </Group>
-    </>
+      <div className="tg-branding-layout">
+        <Stack>
+          <TextInput
+            label="Title"
+            value={title}
+            onChange={(e) => onTitleChange(e.currentTarget.value)}
+          />
+          <Textarea
+            label="Message"
+            value={message}
+            onChange={(e) => onMessageChange(e.currentTarget.value)}
+          />
+          <SimpleGrid cols={2}>
+            <ColorInput label="Primary" value={primary} onChange={onPrimaryChange} />
+            <ColorInput label="Accent" value={accent} onChange={onAccentChange} />
+            <ColorInput label="Background" value={bg} onChange={onBgChange} />
+            <ColorInput label="Surface" value={surface} onChange={onSurfaceChange} />
+            <ColorInput label="Text" value={text} onChange={onTextChange} />
+            <ColorInput label="Muted" value={muted} onChange={onMutedChange} />
+          </SimpleGrid>
+          <Group>
+            <Button variant="default" onClick={onBack}>
+              Back
+            </Button>
+            <Button loading={busy} onClick={onFinish}>
+              Finish setup
+            </Button>
+          </Group>
+        </Stack>
+        <WaitingRoomPreview
+          branding={{
+            title,
+            message,
+            primaryColor: primary,
+            accentColor: accent,
+            backgroundColor: bg,
+            surfaceColor: surface,
+            textColor: text,
+            mutedColor: muted,
+            fontFamily: '"Fraunces", "IBM Plex Serif", Georgia, serif',
+            showWaitingCount: false,
+            enterButtonLabel: "Continue",
+            requireClickToEnter: false,
+          }}
+        />
+      </div>
+    </Stack>
   );
 }

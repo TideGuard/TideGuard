@@ -55,6 +55,31 @@ export async function clearSetupPending(env: Env): Promise<void> {
   await env.CONFIG_KV.delete(SETUP_PENDING_KEY);
 }
 
+export async function writeSetupPendingApiToken(env: Env, apiToken: string): Promise<SetupPending> {
+  const current = await readSetupPending(env);
+  const sealed = await sealSecret(apiToken.trim(), requireTokenSecret(env));
+  const next: SetupPending = {
+    ...current,
+    cloudflare: current.cloudflare
+      ? { ...current.cloudflare, apiTokenSealed: sealed, verifiedAt: Date.now() }
+      : {
+          zoneId: "",
+          hostname: "",
+          accountId: "",
+          workerService: "tideguard",
+          apiTokenSealed: sealed,
+          verifiedAt: Date.now(),
+          proxyOk: false,
+          sslMode: null,
+          sslIsStrict: false,
+          hostnameAttached: false,
+        },
+    updatedAt: Date.now(),
+  };
+  await env.CONFIG_KV.put(SETUP_PENDING_KEY, JSON.stringify(next));
+  return next;
+}
+
 export async function writeSetupPendingCloudflare(
   env: Env,
   input: {
@@ -169,7 +194,24 @@ export function isSetupPendingReady(pending: SetupPending): boolean {
   );
 }
 
-export function toSetupPendingPublic(pending: SetupPending): {
+export function toSetupPendingPublic(pending: SetupPending): SetupPendingPublic {
+  return {
+    apiTokenReady: Boolean(pending.cloudflare?.apiTokenSealed),
+    cloudflareReady: Boolean(pending.cloudflare?.proxyOk && pending.cloudflare.apiTokenSealed),
+    turnstileReady: Boolean(pending.turnstile?.verifiedAt && pending.turnstile.verifiedAt > 0),
+    turnstileSitekey: pending.turnstile?.sitekey ?? null,
+    proxyOk: pending.cloudflare?.proxyOk ?? false,
+    sslIsStrict: pending.cloudflare?.sslIsStrict ?? false,
+    sslMode: pending.cloudflare?.sslMode ?? null,
+    hostnameAttached: pending.cloudflare?.hostnameAttached ?? false,
+    hostname: pending.cloudflare?.hostname || null,
+    zoneId: pending.cloudflare?.zoneId || null,
+    accountId: pending.cloudflare?.accountId || null,
+  };
+}
+
+export interface SetupPendingPublic {
+  apiTokenReady: boolean;
   cloudflareReady: boolean;
   turnstileReady: boolean;
   turnstileSitekey: string | null;
@@ -180,19 +222,6 @@ export function toSetupPendingPublic(pending: SetupPending): {
   hostname: string | null;
   zoneId: string | null;
   accountId: string | null;
-} {
-  return {
-    cloudflareReady: Boolean(pending.cloudflare?.proxyOk && pending.cloudflare.apiTokenSealed),
-    turnstileReady: Boolean(pending.turnstile?.verifiedAt && pending.turnstile.verifiedAt > 0),
-    turnstileSitekey: pending.turnstile?.sitekey ?? null,
-    proxyOk: pending.cloudflare?.proxyOk ?? false,
-    sslIsStrict: pending.cloudflare?.sslIsStrict ?? false,
-    sslMode: pending.cloudflare?.sslMode ?? null,
-    hostnameAttached: pending.cloudflare?.hostnameAttached ?? false,
-    hostname: pending.cloudflare?.hostname ?? null,
-    zoneId: pending.cloudflare?.zoneId ?? null,
-    accountId: pending.cloudflare?.accountId ?? null,
-  };
 }
 
 export class SetupPendingError extends Error {

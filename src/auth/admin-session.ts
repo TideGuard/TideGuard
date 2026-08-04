@@ -2,6 +2,7 @@
  * Signed admin session cookies (HMAC), separate from visitor admission tokens.
  */
 
+import { decodeJson, encodeJson, hmacSign, timingSafeEqual } from "./crypto";
 import { TokenError } from "./token";
 
 export const ADMIN_COOKIE = "tg_admin";
@@ -106,56 +107,4 @@ export function buildAdminSessionCookie(
 export function clearAdminSessionCookie(request: Request): string {
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
-}
-
-async function hmacSign(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
-  return bytesToBase64Url(new Uint8Array(signature));
-}
-
-async function timingSafeEqual(a: string, b: string): Promise<boolean> {
-  const aBytes = new TextEncoder().encode(a);
-  const bBytes = new TextEncoder().encode(b);
-  if (aBytes.byteLength !== bBytes.byteLength) {
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < aBytes.byteLength; i += 1) {
-    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
-  }
-  return diff === 0;
-}
-
-function encodeJson(value: unknown): string {
-  return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(value)));
-}
-
-function decodeJson<T>(value: string): T {
-  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(value))) as T;
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
-
-function base64UrlToBytes(value: string): Uint8Array {
-  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padLength = (4 - (normalized.length % 4)) % 4;
-  const binary = atob(normalized + "=".repeat(padLength));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }

@@ -2,6 +2,7 @@
  * Admin invite links: opaque token shown once, hash stored in KV with 72h TTL.
  */
 
+import { bytesToBase64Url, timingSafeEqual } from "../auth/crypto";
 import { INVITE_TTL_SECONDS, type PendingInvite, inviteKey } from "./types";
 
 const INVITE_INDEX_KEY = "admin:invite-index";
@@ -90,7 +91,7 @@ export async function consumeInvite(env: Env, rawToken: string): Promise<Pending
   }
 
   const hash = await sha256Hex(parsed.token);
-  if (!(await timingSafeEqualHex(hash, invite.tokenHash))) {
+  if (!(await timingSafeEqual(hash, invite.tokenHash))) {
     throw new InviteError("Invalid invite link");
   }
 
@@ -202,25 +203,6 @@ async function sha256Hex(value: string): Promise<string> {
   return bytesToHex(new Uint8Array(digest));
 }
 
-async function timingSafeEqualHex(a: string, b: string): Promise<boolean> {
-  const aBytes = new TextEncoder().encode(a);
-  const bBytes = new TextEncoder().encode(b);
-  if (aBytes.byteLength !== bBytes.byteLength) return false;
-  let diff = 0;
-  for (let i = 0; i < aBytes.byteLength; i += 1) {
-    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
-  }
-  return diff === 0;
-}
-
 function bytesToHex(bytes: Uint8Array): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }

@@ -3,6 +3,8 @@
  * Uses Web Crypto so the Worker stays dependency-free.
  */
 
+import { base64UrlToBytes, bytesToBase64Url, timingSafeEqualBytes } from "./crypto";
+
 const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BITS = 256;
@@ -43,34 +45,4 @@ async function derive(password: string, salt: Uint8Array): Promise<Uint8Array> {
     HASH_BITS,
   );
   return new Uint8Array(bits);
-}
-
-function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.byteLength !== b.byteLength) {
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < a.byteLength; i += 1) {
-    diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
-  }
-  return diff === 0;
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
-
-function base64UrlToBytes(value: string): Uint8Array {
-  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padLength = (4 - (normalized.length % 4)) % 4;
-  const binary = atob(normalized + "=".repeat(padLength));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }

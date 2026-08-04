@@ -6,6 +6,7 @@ import { formatTurnstileOperatorError } from "../../admin/operator-errors";
 import { verifyTurnstileToken } from "../../admin/cloudflare-api";
 import { readTurnstileSecret, readTurnstileSettings } from "../../admin/turnstile-store";
 import { clientConnectingIp } from "../../auth/client-ip";
+import { textEncode, timingSafeEqualBytes } from "../../auth/crypto";
 
 /** Mid-wizard steps after claim: admin session required; reject if already finished. */
 export async function requireSetupWizardSession(request: Request, env: Env) {
@@ -115,15 +116,5 @@ export function withCookie(response: Response, cookie: string): Response {
 }
 
 export function timingSafeStringEqualSync(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const aBytes = encoder.encode(a);
-  const bBytes = encoder.encode(b);
-  if (aBytes.byteLength !== bBytes.byteLength) {
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < aBytes.byteLength; i += 1) {
-    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
-  }
-  return diff === 0;
+  return timingSafeEqualBytes(textEncode(a), textEncode(b));
 }

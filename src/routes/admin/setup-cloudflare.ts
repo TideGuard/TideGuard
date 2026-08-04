@@ -2,7 +2,6 @@ import { ApiError, jsonOk } from "../../core/errors";
 import { rateLimitOrThrow } from "../../auth";
 import {
   attachWorkerDomain,
-  CloudflareApiError,
   createTurnstileWidget,
   enableHostnameProxy,
   findZoneIdByHostname,
@@ -14,7 +13,7 @@ import {
   verifyTurnstileToken,
 } from "../../admin/cloudflare-api";
 import {
-  formatCloudflareOperatorError,
+  rethrowCloudflareAsApiError,
   formatTurnstileOperatorError,
 } from "../../admin/operator-errors";
 import {
@@ -23,6 +22,7 @@ import {
   openSetupPendingTurnstileSecret,
   readSetupPending,
   toSetupPendingPublic,
+  writeSetupPendingApiToken,
   writeSetupPendingCloudflare,
   writeSetupPendingTurnstile,
   SetupPendingError,
@@ -50,12 +50,15 @@ export async function handleAdminSetupCloudflareTokenVerify(
 
   try {
     const verified = await verifyApiToken(apiToken);
-    return jsonOk({ ok: true, status: verified.status, id: verified.id });
+    const pending = await writeSetupPendingApiToken(env, apiToken);
+    return jsonOk({
+      ok: true,
+      status: verified.status,
+      id: verified.id,
+      pending: toSetupPendingPublic(pending),
+    });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -67,7 +70,10 @@ export async function handleAdminSetupCloudflareVerify(
   await requireSetupWizardSession(request, env);
 
   const body = await readJsonBody(request);
-  const apiToken = typeof body.apiToken === "string" ? body.apiToken.trim() : "";
+  let apiToken = typeof body.apiToken === "string" ? body.apiToken.trim() : "";
+  if (!apiToken) {
+    apiToken = (await openSetupPendingApiToken(env)) ?? "";
+  }
   let zoneId = typeof body.zoneId === "string" ? body.zoneId.trim() : "";
   const hostname =
     (typeof body.hostname === "string" && body.hostname.trim()) || new URL(request.url).hostname;
@@ -79,7 +85,7 @@ export async function handleAdminSetupCloudflareVerify(
   if (apiToken.length < 20) {
     throw new ApiError(
       "bad_request",
-      "Cloudflare API token looks too short or empty. Paste the token from API Tokens → Create Custom Token.",
+      "Cloudflare API token missing — verify the token in the previous step first.",
       400,
     );
   }
@@ -122,10 +128,7 @@ export async function handleAdminSetupCloudflareVerify(
       pending: toSetupPendingPublic(pending),
     });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -166,10 +169,7 @@ export async function handleAdminSetupCloudflareFix(request: Request, env: Env):
     });
     return jsonOk({ ok: check.ok, check, pending: toSetupPendingPublic(next) });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -221,13 +221,10 @@ export async function handleAdminSetupTurnstileProvision(
       pending: toSetupPendingPublic(next),
     });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
     if (error instanceof SetupPendingError) {
       throw new ApiError("bad_request", error.message, 400);
     }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -302,10 +299,7 @@ export async function handleAdminSetupCloudflareAttachDomain(
     });
     return jsonOk({ ok: true, pending: toSetupPendingPublic(next) });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }
 
@@ -334,9 +328,6 @@ export async function handleAdminSetupCloudflareSsl(request: Request, env: Env):
     });
     return jsonOk({ ok: true, ssl, pending: toSetupPendingPublic(next) });
   } catch (error) {
-    if (error instanceof CloudflareApiError) {
-      throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
-    }
-    throw error;
+    rethrowCloudflareAsApiError(error);
   }
 }

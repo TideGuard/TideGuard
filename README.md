@@ -2,7 +2,7 @@
 
 <p>
   <a href="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml"><img src="https://github.com/TideGuard/TideGuard/actions/workflows/ci.yml/badge.svg" alt="CI" height="20" /></a>
-  <a href="#documentation"><img src="https://img.shields.io/badge/coverage-~80%25-brightgreen" alt="Line coverage ~80%" height="20" /></a>
+  <a href="#documentation"><img src="https://img.shields.io/badge/coverage-~76%25-brightgreen" alt="Line coverage ~76%" height="20" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" height="20" /></a>
 </p>
 
@@ -25,15 +25,15 @@ Commercial waiting rooms work. They are also expensive, opaque, and hard to stud
 
 ## Basic features
 
-| Feature                        | Why it matters                                                             |
-| ------------------------------ | -------------------------------------------------------------------------- |
-| **Durable Object queue**       | Strong consistency for join / leave / admit. KV is not a queue.            |
-| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.                   |
-| **HMAC admission tokens**      | Time-limited access without a session database.                            |
-| **Waiting room (`/wait`)**     | Branded hold page with heartbeats, optional depth, redirect after admit.   |
-| **Admin control room**         | React (Mantine) SPA: branding, live metrics, adaptive max outflow.         |
-| **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.          |
-| **Tested Worker logic**        | ≈80% line coverage (`npm run test:coverage`); CI runs format, lint, types. |
+| Feature                        | Why it matters                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------- |
+| **Durable Object queue**       | Strong consistency for join / leave / admit. KV is not a queue.                                   |
+| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.                                          |
+| **HMAC admission tokens**      | Time-limited access without a session database.                                                   |
+| **Waiting room (`/wait`)**     | Branded hold page with heartbeats, optional depth, redirect after admit.                          |
+| **Admin control room**         | React (Mantine) SPA: branding, live metrics, adaptive max outflow.                                |
+| **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.                                 |
+| **Tested Worker logic**        | ≈76%+ line coverage (`npm run test:coverage`); CI enforces Istanbul thresholds (75% lines/stmts). |
 
 Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/cost`.
 
@@ -47,7 +47,7 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 | **Temporary country block** | Event-window geo gate via `CF-IPCountry`.                                                     |
 | **Cloudflare from admin**   | Verify API token, fix proxied DNS, toggle IP Geolocation, set Full (strict), manage domains.  |
 | **Turnstile on admin auth** | Setup provisions a widget; login and invites require siteverify (not rate limits alone).      |
-| **Analytics**               | Control-room charts for queue depth, wait, and geo hits.                                      |
+| **Live traffic**            | Live metrics + 2h inflow/outflow chart; geo-block hit counts in the control room.             |
 | **Cost calculator**         | Ballpark Cloudflare spend before the launch.                                                  |
 | **Adaptive max outflow**    | Live admit-rate control + inflow/outflow chart (no redeploy).                                 |
 | **Team invites**            | 72-hour invite links for additional admins (no email).                                        |
@@ -70,7 +70,7 @@ Operator guides are authored in this repo under `docs/` and published at [tidegu
 | [Architecture](docs/architecture.md) · [web](https://tideguard.dev/docs/architecture/)                      | Understand Workers / DO / KV choices and cost rules                      |
 | [API](docs/api.md) · [web](https://tideguard.dev/docs/api/)                                                 | Integrate `/join`, `/status`, tokens, operator routes                    |
 | [Admin](docs/admin.md) · [web](https://tideguard.dev/docs/admin/)                                           | Wizard, team invites, audit log, branding, traffic                       |
-| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                               | Control-room charts (queue depth, wait, geo hits)                        |
+| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                               | Live metrics + 2h traffic chart (inflow / max outflow)                   |
 | [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/)                      | Staff bypass + Pass queue + Cloudflare access helper                     |
 | [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/)                           | Temporary geo gate via `CF-IPCountry`                                    |
 | [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/)                      | Prove FIFO / lottery behavior at 1k–100k simulated users                 |
@@ -97,7 +97,7 @@ npm run setup   # types + .dev.vars TOKEN_SECRET + handoff (optional: starts dev
 
 ```bash
 npm run ci              # format, lint, typecheck, tests
-npm run test:coverage   # Istanbul line coverage (~80% on src/)
+npm run test:coverage   # Istanbul coverage with CI thresholds (~75% lines on src/)
 npm run test:load       # in-memory scale test (see docs/load-testing.md)
 ```
 
@@ -169,7 +169,7 @@ test/               Vitest + Workers pool tests
 - [x] Opening schedule, silent pause, origin health throttle
 - [x] Multi-admin invites + activity audit log
 - [ ] OpenAPI spec
-- [ ] Richer operator controls in UI (pause / force-admit)
+- [x] Richer operator controls in UI (pause / force-admit / sticky event toolbar)
 
 ## Contributing
 

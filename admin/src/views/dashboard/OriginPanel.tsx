@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Button, Card, Checkbox, Stack, TextInput, Title } from "@mantine/core";
+import { Button, Checkbox, Stack, TextInput } from "@mantine/core";
 import { api } from "../../lib/api";
 import type { AdminState } from "../../lib/types";
 import { LINKS } from "../../lib/setup-guidance";
 import { DocHint } from "./DocHint";
+import { Panel } from "./Panel";
 import { notifyError, notifyOk } from "./notify";
 
 export function OriginPanel({
@@ -13,23 +14,21 @@ export function OriginPanel({
   state: AdminState;
   onSaved: () => Promise<void>;
 }) {
-  const o = state.origin as Record<string, unknown>;
+  const o = state.origin;
   const [enabled, setEnabled] = useState(Boolean(o.enabled));
-  const [originUrl, setOriginUrl] = useState(String(o.originUrl ?? ""));
+  const [originUrl, setOriginUrl] = useState(o.originUrl ?? "");
   const [protectAll, setProtectAll] = useState(o.protectAll !== false);
   const [prefixes, setPrefixes] = useState(
-    Array.isArray(o.pathPrefixes)
-      ? (o.pathPrefixes as string[]).join(",")
-      : String(o.pathPrefixes ?? ""),
+    Array.isArray(o.pathPrefixes) ? o.pathPrefixes.join(",") : "",
   );
 
   return (
-    <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
+    <Panel
+      id="origin"
+      title="Origin proxy"
+      description={<DocHint href={LINKS.docsOrigin} label="Protecting a domain" />}
+    >
       <Stack>
-        <div>
-          <Title order={4}>Origin proxy</Title>
-          <DocHint href={LINKS.docsOrigin} label="Protecting a domain" />
-        </div>
         <Checkbox
           label="Enable origin proxy"
           checked={enabled}
@@ -74,6 +73,6 @@ export function OriginPanel({
           Save origin proxy
         </Button>
       </Stack>
-    </Card>
+    </Panel>
   );
 }

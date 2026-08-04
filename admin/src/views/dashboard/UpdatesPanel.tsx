@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Anchor, Button, Card, Group, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Button, Group, Stack, Text } from "@mantine/core";
 import { api, ApiError } from "../../lib/api";
 import { LINKS } from "../../lib/setup-guidance";
+import { Panel } from "./Panel";
 
 export function UpdatesPanel() {
   const [summary, setSummary] = useState("—");
@@ -21,23 +22,25 @@ export function UpdatesPanel() {
   }, []);
 
   return (
-    <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
+    <Panel
+      id="updates"
+      title="Updates"
+      description={
+        <Anchor href={LINKS.docsUpgrading} target="_blank" rel="noreferrer" size="sm">
+          Upgrading guide
+        </Anchor>
+      }
+      actions={
+        <Button size="xs" variant="default" onClick={() => check(true)}>
+          Check
+        </Button>
+      }
+    >
       <Stack>
-        <Group justify="space-between">
-          <div>
-            <Title order={4}>Updates</Title>
-            <Text size="sm" c="dimmed">
-              <Anchor href={LINKS.docsUpgrading} target="_blank" rel="noreferrer" size="sm">
-                Upgrading guide
-              </Anchor>
-            </Text>
-          </div>
-          <Button size="xs" variant="default" onClick={() => check(true)}>
-            Check
-          </Button>
+        <Group>
+          <Text size="sm">{summary}</Text>
         </Group>
-        <Text size="sm">{summary}</Text>
       </Stack>
-    </Card>
+    </Panel>
   );
 }

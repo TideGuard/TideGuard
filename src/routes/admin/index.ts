@@ -19,6 +19,8 @@ export {
   handleAdminCreateInvite,
   handleAdminRevokeInvite,
   handleAdminAcceptInvite,
+  handleAdminChangePassword,
+  handleAdminRemoveUser,
 } from "./team";
 
 export {

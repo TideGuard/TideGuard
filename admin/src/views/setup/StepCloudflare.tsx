@@ -102,27 +102,39 @@ export function StepCloudflare({
           <Text size="sm" fw={600}>
             3. Paste and verify
           </Text>
-          <PasswordInput
-            label={FIELD_HELP.apiToken.label}
-            placeholder="Paste the token you just created"
-            value={cfToken}
-            onChange={(e) => onCfTokenChange(e.currentTarget.value)}
-          />
+          {tokenVerified ? (
+            <Text size="sm">
+              Token verified and stored encrypted on the Worker. You will not need to paste it again
+              for the rest of setup.
+            </Text>
+          ) : (
+            <PasswordInput
+              label={FIELD_HELP.apiToken.label}
+              placeholder="Paste the token you just created"
+              value={cfToken}
+              onChange={(e) => onCfTokenChange(e.currentTarget.value)}
+              autoComplete="off"
+            />
+          )}
         </Stack>
 
         <Group>
           <Button variant="default" onClick={onBackToStep1}>
             Back
           </Button>
-          <Button loading={busy} onClick={onVerifyToken} disabled={cfToken.trim().length < 20}>
-            Verify token
-          </Button>
+          {tokenVerified ? (
+            <>
+              <Button onClick={() => onBackToPhase("zone")}>Continue</Button>
+              <Button variant="subtle" onClick={() => onCfTokenChange("")}>
+                Use a different token
+              </Button>
+            </>
+          ) : (
+            <Button loading={busy} onClick={onVerifyToken} disabled={cfToken.trim().length < 20}>
+              Verify token
+            </Button>
+          )}
         </Group>
-        {tokenVerified ? (
-          <Text size="sm" c="teal">
-            Token ready
-          </Text>
-        ) : null}
       </>
     );
   }

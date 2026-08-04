@@ -1,5 +1,6 @@
 import { ApiError } from "../core/errors";
 import { TokenError } from "./token";
+import { timingSafeEqual } from "./crypto";
 import {
   type AdminActor,
   buildAdminSessionCookie,
@@ -33,7 +34,7 @@ export async function requireOperator(request: Request, env: Env): Promise<void>
   const operatorHeader = request.headers.get("x-tideguard-operator");
   const provided = bearer || operatorHeader;
 
-  if (!provided || !(await timingSafeStringEqual(provided, secret))) {
+  if (!provided || !(await timingSafeEqual(provided, secret))) {
     throw new ApiError("unauthorized", "Operator authentication required", 401);
   }
 }
@@ -69,17 +70,3 @@ export function requireTokenSecret(env: Env): string {
 
 export { buildAdminSessionCookie, clearAdminSessionCookie, readAdminSessionCookie };
 export type { AdminActor };
-
-async function timingSafeStringEqual(a: string, b: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const aBytes = encoder.encode(a);
-  const bBytes = encoder.encode(b);
-  if (aBytes.byteLength !== bBytes.byteLength) {
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < aBytes.byteLength; i += 1) {
-    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
-  }
-  return diff === 0;
-}

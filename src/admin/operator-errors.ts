@@ -1,4 +1,5 @@
-import type { CloudflareApiError } from "./cloudflare-api";
+import { CloudflareApiError } from "./cloudflare-api";
+import { ApiError } from "../core/errors";
 
 /**
  * Map Cloudflare API failures to short operator guidance for /admin setup.
@@ -94,4 +95,12 @@ export function formatTurnstileOperatorError(errorCodes: string[]): string {
     if (mapped) return mapped;
   }
   return `Turnstile verification failed (${codes.join(", ")}). Refresh the widget and try again.`;
+}
+
+/** Shared catch helper for Cloudflare API calls in admin/setup routes. */
+export function rethrowCloudflareAsApiError(error: unknown): never {
+  if (error instanceof CloudflareApiError) {
+    throw new ApiError("bad_request", formatCloudflareOperatorError(error), 400);
+  }
+  throw error;
 }

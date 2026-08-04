@@ -1,17 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActionIcon,
-  Anchor,
-  Button,
-  Card,
-  Group,
-  NumberInput,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { IconPlayerPlay, IconPlayerPause } from "@tabler/icons-react";
+import { Anchor, SimpleGrid, Text, Title, useMantineTheme } from "@mantine/core";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -28,6 +16,7 @@ import { Line } from "react-chartjs-2";
 import { api } from "../lib/api";
 import type { QueueMetrics, TrafficBucket, TrafficResponse } from "../lib/types";
 import { LINKS } from "../lib/setup-guidance";
+import { Panel } from "../views/dashboard/Panel";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
@@ -51,23 +40,27 @@ function formatTime(t: number): string {
 export function TrafficPanel({
   queue,
   metrics,
-  onMetricsRefresh,
 }: {
   queue: string;
   metrics: QueueMetrics;
-  onMetricsRefresh: () => Promise<void>;
+  onMetricsRefresh?: () => Promise<void>;
 }) {
+  const theme = useMantineTheme();
+  const inflow = String(theme.other?.inflow ?? "#2bb0a6");
+  const outflow = String(theme.other?.outflow ?? "#e07070");
+  const waiting = String(theme.other?.waiting ?? "#9b8fd9");
+  const waitTime = String(theme.other?.waitTime ?? "#e0a070");
+
   const [buckets, setBuckets] = useState<TrafficBucket[]>([]);
   const [totalInflow, setTotalInflow] = useState(metrics.totalInflow);
-  const [rateDraft, setRateDraft] = useState<number | string>(metrics.admitPerSecond);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const chartRef = useRef<ChartJS<"line"> | null>(null);
+  const reduceMotion =
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   useEffect(() => {
-    setRateDraft(metrics.admitPerSecond);
     setTotalInflow(metrics.totalInflow);
-  }, [metrics.admitPerSecond, metrics.totalInflow]);
+  }, [metrics.totalInflow]);
 
   async function loadTraffic() {
     const data = await api<TrafficResponse>(
@@ -75,6 +68,7 @@ export function TrafficPanel({
     );
     setBuckets(data.buckets);
     setTotalInflow(data.totalInflow);
+    setLoadError(null);
   }
 
   useEffect(() => {
@@ -82,8 +76,10 @@ export function TrafficPanel({
     const tick = async () => {
       try {
         if (!cancelled) await loadTraffic();
-      } catch {
-        /* ignore poll errors */
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : "Traffic load failed");
+        }
       }
     };
     void tick();
@@ -96,17 +92,16 @@ export function TrafficPanel({
 
   const chartData: ChartData<"line"> = useMemo(() => {
     const labels = buckets.map((b) => formatTime(b.t));
-    // Convert joins per bucket to approx rate/sec for display consistency with outflow setpoint
-    const inflow = buckets.map((b) => b.joins);
-    const outflow = buckets.map((b) => b.maxOutflow);
+    const joins = buckets.map((b) => b.joins);
+    const maxOut = buckets.map((b) => b.maxOutflow);
     return {
       labels,
       datasets: [
         {
           label: "Total inflow",
-          data: inflow,
-          borderColor: "#2bb0a6",
-          backgroundColor: "rgba(43, 176, 166, 0.15)",
+          data: joins,
+          borderColor: inflow,
+          backgroundColor: `${inflow}26`,
           tension: 0.25,
           pointRadius: 0,
           borderWidth: 2,
@@ -114,8 +109,8 @@ export function TrafficPanel({
         },
         {
           label: "Max outflow",
-          data: outflow,
-          borderColor: "#e07070",
+          data: maxOut,
+          borderColor: outflow,
           backgroundColor: "transparent",
           tension: 0,
           stepped: true,
@@ -124,13 +119,17 @@ export function TrafficPanel({
         },
       ],
     };
-  }, [buckets]);
+  }, [buckets, inflow, outflow]);
 
   const chartOptions: ChartOptions<"line"> = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      animation: false,
+      animation: reduceMotion
+        ? false
+        : {
+            duration: 200,
+          },
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: {
@@ -159,133 +158,69 @@ export function TrafficPanel({
         },
       },
     }),
-    [],
+    [reduceMotion],
   );
 
-  async function updateRate() {
-    const value = typeof rateDraft === "number" ? rateDraft : Number(rateDraft);
-    if (!Number.isFinite(value) || value <= 0) {
-      setStatus("Enter a positive admit rate");
-      return;
-    }
-    setBusy(true);
-    setStatus(null);
-    try {
-      await api("/api/admin/rate", {
-        method: "PUT",
-        body: JSON.stringify({ queue, admitPerSecond: value }),
-      });
-      setStatus(`Max outflow set to ${value}/s`);
-      await onMetricsRefresh();
-      await loadTraffic();
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Failed to update rate");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function togglePause() {
-    setBusy(true);
-    setStatus(null);
-    try {
-      const next = !metrics.paused;
-      await api("/api/admin/pause", {
-        method: "POST",
-        body: JSON.stringify({ queue, paused: next }),
-      });
-      setStatus(next ? "Paused admissions" : "Resumed admissions");
-      await onMetricsRefresh();
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Failed to update pause");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const hasTraffic = buckets.some((b) => b.joins > 0 || b.admits > 0 || b.waiting > 0);
 
   return (
-    <Card
-      withBorder
-      padding="lg"
-      radius="md"
-      bg="dark.7"
-      style={{ borderColor: "rgba(232,241,245,0.14)" }}
+    <Panel
+      id="traffic"
+      title="Traffic"
+      description={
+        <>
+          Adaptive max outflow · last 2 hours ·{" "}
+          <Anchor href={LINKS.docsAnalytics} target="_blank" rel="noreferrer" size="sm">
+            Analytics guide
+          </Anchor>
+        </>
+      }
     >
-      <Stack gap="md">
-        <Group justify="space-between" align="center" wrap="wrap">
-          <Group gap="xs">
-            <ActionIcon
-              variant={metrics.paused ? "filled" : "default"}
-              color={metrics.paused ? "teal" : "gray"}
-              size="lg"
-              onClick={() => void togglePause()}
-              disabled={busy}
-              aria-label={metrics.paused ? "Resume admissions" : "Pause admissions"}
-            >
-              {metrics.paused ? <IconPlayerPlay size={18} /> : <IconPlayerPause size={18} />}
-            </ActionIcon>
-            <NumberInput
-              value={rateDraft}
-              onChange={setRateDraft}
-              min={0.01}
-              max={1000}
-              step={0.5}
-              decimalScale={2}
-              w={120}
-              aria-label="Max outflow"
-            />
-            <Button onClick={() => void updateRate()} loading={busy} color="teal">
-              Update
-            </Button>
-          </Group>
-          <Text size="sm" c="dimmed">
-            Adaptive max outflow · live traffic ·{" "}
-            <Anchor href={LINKS.docsAnalytics} target="_blank" rel="noreferrer" size="sm">
-              Analytics guide
-            </Anchor>
-          </Text>
-        </Group>
-
-        <div style={{ height: 280 }}>
-          <Line ref={chartRef} data={chartData} options={chartOptions} />
-        </div>
-
-        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-          <MetricCard
-            label="Total inflow"
-            value={formatCount(totalInflow)}
-            sub={String(metrics.inflowCurrent)}
-            color="#2bb0a6"
-          />
-          <MetricCard label="Waiting" value={formatCount(metrics.waiting)} color="#9b8fd9" />
-          <MetricCard
-            label="Wait time"
-            value={formatWait(metrics.estimatedWaitSeconds)}
-            color="#e0a070"
-          />
-          <MetricCard
-            label="Max outflow"
-            value={String(metrics.admitPerSecond)}
-            sub={
-              metrics.admitPerSecondOverride !== null
-                ? `env ${metrics.admitPerSecondDefault}`
-                : "env default"
-            }
-            color="#e07070"
-          />
-        </SimpleGrid>
-
-        {status ? (
-          <Text size="sm" c="dimmed">
-            {status}
+      <div className="tg-chart-wrap" style={{ height: 280 }}>
+        {!hasTraffic && buckets.length > 0 ? (
+          <div className="tg-chart-empty">
+            <Text size="sm" c="dimmed">
+              No traffic yet. Visitors joining the waiting room will appear here.
+            </Text>
+          </div>
+        ) : null}
+        {loadError ? (
+          <Text size="sm" c="orange" mb="xs">
+            {loadError}
           </Text>
         ) : null}
-      </Stack>
-    </Card>
+        <Line ref={chartRef} data={chartData} options={chartOptions} />
+      </div>
+
+      <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
+        <MetricTile
+          label="Total inflow"
+          value={formatCount(totalInflow)}
+          sub={String(metrics.inflowCurrent)}
+          color={inflow}
+        />
+        <MetricTile label="Waiting" value={formatCount(metrics.waiting)} color={waiting} />
+        <MetricTile
+          label="Wait time"
+          value={formatWait(metrics.estimatedWaitSeconds)}
+          color={waitTime}
+        />
+        <MetricTile
+          label="Max outflow"
+          value={`${metrics.admitPerSecond}/s`}
+          sub={
+            metrics.admitPerSecondOverride !== null
+              ? `env ${metrics.admitPerSecondDefault}`
+              : "env default"
+          }
+          color={outflow}
+        />
+      </SimpleGrid>
+    </Panel>
   );
 }
 
-function MetricCard({
+function MetricTile({
   label,
   value,
   sub,
@@ -297,7 +232,7 @@ function MetricCard({
   color: string;
 }) {
   return (
-    <Card padding="md" radius="md" style={{ background: color, color: "#07151c" }}>
+    <div className="tg-metric-tile" style={{ background: color, color: "#07151c" }}>
       <Text size="xs" fw={600} style={{ opacity: 0.85 }}>
         {label}
       </Text>
@@ -309,6 +244,6 @@ function MetricCard({
           {sub}
         </Text>
       ) : null}
-    </Card>
+    </div>
   );
 }

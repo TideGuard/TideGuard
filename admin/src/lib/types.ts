@@ -49,6 +49,20 @@ export interface TrafficResponse {
   refreshedAt: number;
 }
 
+export interface SetupPendingPublic {
+  apiTokenReady: boolean;
+  cloudflareReady: boolean;
+  turnstileReady: boolean;
+  turnstileSitekey: string | null;
+  proxyOk: boolean;
+  sslIsStrict: boolean;
+  sslMode: string | null;
+  hostnameAttached: boolean;
+  hostname: string | null;
+  zoneId: string | null;
+  accountId: string | null;
+}
+
 export interface BootstrapResponse {
   setupComplete: boolean;
   claimed: boolean;
@@ -56,18 +70,99 @@ export interface BootstrapResponse {
   defaultQueue: string;
   version: string;
   turnstileSitekey: string | null;
-  setupPending: unknown;
+  setupPending: SetupPendingPublic | null;
+}
+
+export interface WaitingRoomBranding {
+  primaryColor: string;
+  backgroundColor: string;
+  surfaceColor: string;
+  textColor: string;
+  mutedColor: string;
+  accentColor: string;
+  fontFamily: string;
+  title: string;
+  message: string;
+  showWaitingCount: boolean;
+  redirectUrl: string;
+  requireClickToEnter: boolean;
+  admitHoldSeconds: number;
+  enterButtonLabel: string;
+  playTurnSound: boolean;
+}
+
+export interface OriginSettings {
+  enabled: boolean;
+  originUrl: string;
+  protectAll: boolean;
+  pathPrefixes: string[];
+}
+
+export interface BypassSettings {
+  allowlist: string[];
+  allowlistText: string;
+  zoneId: string | null;
+  hostname: string | null;
+  hasApiToken: boolean;
+  accountId: string | null;
+  workerService: string | null;
+  clientIp: string | null;
+  clientIpMatched: boolean;
+  connectingIpPresent: boolean;
+}
+
+export interface GeoBlockSettings {
+  enabled: boolean;
+  active: boolean;
+  countries: string[];
+  countriesText: string;
+  expiresAt: number | null;
+  updatedAt: number | null;
+  clientCountry: string | null;
+  clientBlocked: boolean;
+  hoursRemaining: number | null;
+  stats: {
+    totalHits: number;
+    byCountry: Array<{ country: string; hits: number }>;
+    lastHitAt: number | null;
+    lastHitCountry: string | null;
+    windowStartedAt: number | null;
+  };
+}
+
+export interface TurnstileSettings {
+  configured: boolean;
+  sitekey: string | null;
+  domains: string[];
+}
+
+export interface HealthConfig {
+  enabled?: boolean;
+  url?: string;
+  intervalSeconds?: number;
+  maxLatencyMs?: number;
+  expectStatus?: number;
+  slowRateMultiplier?: number;
+  failThreshold?: number;
+  recoverThreshold?: number;
+}
+
+export interface TeamInvite {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+  createdByUsername: string;
 }
 
 export interface AdminState {
   queue: string;
-  branding: Record<string, unknown>;
+  branding: WaitingRoomBranding;
   metrics: QueueMetrics;
   admissionMode: "queue" | "lottery";
-  origin: Record<string, unknown>;
-  bypass: Record<string, unknown>;
-  geoBlock: Record<string, unknown>;
-  turnstile: Record<string, unknown>;
+  origin: OriginSettings;
+  bypass: BypassSettings;
+  geoBlock: GeoBlockSettings;
+  turnstile: TurnstileSettings;
   traffic: {
     opensAt: number | null;
     paused: boolean;
@@ -79,12 +174,15 @@ export interface AdminState {
     totalInflow: number;
     inflowCurrent: number;
     outflowCurrent: number;
-    healthConfig: Record<string, unknown>;
+    healthConfig: HealthConfig;
   };
   version: string;
   me: { id: string; username: string };
   team: {
     users: Array<{ id: string; username: string; createdAt: number }>;
-    invites: Array<Record<string, unknown>>;
+    invites: TeamInvite[];
   };
 }
+
+export type DashboardSection =
+  "live" | "admission" | "branding" | "access" | "cloudflare" | "team" | "system";

@@ -132,6 +132,58 @@ export async function addAdminUser(env: Env, user: AdminUser): Promise<AdminConf
   return next;
 }
 
+export async function updateAdminUserPassword(
+  env: Env,
+  userId: string,
+  passwordHash: string,
+  passwordSalt: string,
+): Promise<AdminConfig> {
+  const config = await readAdminConfig(env);
+  if (!config) {
+    throw new Error("Admin has not been claimed");
+  }
+  const idx = config.users.findIndex((u) => u.id === userId);
+  if (idx < 0) {
+    throw new Error("User not found");
+  }
+  const users = [...config.users];
+  const current = users[idx]!;
+  users[idx] = { ...current, passwordHash, passwordSalt };
+  const next: AdminConfig = { ...config, users };
+  await writeAdminConfig(env, next);
+  return next;
+}
+
+export async function removeAdminUser(
+  env: Env,
+  userId: string,
+  actorId: string,
+): Promise<AdminConfig> {
+  const config = await readAdminConfig(env);
+  if (!config) {
+    throw new Error("Admin has not been claimed");
+  }
+  if (userId === actorId) {
+    throw new Error("You cannot remove your own account");
+  }
+  if (config.users.length <= 1) {
+    throw new Error("Cannot remove the last admin");
+  }
+  if (!config.users.some((u) => u.id === userId)) {
+    throw new Error("User not found");
+  }
+  const next: AdminConfig = {
+    ...config,
+    users: config.users.filter((u) => u.id !== userId),
+  };
+  await writeAdminConfig(env, next);
+  return next;
+}
+
+export function findUserById(config: AdminConfig, userId: string): AdminUser | null {
+  return config.users.find((u) => u.id === userId) ?? null;
+}
+
 export async function readBranding(env: Env, queue: string): Promise<WaitingRoomBranding> {
   try {
     const raw = await env.CONFIG_KV.get(brandingKey(queue), "json");

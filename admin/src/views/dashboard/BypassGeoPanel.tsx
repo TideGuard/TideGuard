@@ -1,53 +1,49 @@
 import { useState } from "react";
-import {
-  Button,
-  Card,
-  Checkbox,
-  Group,
-  NumberInput,
-  Stack,
-  Text,
-  Textarea,
-  Title,
-  Anchor,
-} from "@mantine/core";
+import { Anchor, Button, Checkbox, Group, NumberInput, Stack, Text, Textarea } from "@mantine/core";
 import { api } from "../../lib/api";
 import type { AdminState } from "../../lib/types";
 import { LINKS } from "../../lib/setup-guidance";
+import { Panel } from "./Panel";
 import { notifyError, notifyOk } from "./notify";
 
 export function BypassGeoPanel({
   state,
   onSaved,
+  showPassQueue = true,
 }: {
   state: AdminState;
   onSaved: () => Promise<void>;
+  showPassQueue?: boolean;
 }) {
-  const bypass = state.bypass as Record<string, unknown>;
-  const geo = state.geoBlock as Record<string, unknown>;
-  const [allowlist, setAllowlist] = useState(String(bypass.allowlistText ?? ""));
+  const bypass = state.bypass;
+  const geo = state.geoBlock;
+  const [allowlist, setAllowlist] = useState(bypass.allowlistText ?? "");
   const [geoEnabled, setGeoEnabled] = useState(Boolean(geo.enabled));
-  const [countries, setCountries] = useState(String(geo.countriesText ?? ""));
-  const [ttl, setTtl] = useState(Number(geo.ttlHours ?? 24));
+  const [countries, setCountries] = useState(geo.countriesText ?? "");
+  const [ttl, setTtl] = useState(
+    geo.hoursRemaining != null && geo.hoursRemaining > 0 ? Math.ceil(geo.hoursRemaining) : 24,
+  );
 
   return (
-    <Card withBorder bg="dark.7" style={{ borderColor: "rgba(232,241,245,0.14)" }}>
+    <Panel
+      id="access-gates"
+      title="IP allowlist & country block"
+      description={
+        <>
+          <Anchor href={LINKS.docsBypass} target="_blank" rel="noreferrer" size="sm">
+            IP allowlist
+          </Anchor>
+          {" · "}
+          <Anchor href={LINKS.docsGeo} target="_blank" rel="noreferrer" size="sm">
+            Country block
+          </Anchor>
+        </>
+      }
+    >
       <Stack>
-        <div>
-          <Title order={4}>IP allowlist & country block</Title>
-          <Text size="sm" c="dimmed">
-            <Anchor href={LINKS.docsBypass} target="_blank" rel="noreferrer" size="sm">
-              IP allowlist
-            </Anchor>
-            {" · "}
-            <Anchor href={LINKS.docsGeo} target="_blank" rel="noreferrer" size="sm">
-              Country block
-            </Anchor>
-          </Text>
-        </div>
         <Text size="sm" c="dimmed">
-          Your IP: {String(bypass.clientIp ?? "—")}
-          {bypass.clientMatched ? " (matched)" : ""}
+          Your IP: {bypass.clientIp ?? "—"}
+          {bypass.clientIpMatched ? " (matched)" : ""}
         </Text>
         <Textarea
           label="Allowed IPs / CIDRs"
@@ -71,30 +67,39 @@ export function BypassGeoPanel({
           >
             Save allowlist
           </Button>
-          <Button
-            variant="default"
-            onClick={() => {
-              if (!window.confirm("Issue admission cookie for this browser?")) return;
-              void api<{ redirectTo?: string }>("/api/admin/pass", {
-                method: "POST",
-                body: JSON.stringify({ queue: state.queue }),
-              })
-                .then((data) => {
-                  window.location.assign(data.redirectTo || "/");
+          {showPassQueue ? (
+            <Button
+              variant="default"
+              onClick={() => {
+                if (!window.confirm("Issue admission cookie for this browser?")) return;
+                void api<{ redirectTo?: string }>("/api/admin/pass", {
+                  method: "POST",
+                  body: JSON.stringify({ queue: state.queue }),
                 })
-                .catch(notifyError);
-            }}
-          >
-            Pass queue
-          </Button>
+                  .then((data) => {
+                    window.location.assign(data.redirectTo || "/");
+                  })
+                  .catch(notifyError);
+              }}
+            >
+              Pass queue
+            </Button>
+          ) : null}
         </Group>
 
-        <Title order={5} mt="sm">
+        <Text fw={600} size="sm" mt="sm">
           Country block
-        </Title>
-        <Text size="sm" c="dimmed">
-          Your country: {String(geo.clientCountry ?? "—")}
         </Text>
+        <Text size="sm" c="dimmed">
+          Your country: {geo.clientCountry ?? "—"}
+          {geo.active ? " · block active" : ""}
+          {geo.stats.totalHits > 0 ? ` · ${geo.stats.totalHits} hits this window` : ""}
+        </Text>
+        {geo.stats.byCountry.length > 0 ? (
+          <Text size="sm" c="dimmed">
+            Hits: {geo.stats.byCountry.map((c) => `${c.country} ${c.hits}`).join(" · ")}
+          </Text>
+        ) : null}
         <Checkbox
           label="Enable country block"
           checked={geoEnabled}
@@ -154,6 +159,6 @@ export function BypassGeoPanel({
           </Button>
         </Group>
       </Stack>
-    </Card>
+    </Panel>
   );
 }

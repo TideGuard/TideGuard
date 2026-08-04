@@ -73,16 +73,17 @@ Unsuitable for queue membership or ordering.
 
 ## Module boundaries
 
-| Module                  | Role                                                         |
-| ----------------------- | ------------------------------------------------------------ |
-| `src/core`              | Types, config parsing, ETA, API errors — package-extractable |
-| `src/queue`             | Pure queue engine logic                                      |
-| `src/health`            | Origin probe helpers + graduated throttle state machine      |
-| `src/durable-object`    | Persistence and RPC surface for `QueueRoom`                  |
-| `src/auth`              | Token sign / verify                                          |
-| `src/routes`            | HTTP mapping only — thin adapters                            |
-| `src/html` / `src/demo` | Presentation (waiting room, cost, geo block)                 |
-| `admin/`                | React admin SPA (Vite + Mantine + Chart.js → Static Assets)  |
+| Module                  | Role                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `src/core`              | Types, config parsing, ETA, API errors — package-extractable                                                        |
+| `src/queue`             | Pure queue engine logic                                                                                             |
+| `src/health`            | Origin probe helpers + graduated throttle state machine                                                             |
+| `src/durable-object`    | `QueueRoom` RPC + SQLite helpers (`visitor-sql`, traffic buckets, health state, schema)                             |
+| `src/auth`              | Tokens, sessions, passwords, access gates; shared `crypto.ts` HMAC/base64url primitives                             |
+| `src/admin`             | KV stores (config, branding, bypass, geo, Turnstile, invites, audit), Cloudflare API client, operator error mapping |
+| `src/routes`            | HTTP mapping — thin adapters (`admin/*`, queue, pages)                                                              |
+| `src/html` / `src/demo` | Presentation (waiting room, cost, geo block)                                                                        |
+| `admin/`                | React admin SPA (Vite + Mantine + Chart.js → Static Assets)                                                         |
 
 Keeping HTTP, crypto, and queue math separate makes the core easier to unit test and eventually publish as an npm package.
 

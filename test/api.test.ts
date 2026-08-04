@@ -189,7 +189,7 @@ describe("queue REST API", () => {
     expect(promotedBody.accessToken).toBeTypeOf("string");
   });
 
-  it("requires operator auth for /admit", async () => {
+  it("requires operator auth for /admit and admits waiters when authorized", async () => {
     const denied = await exports.default.fetch(
       new Request("https://example.com/admit", {
         method: "POST",
@@ -199,6 +199,15 @@ describe("queue REST API", () => {
     );
     expect(denied.status).toBe(401);
 
+    const { env } = await import("cloudflare:workers");
+    const queue = "api-admit";
+    const cfg = { ...DEFAULT_QUEUE_CONFIG, maxConcurrentUsers: 10, admitPerSecond: 1 };
+    const room = env.QUEUE_ROOM.getByName(queue);
+    await room.setPaused(true);
+    await room.join({ queue, config: cfg, visitorId: "w1" });
+    await room.join({ queue, config: cfg, visitorId: "w2" });
+    await room.setPaused(false);
+
     const allowed = await exports.default.fetch(
       new Request("https://example.com/admit", {
         method: "POST",
@@ -206,10 +215,12 @@ describe("queue REST API", () => {
           "content-type": "application/json",
           authorization: `Bearer ${SECRET}`,
         },
-        body: JSON.stringify({ queue: "api-admit", count: 1 }),
+        body: JSON.stringify({ queue, count: 2 }),
       }),
     );
     expect(allowed.status).toBe(200);
+    const body = await json<{ admitted: string[] }>(allowed);
+    expect(body.admitted).toHaveLength(2);
   });
 
   it("switches admission mode with operator auth", async () => {

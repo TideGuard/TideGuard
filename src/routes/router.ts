@@ -32,8 +32,10 @@ import {
   handleAdminPage,
   handleAdminPass,
   handleAdminPause,
+  handleAdminChangePassword,
   handleAdminRate,
   handleAdminClearRate,
+  handleAdminRemoveUser,
   handleAdminTraffic,
   handleAdminReset,
   handleAdminRevokeInvite,
@@ -333,6 +335,14 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "POST" && url.pathname === "/api/admin/invites/accept") {
     return await handleAdminAcceptInvite(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/password") {
+    return await handleAdminChangePassword(request, env);
+  }
+
+  if (request.method === "DELETE" && url.pathname.startsWith("/api/admin/users/")) {
+    return await handleAdminRemoveUser(request, env);
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/reset") {

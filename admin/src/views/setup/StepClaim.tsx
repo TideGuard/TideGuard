@@ -1,5 +1,8 @@
-import { Button, Group, List, PasswordInput, Text, TextInput, Anchor } from "@mantine/core";
-import { LINKS, passwordChecks } from "../../lib/setup-guidance";
+import { Button, Group, PasswordInput, Text, TextInput, Anchor } from "@mantine/core";
+import { useState } from "react";
+import { LINKS } from "../../lib/setup-guidance";
+import { PasswordChecklist } from "../dashboard/PasswordChecklist";
+import { TokenSecretAckModal } from "./TokenSecretAckModal";
 
 export function StepClaim({
   claimed,
@@ -34,7 +37,7 @@ export function StepClaim({
   onContinue: () => void;
   onNeedLogin: () => void;
 }) {
-  const pwd = passwordChecks(password, confirmPassword);
+  const [secretAcked, setSecretAcked] = useState(false);
 
   if (claimed || signedInAs) {
     return (
@@ -55,6 +58,8 @@ export function StepClaim({
 
   return (
     <>
+      <TokenSecretAckModal opened={!secretAcked} onConfirm={() => setSecretAcked(true)} />
+
       <PasswordInput
         label="TOKEN_SECRET"
         description={
@@ -68,38 +73,30 @@ export function StepClaim({
         }
         value={tokenSecret}
         onChange={(e) => onTokenSecretChange(e.currentTarget.value)}
+        autoComplete="off"
+        disabled={!secretAcked}
       />
       <TextInput
         label="Admin username"
         value={username}
         onChange={(e) => onUsernameChange(e.currentTarget.value)}
+        autoComplete="username"
       />
       <PasswordInput
         label="Password"
         description="8–128 chars, at least one uppercase letter, and a digit or symbol."
         value={password}
         onChange={(e) => onPasswordChange(e.currentTarget.value)}
+        autoComplete="new-password"
       />
       <PasswordInput
         label="Confirm password"
         value={confirmPassword}
         onChange={(e) => onConfirmChange(e.currentTarget.value)}
+        autoComplete="new-password"
       />
-      <List size="sm" spacing={2} c="dimmed">
-        <List.Item c={pwd.length ? "teal" : undefined}>
-          {pwd.length ? "✓" : "○"} At least 8 characters
-        </List.Item>
-        <List.Item c={pwd.upper ? "teal" : undefined}>
-          {pwd.upper ? "✓" : "○"} One uppercase letter
-        </List.Item>
-        <List.Item c={pwd.digitOrSymbol ? "teal" : undefined}>
-          {pwd.digitOrSymbol ? "✓" : "○"} One digit or symbol
-        </List.Item>
-        <List.Item c={pwd.match ? "teal" : undefined}>
-          {pwd.match ? "✓" : "○"} Passwords match
-        </List.Item>
-      </List>
-      <Button loading={busy} onClick={onClaim}>
+      <PasswordChecklist password={password} confirm={confirmPassword} />
+      <Button loading={busy} onClick={onClaim} disabled={!secretAcked}>
         Claim & continue
       </Button>
     </>

@@ -64,7 +64,10 @@ Toggles that change visitor-visible or security-sensitive behavior (pause, mode,
 
 ## Control room
 
-React SPA (Mantine + Chart.js) served from Workers Static Assets under `/admin/`. Dark teal theme (Source Sans). Includes live queue, **adaptive traffic** (inflow vs max outflow chart + live rate control), branding, schedule/pause/health, origin proxy, allowlist, geo block, Cloudflare controls, team, activity, and updates.
+React SPA (Mantine + Chart.js) served from Workers Static Assets under `/admin/`. Dark teal theme (Source Sans). Layout:
+
+- **Sticky event toolbar** — waiting/admitted chips, pause, admit rate (+ clear override), force-admit, Pass queue
+- **Tabs** — Live (metrics + 2h traffic chart), Admission (schedule + health), Branding (preview + fonts), Access, Cloudflare (+ Turnstile status), Team, System (activity, updates, factory reset)
 
 Build with `npm run build:admin` (also runs before `npm run dev` / `npm run deploy`).
 
@@ -72,9 +75,10 @@ Build with `npm run build:admin` (also runs before `npm run dev` / `npm run depl
 
 Operators can change admit rate without redeploying:
 
-1. Set the value in the traffic panel and click **Update** (`PUT /api/admin/rate`)
+1. Set the value in the event toolbar and click **Set rate** (`PUT /api/admin/rate`)
 2. Pause / resume with the play-pause control (`POST /api/admin/pause`)
-3. Clear the override with `DELETE /api/admin/rate` to fall back to `ADMIT_PER_SECOND`
+3. Clear the override with **Clear override** (`DELETE /api/admin/rate`) to fall back to `ADMIT_PER_SECOND`
+4. Force-admit waiting visitors via **Force admit** (`POST /admit`)
 
 The chart shows joins per interval (inflow) vs the setpoint (max outflow). Series come from the Durable Object (`GET /api/admin/traffic`, ~15s buckets, ~2h retention).
 
@@ -110,6 +114,8 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `POST`               | `/api/admin/invites`                        | Session (returns accept URL once)                                  |
 | `DELETE`             | `/api/admin/invites/:id`                    | Session                                                            |
 | `POST`               | `/api/admin/invites/accept`                 | Public (rate-limited); invite + Turnstile                          |
+| `PUT`                | `/api/admin/password`                       | Session (change own password)                                      |
+| `DELETE`             | `/api/admin/users/:id`                      | Session (remove another admin)                                     |
 | `PUT`                | `/api/admin/branding`                       | Session                                                            |
 | `PUT`                | `/api/admin/origin`                         | Session                                                            |
 | `POST`               | `/api/admin/mode`                           | Session                                                            |

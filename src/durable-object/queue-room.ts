@@ -51,19 +51,14 @@ import {
   totalInflow as totalInflowFromMeta,
   type TrafficBucketDeps,
 } from "./traffic-buckets";
-
-type SqlValue = string | number | null;
-
-interface VisitorRow {
-  [key: string]: SqlValue;
-  id: string;
-  status: string;
-  joined_at: number;
-  last_heartbeat_at: number;
-  admitted_at: number | null;
-  sequence: number;
-  entered: 0 | 1;
-}
+import {
+  countEnteredVisitors,
+  countVisitorsByStatus,
+  countWaitingAhead,
+  selectVisitor,
+  waitingWaitStats as waitingWaitStatsFromSql,
+  type VisitorRow,
+} from "./visitor-sql";
 
 /**
  * Authoritative state for a single named waiting room.
@@ -861,14 +856,7 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   private getVisitor(id: string): VisitorRow | null {
-    const row = this.ctx.storage.sql
-      .exec<VisitorRow>(
-        `SELECT id, status, joined_at, last_heartbeat_at, admitted_at, sequence, entered
-         FROM visitors WHERE id = ?`,
-        id,
-      )
-      .toArray()[0];
-    return row ?? null;
+    return selectVisitor(this.ctx.storage.sql, id);
   }
 
   private countByStatus(status: "waiting" | "admitted"): number {
@@ -877,37 +865,14 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   private countEntered(): number {
-    return this.ctx.storage.sql
-      .exec<{ count: number }>(
-        `SELECT COUNT(*) AS count FROM visitors WHERE status = 'admitted' AND entered = 1`,
-      )
-      .one().count;
+    return countEnteredVisitors(this.ctx.storage.sql);
   }
 
   private waitingWaitStats(now: number): {
     averageWaitSeconds: number;
     oldestWaitSeconds: number;
   } {
-    const row = this.ctx.storage.sql
-      .exec<{ avg_ms: number | null; max_ms: number | null }>(
-        `SELECT AVG(? - joined_at) AS avg_ms, MAX(? - joined_at) AS max_ms
-         FROM visitors WHERE status = 'waiting'`,
-        now,
-        now,
-      )
-      .toArray()[0];
-    const avgMs = row?.avg_ms;
-    const maxMs = row?.max_ms;
-    return {
-      averageWaitSeconds:
-        avgMs !== null && avgMs !== undefined && Number.isFinite(avgMs)
-          ? Math.max(0, Math.round(avgMs / 1000))
-          : 0,
-      oldestWaitSeconds:
-        maxMs !== null && maxMs !== undefined && Number.isFinite(maxMs)
-          ? Math.max(0, Math.round(maxMs / 1000))
-          : 0,
-    };
+    return waitingWaitStatsFromSql(this.ctx.storage.sql, now);
   }
 
   private waitingAhead(sequence: number): number {
@@ -915,13 +880,7 @@ export class QueueRoom extends DurableObject<Env> {
     if (cached !== undefined) {
       return cached;
     }
-    const ahead = this.ctx.storage.sql
-      .exec<{ count: number }>(
-        `SELECT COUNT(*) AS count FROM visitors
-         WHERE status = 'waiting' AND sequence < ?`,
-        sequence,
-      )
-      .one().count;
+    const ahead = countWaitingAhead(this.ctx.storage.sql, sequence);
     this.aheadCache.set(sequence, ahead);
     return ahead;
   }
@@ -942,12 +901,8 @@ export class QueueRoom extends DurableObject<Env> {
   }
 
   private reconcileDepth(): void {
-    const waiting = this.ctx.storage.sql
-      .exec<{ count: number }>(`SELECT COUNT(*) AS count FROM visitors WHERE status = 'waiting'`)
-      .one().count;
-    const admitted = this.ctx.storage.sql
-      .exec<{ count: number }>(`SELECT COUNT(*) AS count FROM visitors WHERE status = 'admitted'`)
-      .one().count;
+    const waiting = countVisitorsByStatus(this.ctx.storage.sql, "waiting");
+    const admitted = countVisitorsByStatus(this.ctx.storage.sql, "admitted");
     this.depth = { waiting, admitted };
     this.setMeta("count_waiting", String(waiting));
     this.setMeta("count_admitted", String(admitted));

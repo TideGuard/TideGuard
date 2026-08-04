@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card, Group, Stack, Text, Title } from "@mantine/core";
 import { api, ApiError } from "../lib/api";
-import type { BootstrapResponse } from "../lib/types";
+import type { BootstrapResponse, SetupPendingPublic } from "../lib/types";
 import { CF_PHASE_LABELS, SETUP_STEPS, type CfPhase, isPasswordReady } from "../lib/setup-guidance";
 import { StepClaim } from "../views/setup/StepClaim";
 import { StepCloudflare } from "../views/setup/StepCloudflare";
@@ -10,13 +10,23 @@ import { StepQueue } from "../views/setup/StepQueue";
 import { StepTurnstile } from "../views/setup/StepTurnstile";
 import { ensureTurnstile, type VerifyPayload } from "../views/setup/helpers";
 
+/** Resume wizard from flat bootstrap.setupPending (matches toSetupPendingPublic). */
 function initialStep(bootstrap: BootstrapResponse): number {
   if (!bootstrap.claimed) return 1;
-  const pending = bootstrap.setupPending as
-    { cloudflare?: { proxyOk?: boolean }; turnstile?: { verifiedAt?: number } } | null | undefined;
-  if (pending?.turnstile?.verifiedAt && pending.turnstile.verifiedAt > 0) return 4;
-  if (pending?.cloudflare?.proxyOk) return 3;
+  const pending = bootstrap.setupPending;
+  if (!pending) return 2;
+  if (pending.turnstileReady) return 4;
+  if (pending.proxyOk || pending.cloudflareReady) return 3;
   return 2;
+}
+
+function initialCfPhase(pending: SetupPendingPublic | null | undefined): CfPhase {
+  if (!pending) return "token";
+  if (pending.hostnameAttached) return "domain";
+  if (pending.sslIsStrict) return "domain";
+  if (pending.proxyOk) return "ssl";
+  if (pending.apiTokenReady || pending.cloudflareReady || pending.zoneId) return "zone";
+  return "token";
 }
 
 export function SetupWizard({
@@ -29,29 +39,32 @@ export function SetupWizard({
   onNeedLogin: () => void;
 }) {
   const claimed = bootstrap.claimed;
+  const pending = bootstrap.setupPending;
   const [step, setStep] = useState(() => initialStep(bootstrap));
-  const [cfPhase, setCfPhase] = useState<CfPhase>("token");
+  const [cfPhase, setCfPhase] = useState<CfPhase>(() => initialCfPhase(pending));
   const [tokenSecret, setTokenSecret] = useState("");
   const [username, setUsername] = useState(bootstrap.claimedUsername ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
   const [signedInAs, setSignedInAs] = useState(bootstrap.claimedUsername);
   const [cfToken, setCfToken] = useState("");
-  const [tokenVerified, setTokenVerified] = useState(false);
-  const [zoneId, setZoneId] = useState("");
-  const [hostname, setHostname] = useState(() =>
-    typeof window !== "undefined" ? window.location.hostname : "",
+  const [tokenVerified, setTokenVerified] = useState(() => Boolean(pending?.apiTokenReady));
+  const [zoneId, setZoneId] = useState(() => pending?.zoneId ?? "");
+  const [hostname, setHostname] = useState(
+    () => pending?.hostname ?? (typeof window !== "undefined" ? window.location.hostname : ""),
   );
   const [workerService, setWorkerService] = useState("tideguard");
-  const [proxyOk, setProxyOk] = useState(false);
-  const [proxyChecked, setProxyChecked] = useState(false);
+  const [proxyOk, setProxyOk] = useState(() => Boolean(pending?.proxyOk));
+  const [proxyChecked, setProxyChecked] = useState(() => Boolean(pending?.proxyOk));
   const [proxySummary, setProxySummary] = useState<string | null>(null);
   const [proxySuggestions, setProxySuggestions] = useState<string[]>([]);
-  const [sslDone, setSslDone] = useState(false);
-  const [domainDone, setDomainDone] = useState(false);
-  const [tsSitekey, setTsSitekey] = useState<string | null>(bootstrap.turnstileSitekey);
+  const [sslDone, setSslDone] = useState(() => Boolean(pending?.sslIsStrict));
+  const [domainDone, setDomainDone] = useState(() => Boolean(pending?.hostnameAttached));
+  const [tsSitekey, setTsSitekey] = useState<string | null>(
+    () => pending?.turnstileSitekey ?? bootstrap.turnstileSitekey,
+  );
   const [tsToken, setTsToken] = useState<string | null>(null);
-  const [tsVerified, setTsVerified] = useState(false);
+  const [tsVerified, setTsVerified] = useState(() => Boolean(pending?.turnstileReady));
   const [queue, setQueue] = useState(bootstrap.defaultQueue || "default");
   const [mode, setMode] = useState<"queue" | "lottery">("queue");
   const [title, setTitle] = useState("You're in line");
@@ -144,7 +157,7 @@ export function SetupWizard({
             surfaceColor: surface,
             textColor: text,
             mutedColor: muted,
-            fontFamily: '"Source Sans 3", system-ui, sans-serif',
+            fontFamily: '"Fraunces", "IBM Plex Serif", Georgia, serif',
             showWaitingCount: showWaiting,
             redirectUrl: "",
             requireClickToEnter: requireClick,
@@ -171,7 +184,8 @@ export function SetupWizard({
     })
       .then(() => {
         setTokenVerified(true);
-        setStatus("API token verified");
+        setCfToken("");
+        setStatus("API token verified and stored encrypted — continue with your site");
         setCfPhase("zone");
       })
       .catch((e) => handleApiError(e, "Token verify failed"))
@@ -193,7 +207,6 @@ export function SetupWizard({
     void api<VerifyPayload>("/api/admin/setup/cloudflare/verify", {
       method: "POST",
       body: JSON.stringify({
-        apiToken: cfToken,
         zoneId,
         hostname,
         workerService,

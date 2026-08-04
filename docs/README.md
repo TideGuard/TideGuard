@@ -13,7 +13,7 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 | [Architecture](architecture.md)                       | Engineers who need the Workers / Durable Object / KV story                        |
 | [API](api.md)                                         | Anyone integrating join, status, tokens, or operator routes                       |
 | [Admin](admin.md)                                     | Operators using setup (Cloudflare + Turnstile), team invites, audit log, branding |
-| [Analytics](analytics.md)                             | Control-room charts for queue depth, wait, and geo-block hits                     |
+| [Analytics](analytics.md)                             | Live metrics + 2h traffic chart; geo-block hits in the control room               |
 | [IP allowlist](ip-allowlist.md)                       | Staff bypass, Pass queue, and Cloudflare zone helpers from admin                  |
 | [Country block](geo-block.md)                         | Temporary event-window geo gate via `CF-IPCountry`                                |
 | [Load testing](load-testing.md)                       | Contributors validating queue behavior at scale                                   |

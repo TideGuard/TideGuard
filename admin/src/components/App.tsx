@@ -2,25 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Card, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
 import { api, ApiError } from "../lib/api";
 import type { AdminState, BootstrapResponse } from "../lib/types";
+import { isPasswordReady } from "../lib/setup-guidance";
+import { ensureTurnstile } from "../views/setup/helpers";
+import { PasswordChecklist } from "../views/dashboard/PasswordChecklist";
 import { Dashboard } from "./Dashboard";
 import { SetupWizard } from "./SetupWizard";
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        el: HTMLElement,
-        opts: {
-          sitekey: string;
-          callback: (token: string) => void;
-          "expired-callback"?: () => void;
-        },
-      ) => string;
-      reset: (id?: string) => void;
-      remove: (id?: string) => void;
-    };
-  }
-}
 
 type View = "loading" | "login" | "invite" | "wizard" | "dashboard";
 
@@ -52,7 +38,6 @@ export function App() {
       }
 
       try {
-        // Probe session with state (works once claimed, even if wizard unfinished).
         const dash = await api<AdminState>(
           `/api/admin/state?queue=${encodeURIComponent(bootData.defaultQueue)}`,
         );
@@ -100,6 +85,11 @@ export function App() {
       <SetupWizard
         bootstrap={bootstrap}
         onComplete={async () => {
+          try {
+            sessionStorage.removeItem("tg-first-run");
+          } catch {
+            /* ignore */
+          }
           const refreshed = await api<BootstrapResponse>("/api/admin/bootstrap");
           setBootstrap(refreshed);
           const dash = await api<AdminState>(
@@ -299,17 +289,22 @@ function InviteView({
           label="Username"
           value={username}
           onChange={(e) => setUsername(e.currentTarget.value)}
+          autoComplete="username"
         />
         <PasswordInput
           label="Password"
+          description="8–128 chars, at least one uppercase letter, and a digit or symbol."
           value={password}
           onChange={(e) => setPassword(e.currentTarget.value)}
+          autoComplete="new-password"
         />
         <PasswordInput
           label="Confirm password"
           value={confirmPassword}
           onChange={(e) => setConfirm(e.currentTarget.value)}
+          autoComplete="new-password"
         />
+        <PasswordChecklist password={password} confirm={confirmPassword} />
         <div ref={widgetRef} />
         {msg ? (
           <Text size="sm" c="red">
@@ -318,6 +313,7 @@ function InviteView({
         ) : null}
         <Button
           loading={busy}
+          disabled={!isPasswordReady(password, confirmPassword)}
           onClick={() => {
             setBusy(true);
             setMsg(null);
@@ -344,22 +340,4 @@ function InviteView({
       </Stack>
     </Card>
   );
-}
-
-function ensureTurnstile(): Promise<void> {
-  if (window.turnstile) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector("script[data-tg-turnstile]");
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    s.async = true;
-    s.dataset.tgTurnstile = "1";
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Failed to load Turnstile"));
-    document.head.appendChild(s);
-  });
 }
