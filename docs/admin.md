@@ -25,24 +25,21 @@ Cloudflare step 2 is progressive: the API token must verify before zone fields; 
 
 On **claim**, TideGuard:
 
-- Requires `Authorization: Bearer <TOKEN_SECRET>` so a stranger cannot claim a public Worker
-- Writes a PBKDF2 password hash + salt for the first user in KV (`admin:config` → `users[]`, `setupComplete: false`)
-- Shows a 12-word recovery phrase once (Forgot password)
-- Issues an admin session cookie (`tg_admin`) with `sub` + `username`
+- Requires Bearer `TOKEN_SECRET` so a stranger cannot claim a public Worker
+- Locks in the first admin account and shows a 12-word recovery phrase once
+- Issues an admin session (`tg_admin`)
 
 On **finish**, TideGuard:
 
 - Requires that admin session (not TOKEN_SECRET / password again)
-- Requires completed Cloudflare verify + Turnstile verify (pending KV promoted)
-- Sets `setupComplete: true`, writes branding, seals Cloudflare + Turnstile secrets, sets admission mode on the queue Durable Object
+- Requires completed Cloudflare verify + Turnstile verify
+- Marks setup complete, writes branding, seals Cloudflare + Turnstile secrets, and sets admission mode on the queue
 
 `TOKEN_SECRET` remains a Wrangler secret. It signs visitor tickets, admission tokens, and admin session cookies. Daily login (after finish) uses username + password **plus Turnstile**.
 
-Legacy installs with a single top-level password hash migrate to `users[{ username: "admin", … }]` on first read.
-
 ## Login
 
-After the Worker is claimed, `/admin` can show **Sign in** if the session is missing. Until setup is finished, Turnstile may be skipped (widget not saved yet). After finish, login requires **username**, password, and a **Turnstile** challenge. Success sets `tg_admin` (HttpOnly, `SameSite=Lax`, 12h TTL). Rate limits still apply; Turnstile is the primary brute-force control once configured.
+After the Worker is claimed, `/admin` shows **Sign in** when there is no session. Until setup is finished, Turnstile may be skipped (widget not saved yet). After finish, login requires **username**, password, and **Turnstile**.
 
 ## Team invites
 
@@ -119,7 +116,7 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `DELETE`             | `/api/admin/invites/:id`                    | Session                                                            |
 | `POST`               | `/api/admin/invites/accept`                 | Public (rate-limited); invite + Turnstile                          |
 | `PUT`                | `/api/admin/password`                       | Session (change own password)                                      |
-| `POST`               | `/api/admin/password/recover`               | Public (rate-limited); BIP39 phrase + Turnstile → new password     |
+| `POST`               | `/api/admin/password/recover`               | Public (rate-limited); recovery phrase + Turnstile → new password  |
 | `POST`               | `/api/admin/recovery/regenerate`            | Session + current password; returns new phrase once                |
 | `DELETE`             | `/api/admin/users/:id`                      | Session (remove another admin)                                     |
 | `PUT`                | `/api/admin/branding`                       | Session                                                            |

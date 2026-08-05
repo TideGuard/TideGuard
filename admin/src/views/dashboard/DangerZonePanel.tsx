@@ -81,9 +81,9 @@ export function DangerZonePanel({ onReset }: { onReset: () => void }) {
           </>
         )}
         <Text size="xs" c="dimmed">
-          Lost a password? Use Forgot password on the sign-in screen with your 12-word BIP39
-          recovery phrase (Turnstile required after setup). If you lose both passwords and recovery
-          phrases, factory-reset with TOKEN_SECRET.
+          Lost a password? Use Forgot password on the sign-in screen with your 12-word recovery
+          phrase (Turnstile required after setup). If you lose both passwords and recovery phrases,
+          factory-reset with TOKEN_SECRET.
         </Text>
       </Stack>
     </Panel>

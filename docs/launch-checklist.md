@@ -6,8 +6,8 @@ Use this before pointing production traffic at TideGuard.
 
 - [ ] `TOKEN_SECRET` set via Wrangler secret / Deploy-to-Cloudflare ([tideguard.dev/token](https://tideguard.dev/token) or `openssl rand -hex 32`)
 - [ ] `/admin` setup completed: Claim (TOKEN_SECRET + username/password) + **Cloudflare verify** + **Turnstile verify** + Finish
-- [ ] Strong per-admin passwords stored offline; session cookie is HttpOnly; login protected by Turnstile after finish
-- [ ] Confirmed `POST /api/admin/reset` only works with `Authorization: Bearer <TOKEN_SECRET>`
+- [ ] Per-admin passwords stored offline; login uses Turnstile after finish
+- [ ] Recovery phrases saved for each admin (Forgot password)
 - [ ] Extra operators invited via Team panel (72h links), not by sharing one password
 - [ ] Custom domain attached ([custom-domain.md](custom-domain.md)) — full NS or partial CNAME as applicable
 - [ ] Cloudflare panel: DNS proxied, IP Geolocation as needed, SSL Full (strict) if origin is ready
@@ -59,7 +59,7 @@ Use `/cost` for Cloudflare Workers paid-plan estimates (adaptive by default).
 - [ ] `/wait?queue=…&return=/demo` joins and eventually admits
 - [ ] Branding redirect path (if set) lands on the expected same-origin URL
 - [ ] Click-to-enter (if enabled): Continue issues cookie; hold expiry rejoins
-- [ ] `/demo` (or origin path) loads with HttpOnly `tg_access`
+- [ ] `/demo` (or origin path) loads with a valid admission cookie
 - [ ] Origin sees `X-TideGuard-Visitor` when proxying (or your app verifies HMAC)
 - [ ] Operator-auth `GET /metrics?queue=…` shows expected waiting/admitted / pause / health
 - [ ] Public join/status omit depth unless Show depth is enabled

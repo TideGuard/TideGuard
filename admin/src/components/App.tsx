@@ -230,7 +230,7 @@ function LoginView({
           <>
             <Textarea
               label="Recovery phrase"
-              description="12 BIP39 English words in order"
+              description="12 words in order, as shown when you claimed or accepted an invite"
               value={mnemonic}
               onChange={(e) => setMnemonic(e.currentTarget.value)}
               autosize

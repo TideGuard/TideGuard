@@ -204,8 +204,8 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `DELETE` | `/api/admin/invites/:id` | session | Revoke invite |
 | `POST` | `/api/admin/invites/accept` | public (rate-limited) | Token + username + password + Turnstile → session |
 | `PUT` | `/api/admin/password` | session | Change own password (current + new + confirm) |
-| `POST` | `/api/admin/password/recover` | public (rate-limited) | BIP39 phrase + Turnstile → new password + session |
-| `POST` | `/api/admin/recovery/regenerate` | session | Regenerate BIP39 phrase (current password); returns phrase once |
+| `POST` | `/api/admin/password/recover` | public (rate-limited) | Recovery phrase + Turnstile → new password + session |
+| `POST` | `/api/admin/recovery/regenerate` | session | Regenerate recovery phrase (current password); returns phrase once |
 | `DELETE` | `/api/admin/users/:id` | session | Remove another admin (not self / not last) |
 | `PUT` | `/api/admin/branding` | session | KV write |
 | `PUT` | `/api/admin/origin` | session | Origin proxy override in KV |

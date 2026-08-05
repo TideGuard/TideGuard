@@ -106,7 +106,7 @@ Breaking changes (renamed bindings, removed KV keys, token format, DO class rena
 - [ ] If CHANGELOG lists new `vars`, decide whether to adopt upstream defaults or keep your tuned values, then redeploy
 - [ ] Smoke-test `/wait` join → admit once before a real launch
 
-## Upgrade notes (Unreleased → Cloudflare + Turnstile setup)
+## Upgrade notes (from pre-Turnstile installs)
 
 Existing deploys that already finished the old 3-step wizard keep working for **session cookies already issued**. New logins and invite accepts expect Turnstile once `admin:turnstile` is configured. Fresh Workers (or after `POST /api/admin/reset`) must complete the **5-step** wizard: Account → Cloudflare verify → Turnstile → Queue → Branding.
 

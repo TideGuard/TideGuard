@@ -189,7 +189,7 @@ export function TeamPanel({ state, onSaved }: { state: AdminState; onSaved: () =
           Recovery phrase
         </Text>
         <Text size="sm" c="dimmed">
-          Regenerate your 12-word BIP39 phrase. The old phrase stops working immediately.
+          Regenerate your 12-word recovery phrase. The old phrase stops working immediately.
         </Text>
         <PasswordInput
           label="Current password"

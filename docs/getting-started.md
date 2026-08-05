@@ -106,7 +106,7 @@ curl -s "http://localhost:8787/api/cost-estimate?visitors=100000&averageWaitSeco
 | Default admission mode           | `/admin` wizard or `POST /mode`   | Not a Deploy prompt; optional advanced env override           |
 | Origin proxy                     | `/admin` Origin panel             | Stored in KV; not a Deploy prompt                             |
 | Branding + depth display         | `/admin` → Save branding          | KV write on save only                                         |
-| Admin password                   | `/admin` claim (step 1)           | PBKDF2 hash in KV; emergency reset with `TOKEN_SECRET`        |
+| Admin password                   | `/admin` claim (step 1)           | Emergency reset with `TOKEN_SECRET` / Forgot password recovery phrase |
 | Cloudflare API token / Turnstile | `/admin` setup + Cloudflare panel | Required on first setup; seals token + Turnstile secret in KV |
 
 Full var table: [README configuration](../README.md#configuration)  
