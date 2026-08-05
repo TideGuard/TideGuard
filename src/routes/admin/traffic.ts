@@ -370,7 +370,11 @@ export async function handleAdminQueueLimitsPut(request: Request, env: Env): Pro
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const next = Math.floor(Number(body.maxWaitingVisitors));
   if (!Number.isFinite(next) || next < 1 || next > 50_000_000) {
-    throw new ApiError("bad_request", "maxWaitingVisitors must be an integer from 1 to 50000000", 400);
+    throw new ApiError(
+      "bad_request",
+      "maxWaitingVisitors must be an integer from 1 to 50000000",
+      400,
+    );
   }
   if (body.confirmChanges !== true) {
     throw new ApiError(
@@ -404,7 +408,13 @@ export async function handleAdminQueueLimitsPut(request: Request, env: Env): Pro
     queue,
     maxWaitingVisitors: result.maxWaitingVisitors,
     defaultMaxWaitingVisitors: DEFAULT_MAX_WAITING_VISITORS,
-    changed: [{ field: "maxWaitingVisitors", from: before.maxWaitingVisitors, to: result.maxWaitingVisitors }],
+    changed: [
+      {
+        field: "maxWaitingVisitors",
+        from: before.maxWaitingVisitors,
+        to: result.maxWaitingVisitors,
+      },
+    ],
   });
 }
 

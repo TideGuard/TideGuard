@@ -5,13 +5,7 @@ import { Panel } from "./Panel";
 import { notifyError, notifyOk } from "./notify";
 import { TokenSecretAckModal } from "../setup/TokenSecretAckModal";
 
-export function DangerZonePanel({
-  queue,
-  onReset,
-}: {
-  queue: string;
-  onReset: () => void;
-}) {
+export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: () => void }) {
   const [tokenSecret, setTokenSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
@@ -40,9 +34,7 @@ export function DangerZonePanel({
   }, [queue]);
 
   const changed =
-    maxWaiting !== null &&
-    draftMaxWaiting !== null &&
-    Math.floor(draftMaxWaiting) !== maxWaiting;
+    maxWaiting !== null && draftMaxWaiting !== null && Math.floor(draftMaxWaiting) !== maxWaiting;
 
   return (
     <Panel
