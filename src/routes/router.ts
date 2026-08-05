@@ -40,6 +40,8 @@ import {
   handleAdminClearRate,
   handleAdminRemoveUser,
   handleAdminTraffic,
+  handleAdminQueueLimitsGet,
+  handleAdminQueueLimitsPut,
   handleAdminReset,
   handleAdminRevokeInvite,
   handleAdminSaveBranding,
@@ -365,6 +367,12 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminRemoveUser(request, env);
   }
 
+  if (request.method === "GET" && url.pathname === "/api/admin/queue-limits") {
+    return await handleAdminQueueLimitsGet(request, env);
+  }
+  if (request.method === "PUT" && url.pathname === "/api/admin/queue-limits") {
+    return await handleAdminQueueLimitsPut(request, env);
+  }
   if (request.method === "POST" && url.pathname === "/api/admin/reset") {
     return await handleAdminReset(request, env);
   }

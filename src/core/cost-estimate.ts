@@ -37,17 +37,21 @@ export const DEFAULT_CLOUDFLARE_PAID_RATES: CloudflarePaidRates = {
   durableObjectDurationUsdPerMillionGbSeconds: 12.5,
 };
 
-/** Default waiting-room pacing: adaptive (relative to place in line) or fixed intervals. */
+/** Default waiting-room pacing: timeslot (adaptive) or fixed intervals. */
 export type PollingMode = "adaptive" | "fixed";
 
-/** Adaptive poll bounds (seconds), matching waiting-room / engine defaults. */
+/** Timeslot status budget (must match src/queue/engine.ts). */
+export const STATUS_RPS_BUDGET = 750;
+export const MIN_CHECK_IN_PERIOD_SEC = 5;
+
+/** @deprecated Prefer timeslotAveragePollSeconds; kept for fixed-mode helpers. */
 export const ADAPTIVE_POLL_MIN_SECONDS = 5;
 export const ADAPTIVE_POLL_MAX_SECONDS = 60;
 
 /**
  * Mean poll interval when visitors are uniform over queue progress and the
  * client uses `MIN + (MAX - MIN) * √progress`.
- * ∫₀¹ √p dp = 2/3 → MIN + (MAX - MIN) * 2/3.
+ * @deprecated Timeslot scheduling replaced √progress adaptive polls.
  */
 export function adaptiveAveragePollSeconds(
   minSeconds = ADAPTIVE_POLL_MIN_SECONDS,
@@ -56,6 +60,19 @@ export function adaptiveAveragePollSeconds(
   const min = Math.max(0.5, minSeconds);
   const max = Math.max(min, maxSeconds);
   return min + (max - min) * (2 / 3);
+}
+
+/** Steady-state check-in period for a given waiting depth (seconds). */
+export function timeslotAveragePollSeconds(
+  waiting: number,
+  budgetRps = STATUS_RPS_BUDGET,
+  minPeriodSec = MIN_CHECK_IN_PERIOD_SEC,
+): number {
+  const w = Math.max(0, Math.floor(waiting));
+  const budget = Math.max(1, Math.floor(budgetRps));
+  const minPeriod = Math.max(1, Math.floor(minPeriodSec));
+  if (w <= 0) return minPeriod;
+  return Math.max(minPeriod, Math.ceil(w / budget));
 }
 
 export interface CostEstimateInput {
@@ -130,10 +147,11 @@ export function estimateWaitingRoomCost(input: CostEstimateInput): CostEstimateB
   let heartbeatsPerVisitor: number;
 
   if (pollingMode === "adaptive") {
+    // Timeslot model: period grows with concurrent waiters (≈ unique visitors in the spike model).
     pollIntervalSeconds =
       input.pollIntervalSeconds !== undefined
         ? Math.max(0.5, input.pollIntervalSeconds)
-        : adaptiveAveragePollSeconds();
+        : timeslotAveragePollSeconds(Math.max(1, visitors));
     heartbeatIntervalSeconds = 0;
     statusPollsPerVisitor =
       averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);

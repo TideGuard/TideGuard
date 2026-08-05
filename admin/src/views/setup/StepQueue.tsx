@@ -54,7 +54,8 @@ export function StepQueue({
         ]}
       />
       <Checkbox
-        label="Show waiting count"
+        label="Show place in line (#X of Y)"
+        description="Visitors see their place in line on the waiting page, embed, and API."
         checked={showWaiting}
         onChange={(e) => onShowWaitingChange(e.currentTarget.checked)}
       />

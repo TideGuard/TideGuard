@@ -23,10 +23,12 @@ Use this before pointing production traffic at TideGuard.
 | Fixed poll override    | Env (optional)              | `WAITING_ROOM_*_INTERVAL_MS` — not recommended; budgets DO requests   |
 | Heartbeat timeout      | Worker vars (`180`)         | Drop silent waiters; adaptive polls stay under half this window       |
 
-Rough DO request volume while waiting (adaptive, status-only):
+Rough DO request volume while waiting (timeslot status-only):
 
 ```text
-visitors × (1 join + waitSeconds / averageAdaptivePollInterval)
+periodSec = max(5, ceil(waiting / 750))
+statusRps ≈ waiting / periodSec   # ≤ 750 once waiting ≥ 3750
+visitors × (1 join + waitSeconds / periodSec)
 ```
 
 Fixed-interval override (discouraged) still follows:

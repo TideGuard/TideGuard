@@ -120,6 +120,8 @@ export interface JoinResult {
    * visitors; clients may ignore it when using fixed-interval overrides.
    */
   nextPollAfterMs?: number | null;
+  /** Absolute unix ms (second-aligned) for the next status check-in. */
+  nextCheckAt?: number | null;
   accessToken?: string;
 }
 
@@ -137,6 +139,8 @@ export interface StatusResult {
   entered?: boolean;
   holdSecondsRemaining?: number;
   nextPollAfterMs?: number | null;
+  /** Absolute unix ms (second-aligned) for the next status check-in. */
+  nextCheckAt?: number | null;
   accessToken?: string;
 }
 

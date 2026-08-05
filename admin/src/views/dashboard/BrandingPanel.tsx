@@ -135,7 +135,8 @@ export function BrandingPanel({
             <ColorInput label="Muted" value={muted} onChange={setMuted} />
           </SimpleGrid>
           <Checkbox
-            label="Show waiting count"
+            label="Show place in line (#X of Y)"
+            description="Shows your place, ahead/behind (Queue Mode), or pool size (Lottery) on the full waiting page, embed widget, and public /join /status API."
             checked={showWaiting}
             onChange={(e) => setShowWaiting(e.currentTarget.checked)}
           />

@@ -39,20 +39,20 @@ Enter a queue.
 
 Every successful join sets cookie `tg_ticket` (visitor ownership proof). `/status`, `/leave`, and `/heartbeat` require that cookie to match the visitor id and queue.
 
-Waiting responses include `admissionMode` (`queue` | `lottery`) and, while waiting, `nextPollAfterMs` (adaptive status poll hint). Depth fields (`waiting`, `ahead`, `behind`, `lotteryOdds`) are included **only** when branding `showWaitingCount` is enabled for that queue (synced to the DO on branding save). Public join/status never expose pause, health, `opensAt`, or capacity.
+Waiting responses include `admissionMode` (`queue` | `lottery`), while waiting `nextCheckAt` (absolute unix ms, second-aligned timeslot) and `nextPollAfterMs` (compat delay hint). Depth fields (`waiting`, `ahead`, `behind`, `lotteryOdds`) are included **only** when branding `showWaitingCount` (“Show place in line”) is enabled. Public join/status never expose pause, health, `opensAt`, or capacity.
 
-- **Queue Mode** — `position` (1-based FIFO), optional `ahead` / `behind`, `estimatedWaitSeconds`, `nextPollAfterMs`
-- **Lottery Mode** — `position` omitted, `estimatedWaitSeconds`, optional `lotteryOdds` (`1 / waitingCount`) and `waiting` for API clients, plus `nextPollAfterMs`. The built-in waiting room emphasizes equal chance + ETA rather than raw odds.
+- **Queue Mode** — `position` (1-based FIFO), optional `ahead` / `behind` / `#X of Y`, `estimatedWaitSeconds`, `nextCheckAt`
+- **Lottery Mode** — `position` omitted, `estimatedWaitSeconds`, optional `lotteryOdds` / `waiting`, plus `nextCheckAt`
 
-The built-in waiting room schedules the next `/status` from `nextPollAfterMs` (relative to place in line: faster near the front, slower far back). Status renews liveness, so dedicated heartbeats are usually unnecessary. Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended.
+Check-in timeslots keep Durable Object status load near a fixed **750 RPS** budget (`periodSec = max(5, ceil(waiting/750))`). Front-of-line waiters stay on a 5s period. Early `/status` before `nextCheckAt` is **read-only** (does not renew liveness). The built-in waiting room (full page and `?embed=1`) schedules on `nextCheckAt`. Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended.
 
-If a valid `tg_ticket` cookie is already present for the queue, join **resumes that visitor** and ignores a conflicting body `visitorId` (same-browser multi-tab).
+If a valid `tg_ticket` cookie is already present for the queue, join **resumes that visitor** and ignores a conflicting body `visitorId` (same-browser multi-tab). When the waiting-row cap is reached, `/join` returns `503 queue_full`.
 
 ### `GET /status?queue=…&id=…`
 
 Current visitor status. Requires cookie `tg_ticket` for that visitor/queue.
 When `status` is `admitted` and click-to-enter is satisfied, response includes `accessToken` and sets HttpOnly `tg_access`.
-Same field rules as `/join` (no ops fields; depth only if `showWaitingCount`). Waiting `/status` also renews `last_heartbeat_at`.
+Same field rules as `/join` (no ops fields; depth only if `showWaitingCount`). Waiting `/status` renews liveness **only when the timeslot is due**.
 
 ### `POST /leave`
 

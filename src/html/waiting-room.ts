@@ -109,6 +109,10 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
           <span class="label">${escapeHtml(copy.waitLabel)}</span>
           <span class="value" id="eta">—</span>
         </div>
+        <div class="stat" id="checkin-stat">
+          <span class="label">${escapeHtml(copy.checkInLabel)}</span>
+          <span class="value" id="checkin">—</span>
+        </div>
         ${
           showWaitingCount
             ? `<div class="stat" id="depth-a-stat">
@@ -123,6 +127,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
         }
       </div>
       <p class="status" id="status" data-tone="ok" role="status" aria-live="polite">Connecting to queue…</p>
+      <p class="hint" id="checkin-hint" hidden></p>
       <p class="status" id="open-status" data-tone="ok" role="status" aria-live="polite" hidden></p>
       <div class="enter-panel" id="enter-panel" hidden>
         <p class="hold" id="hold-text">${escapeHtml(copy.statusHold)}</p>

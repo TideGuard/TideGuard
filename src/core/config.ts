@@ -114,7 +114,8 @@ export const DEFAULT_QUEUE_CONFIG: QueueConfig = {
   admitPerSecond: 2,
   tokenTTLSeconds: 600,
   heartbeatTimeoutSeconds: 180,
-  queueTimeoutSeconds: 1800,
+  /** Max stay in the waiting room; deep timeslots need hours, not 30m. */
+  queueTimeoutSeconds: 86_400,
   admissionMode: "queue",
   requireClickToEnter: false,
   admitHoldSeconds: 120,

@@ -53,6 +53,7 @@ paths:
       description: |
         Successful joins set HttpOnly `tg_ticket`. Admitted joins also set `tg_access`.
         Depth fields appear only when branding `showWaitingCount` is enabled.
+        Waiting responses include `nextCheckAt` (timeslot) and `nextPollAfterMs` (compat).
       requestBody:
         required: true
         content:
@@ -691,6 +692,11 @@ components:
           type: number
         nextPollAfterMs:
           type: integer
+          description: Compat delay hint (ms). Prefer nextCheckAt for scheduling.
+        nextCheckAt:
+          type: integer
+          format: int64
+          description: Absolute unix ms (second-aligned) for the next status check-in while waiting.
         accessToken:
           type: string
         waiting:

@@ -11,15 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Timeslot status check-ins** — fixed 750 RPS budget, ≥5s period; server assigns `nextCheckAt`; early `/status` is read-only; missed-slot expiry; default queue stay timeout 24h
+- **Max waiting visitors** cap (default 1M) with `/api/admin/queue-limits` and System → Danger zone A→B confirm
 - **Versioned operator Terms of Service** ([`TERMS.md`](TERMS.md), `TOS_VERSION`) — claim / invite / re-accept require `acceptedTosVersion` matching the current version; re-accept on login after a version bump; session APIs return `403 tos_required` until accepted; admin footer links Terms / License / Issues
 
 ### Changed
 
+- Waiting UI / embed / API: schedule on `nextCheckAt`; optional **#X of Y** via Branding “Show place in line”
+- Cost estimate adaptive path uses timeslot period (`max(5, ceil(waiting/750))`) instead of √progress average
 - **Lint:** ESLint + `typescript-eslint` → [Oxlint](https://oxc.rs/) (`oxlint` + `oxlint-tsgolint`) for TypeScript 7–compatible, type-aware linting
 - **TypeScript 7.0** as the project compiler (`tsc` / typecheck)
 
 ### Upgrade notes
 
+- Default `QUEUE_TIMEOUT_SECONDS` is now **86400** (24h). Override only if you intentionally want shorter max stays; too-short values expire deep-queue waiters between timeslots.
 - After upgrading to a build that introduces or bumps `TOS_VERSION`, each admin must accept the Terms of Service in `/admin` before the control room APIs work again.
 - Contributors: use `npm run lint` (Oxlint), not ESLint. Node 24+ and TypeScript 7 are required for local typecheck/lint.
 

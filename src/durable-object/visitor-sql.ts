@@ -14,12 +14,13 @@ export interface VisitorRow {
   admitted_at: number | null;
   sequence: number;
   entered: 0 | 1;
+  next_check_at: number | null;
 }
 
 export function selectVisitor(sql: SqlStorage, id: string): VisitorRow | null {
   const row = sql
     .exec<VisitorRow>(
-      `SELECT id, status, joined_at, last_heartbeat_at, admitted_at, sequence, entered
+      `SELECT id, status, joined_at, last_heartbeat_at, admitted_at, sequence, entered, next_check_at
        FROM visitors WHERE id = ?`,
       id,
     )

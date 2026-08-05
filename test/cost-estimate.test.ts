@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  adaptiveAveragePollSeconds,
   estimateWaitingRoomCost,
   formatUsd,
+  timeslotAveragePollSeconds,
 } from "../src/core/cost-estimate";
 
 describe("estimateWaitingRoomCost", () => {
-  it("defaults to adaptive polling with no dedicated heartbeats", () => {
+  it("defaults to timeslot polling with no dedicated heartbeats", () => {
     const estimate = estimateWaitingRoomCost({
       visitors: 5_000_000,
       averageWaitSeconds: 15 * 60,
@@ -14,20 +14,24 @@ describe("estimateWaitingRoomCost", () => {
 
     expect(estimate.pollingMode).toBe("adaptive");
     expect(estimate.heartbeatsPerVisitor).toBe(0);
-    expect(estimate.pollIntervalSeconds).toBeCloseTo(adaptiveAveragePollSeconds(), 5);
-    expect(estimate.statusPollsPerVisitor).toBe(Math.ceil(900 / adaptiveAveragePollSeconds()));
-    expect(estimate.totalUsd).toBeGreaterThan(20);
-    expect(estimate.totalUsd).toBeLessThan(200);
+    expect(estimate.pollIntervalSeconds).toBe(timeslotAveragePollSeconds(5_000_000));
+    expect(estimate.statusPollsPerVisitor).toBe(
+      Math.ceil(900 / timeslotAveragePollSeconds(5_000_000)),
+    );
+    expect(estimate.totalUsd).toBeGreaterThan(5);
+    expect(estimate.totalUsd).toBeLessThan(100);
   });
 
-  it("keeps short waits inexpensive for 5M visitors under adaptive defaults", () => {
+  it("keeps short waits inexpensive for 5M visitors under timeslot defaults", () => {
     const estimate = estimateWaitingRoomCost({
       visitors: 5_000_000,
       averageWaitSeconds: 2 * 60,
       includeBaseFee: true,
     });
 
-    expect(estimate.statusPollsPerVisitor).toBe(Math.ceil(120 / adaptiveAveragePollSeconds()));
+    expect(estimate.statusPollsPerVisitor).toBe(
+      Math.ceil(120 / timeslotAveragePollSeconds(5_000_000)),
+    );
     expect(estimate.heartbeatsPerVisitor).toBe(0);
     expect(estimate.totalUsd).toBeGreaterThan(5);
     expect(estimate.totalUsd).toBeLessThan(50);

@@ -68,5 +68,14 @@ export function migrateQueueRoomSchema(deps: MigrateDeps): void {
         )
       `);
     setMeta("schema_version", "4");
+    version = 4;
+  }
+
+  if (version < 5) {
+    sql.exec(`
+        ALTER TABLE visitors ADD COLUMN next_check_at INTEGER
+      `);
+    setMeta("schema_version", "5");
+    version = 5;
   }
 }

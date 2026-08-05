@@ -27,9 +27,14 @@ export interface QueueRoomVisitorView {
   showWaitingCount: boolean;
   /**
    * Suggested delay before the next status poll while waiting (adaptive).
-   * Null when not waiting.
+   * Null when not waiting. Prefer `nextCheckAt` for scheduling.
    */
   nextPollAfterMs: number | null;
+  /**
+   * Absolute unix ms (second-aligned) when this visitor should next call /status.
+   * Null when not waiting.
+   */
+  nextCheckAt: number | null;
 }
 
 export interface QueueJoinRequest {

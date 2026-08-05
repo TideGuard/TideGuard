@@ -15,6 +15,7 @@ import { clearSetupPending } from "../../admin/setup-pending-store";
 import { clearTurnstileSettings } from "../../admin/turnstile-store";
 import { UPDATE_CHECK_CACHE_KEY } from "../../admin/update-check";
 import { configFromEnv, getQueueRoom } from "../../queue/client";
+import { DEFAULT_MAX_WAITING_VISITORS } from "../../queue/engine";
 import {
   MAX_ADMIT_PER_SECOND,
   MIN_ADMIT_PER_SECOND,
@@ -343,6 +344,68 @@ export async function handleAdminHealth(request: Request, env: Env): Promise<Res
     url: typeof healthInput.url === "string" ? healthInput.url : null,
   });
   return jsonOk(result);
+}
+
+/** Read waiting-row cap (danger-zone). */
+export async function handleAdminQueueLimitsGet(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const url = new URL(request.url);
+  const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
+  const room = getQueueRoom(env, queue);
+  const { maxWaitingVisitors } = await room.getMaxWaitingVisitors();
+  return jsonOk({
+    queue,
+    maxWaitingVisitors,
+    defaultMaxWaitingVisitors: DEFAULT_MAX_WAITING_VISITORS,
+  });
+}
+
+/**
+ * Update waiting-row cap. Requires explicit confirmChanges and A→B acknowledgement
+ * of the previous value (danger zone).
+ */
+export async function handleAdminQueueLimitsPut(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
+  const next = Math.floor(Number(body.maxWaitingVisitors));
+  if (!Number.isFinite(next) || next < 1 || next > 50_000_000) {
+    throw new ApiError("bad_request", "maxWaitingVisitors must be an integer from 1 to 50000000", 400);
+  }
+  if (body.confirmChanges !== true) {
+    throw new ApiError(
+      "bad_request",
+      "confirmChanges must be true after reviewing the A→B change list",
+      400,
+    );
+  }
+  const room = getQueueRoom(env, queue);
+  const before = await room.getMaxWaitingVisitors();
+  if (Number(body.previousMaxWaitingVisitors) !== before.maxWaitingVisitors) {
+    throw new ApiError(
+      "conflict",
+      "previousMaxWaitingVisitors does not match the current value — reload and try again",
+      409,
+    );
+  }
+  const result = await room.setMaxWaitingVisitors({ maxWaitingVisitors: next });
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "queue.limits",
+    summary: `Max waiting visitors ${before.maxWaitingVisitors} → ${result.maxWaitingVisitors}`,
+    meta: {
+      queue,
+      from: before.maxWaitingVisitors,
+      to: result.maxWaitingVisitors,
+    },
+  });
+  return jsonOk({
+    queue,
+    maxWaitingVisitors: result.maxWaitingVisitors,
+    defaultMaxWaitingVisitors: DEFAULT_MAX_WAITING_VISITORS,
+    changed: [{ field: "maxWaitingVisitors", from: before.maxWaitingVisitors, to: result.maxWaitingVisitors }],
+  });
 }
 
 /** Emergency reset: TOKEN_SECRET bearer only (not session). Clears admin + origin override. */

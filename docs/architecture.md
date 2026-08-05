@@ -120,8 +120,8 @@ Cloudflare bills for Worker requests, Durable Object requests/duration, KV opera
 | Admin users                     | Named accounts in `admin:config.users[]`; invites hashed with 72h TTL               |
 | Activity audit                  | KV ring `admin:audit` (~200 events); no secrets                                     |
 | Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV                 |
-| Status polling                  | Adaptive by default (`nextPollAfterMs`); fixed env overrides are not recommended    |
-| Heartbeat                       | Status renews `last_heartbeat_at` while waiting; dedicated `/heartbeat` is fallback |
+| Status polling                  | Timeslots (`nextCheckAt`); early status is read-only; density ≤ ~750/s              |
+| Heartbeat                       | Due status renews liveness; dedicated `/heartbeat` is fallback for long gaps        |
 
 Avoid:
 

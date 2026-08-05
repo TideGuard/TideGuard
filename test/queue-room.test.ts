@@ -128,7 +128,7 @@ describe("QueueRoom FIFO behavior", () => {
     expect(expired).toEqual({ ok: false, code: "not_found" });
   });
 
-  it("updates heartbeats for waiting visitors", async () => {
+  it("updates heartbeats for waiting visitors when the timeslot is due", async () => {
     const stub = room("heartbeat-ok");
     const cfg = config({ maxConcurrentUsers: 1 });
     const t0 = 5_000_000;
@@ -139,29 +139,44 @@ describe("QueueRoom FIFO behavior", () => {
       visitorId: "seat",
       now: t0,
     });
-    await stub.join({
+    const joined = await stub.join({
       queue: "heartbeat-ok",
       config: cfg,
       visitorId: "waiter",
       now: t0,
     });
+    expect(joined.nextCheckAt).toBeGreaterThan(t0);
 
-    const beat = await stub.heartbeat({
+    const early = await stub.heartbeat({
       queue: "heartbeat-ok",
       config: cfg,
       visitorId: "waiter",
       now: t0 + 1_000,
     });
+    expect(early.ok).toBe(true);
+    if (early.ok) {
+      expect(early.visitor.lastHeartbeatAt).toBe(t0);
+      expect(early.visitor.nextCheckAt).toBe(joined.nextCheckAt);
+    }
+
+    const dueAt = (joined.nextCheckAt ?? t0) + 1;
+    const beat = await stub.heartbeat({
+      queue: "heartbeat-ok",
+      config: cfg,
+      visitorId: "waiter",
+      now: dueAt,
+    });
 
     expect(beat.ok).toBe(true);
     if (beat.ok) {
       expect(beat.visitor.status).toBe("waiting");
-      expect(beat.visitor.lastHeartbeatAt).toBe(t0 + 1_000);
-      expect(beat.visitor.nextPollAfterMs).toBeGreaterThanOrEqual(5_000);
+      expect(beat.visitor.lastHeartbeatAt).toBe(dueAt);
+      expect(beat.visitor.nextCheckAt).toBeGreaterThan(dueAt);
+      expect(beat.visitor.nextPollAfterMs).toBeGreaterThanOrEqual(1_000);
     }
   });
 
-  it("renews last_heartbeat_at on waiting status polls", async () => {
+  it("renews next_check_at on due status polls and stays read-only when early", async () => {
     const stub = room("status-heartbeat");
     const cfg = config({ maxConcurrentUsers: 1, heartbeatTimeoutSeconds: 30 });
     const t0 = 8_000_000;
@@ -172,32 +187,49 @@ describe("QueueRoom FIFO behavior", () => {
       visitorId: "seat",
       now: t0,
     });
-    await stub.join({
+    const joined = await stub.join({
       queue: "status-heartbeat",
       config: cfg,
       visitorId: "waiter",
       now: t0,
     });
 
+    const early = await stub.status({
+      queue: "status-heartbeat",
+      config: cfg,
+      visitorId: "waiter",
+      now: t0 + 1_000,
+    });
+    expect(early.ok).toBe(true);
+    if (early.ok) {
+      expect(early.visitor.lastHeartbeatAt).toBe(t0);
+      expect(early.visitor.nextCheckAt).toBe(joined.nextCheckAt);
+    }
+
+    const dueAt = (joined.nextCheckAt ?? t0) + 1;
     const refreshed = await stub.status({
       queue: "status-heartbeat",
       config: cfg,
       visitorId: "waiter",
-      now: t0 + 25_000,
+      now: dueAt,
     });
     expect(refreshed.ok).toBe(true);
     if (refreshed.ok) {
-      expect(refreshed.visitor.lastHeartbeatAt).toBe(t0 + 25_000);
-      expect(refreshed.visitor.nextPollAfterMs).toBeGreaterThanOrEqual(5_000);
+      expect(refreshed.visitor.lastHeartbeatAt).toBe(dueAt);
+      expect(refreshed.visitor.nextCheckAt).toBeGreaterThan(dueAt);
+      expect(refreshed.visitor.nextPollAfterMs).toBeGreaterThanOrEqual(1_000);
     }
 
     const stillWaiting = await stub.status({
       queue: "status-heartbeat",
       config: cfg,
       visitorId: "waiter",
-      now: t0 + 50_000,
+      now: dueAt + 1_000,
     });
     expect(stillWaiting.ok).toBe(true);
+    if (stillWaiting.ok) {
+      expect(stillWaiting.visitor.lastHeartbeatAt).toBe(dueAt);
+    }
   });
 
   it("rate-limits admission through the alarm while paused slots stay closed", async () => {

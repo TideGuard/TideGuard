@@ -202,7 +202,7 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
             <UpdatesPanel />
             <WebhooksPanel state={state} onSaved={refreshState} />
             <SecretRotationPanel />
-            <DangerZonePanel onReset={onLogout} />
+            <DangerZonePanel queue={queue} onReset={onLogout} />
           </Stack>
         </Tabs.Panel>
       </Tabs>

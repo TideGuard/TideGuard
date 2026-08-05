@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   QUEUE_ALARM_INTERVAL_MS,
+  STATUS_RPS_BUDGET,
+  MIN_CHECK_IN_PERIOD_SEC,
   admissionsForTick,
+  checkInPeriodSeconds,
+  effectiveCheckInPeriodSeconds,
   isAdmissionExpired,
+  isCheckInDue,
   isHeartbeatExpired,
   isQueueStayExpired,
+  missedSlotGraceMs,
+  nextCheckAtMs,
   nextPollAfterMs,
   openSlots,
   queuePollProgress,
+  stableSlotIndex,
   waitingPosition,
 } from "../src/queue/engine";
 import { DEFAULT_QUEUE_CONFIG } from "../src/core/config";
@@ -48,8 +56,8 @@ describe("queue helpers", () => {
     expect(isHeartbeatExpired(now - 179_000, now, config)).toBe(false);
     expect(isHeartbeatExpired(now - 180_000, now, config)).toBe(true);
 
-    expect(isQueueStayExpired(now - 1_799_000, now, config)).toBe(false);
-    expect(isQueueStayExpired(now - 1_800_000, now, config)).toBe(true);
+    expect(isQueueStayExpired(now - 86_399_000, now, config)).toBe(false);
+    expect(isQueueStayExpired(now - 86_400_000, now, config)).toBe(true);
 
     expect(isAdmissionExpired(now - 599_000, now, config)).toBe(false);
     expect(isAdmissionExpired(now - 600_000, now, config)).toBe(true);
@@ -111,5 +119,59 @@ describe("adaptive poll interval", () => {
         queueTimeoutSeconds: 1800,
       }),
     ).toBeCloseTo(0.5, 5);
+  });
+});
+
+describe("timeslot check-in", () => {
+  it("floors period at 5s and caps density near the RPS budget", () => {
+    expect(checkInPeriodSeconds(200)).toBe(MIN_CHECK_IN_PERIOD_SEC);
+    expect(checkInPeriodSeconds(750)).toBe(MIN_CHECK_IN_PERIOD_SEC);
+    expect(checkInPeriodSeconds(3_750)).toBe(MIN_CHECK_IN_PERIOD_SEC);
+    expect(checkInPeriodSeconds(7_500)).toBe(10);
+    expect(checkInPeriodSeconds(45_000)).toBe(60);
+    expect(7_500 / checkInPeriodSeconds(7_500)).toBeCloseTo(STATUS_RPS_BUDGET, 5);
+  });
+
+  it("keeps the front band on the min period", () => {
+    expect(
+      effectiveCheckInPeriodSeconds({
+        waiting: 45_000,
+        position: 1,
+        admissionMode: "queue",
+        estimatedWaitSeconds: 22_500,
+        admitPerSecond: 2,
+      }),
+    ).toBe(MIN_CHECK_IN_PERIOD_SEC);
+
+    expect(
+      effectiveCheckInPeriodSeconds({
+        waiting: 45_000,
+        position: 20_000,
+        admissionMode: "queue",
+        estimatedWaitSeconds: 10_000,
+        admitPerSecond: 2,
+      }),
+    ).toBe(60);
+  });
+
+  it("assigns a stable second-aligned nextCheckAt", () => {
+    const now = 1_700_000_000_123;
+    const periodSec = 10;
+    const key = "visitor-a";
+    const slot = stableSlotIndex(key, periodSec);
+    const at = nextCheckAtMs({ now, periodSec, visitorKey: key });
+    expect(at % 1000).toBe(0);
+    expect(Math.floor(at / 1000) % periodSec).toBe(slot);
+    expect(at).toBeGreaterThanOrEqual(Math.ceil(now / 1000) * 1000);
+    expect(nextCheckAtMs({ now, periodSec, visitorKey: key })).toBe(at);
+  });
+
+  it("treats early status as not due and sizes missed-slot grace", () => {
+    const next = 1_000_000;
+    expect(isCheckInDue(next - 1_000, next)).toBe(false);
+    expect(isCheckInDue(next - 100, next)).toBe(true);
+    expect(isCheckInDue(next + 1, next)).toBe(true);
+    expect(missedSlotGraceMs(5)).toBe(120_000);
+    expect(missedSlotGraceMs(180)).toBe(180_000);
   });
 });

@@ -8,9 +8,11 @@ export type WaitingRoomLocale = "en";
 export interface WaitingRoomStrings {
   brand: string;
   positionLabel: string;
+  placeLabel: string;
   lotteryLabel: string;
   waitLabel: string;
   depthLabel: string;
+  checkInLabel: string;
   openNow: string;
   opensIn: string;
   soundLabel: string;
@@ -24,9 +26,11 @@ export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings>
   en: {
     brand: "TideGuard",
     positionLabel: "Position",
+    placeLabel: "Your place",
     lotteryLabel: "Your chance",
     waitLabel: "Est. wait",
     depthLabel: "Waiting",
+    checkInLabel: "Next check-in",
     openNow: "Admissions are open",
     opensIn: "Opens in",
     soundLabel: "Play a sound when it is your turn",

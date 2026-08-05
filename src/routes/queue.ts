@@ -25,8 +25,8 @@ import {
   requireTokenSecret,
 } from "./validation";
 
-/** Ticket TTL covers max queue stay + buffer so waiters can poll until admission. */
-const TICKET_TTL_SECONDS = 60 * 60 * 6;
+/** Ticket TTL covers max queue stay (24h default) + buffer so waiters can poll until admission. */
+const TICKET_TTL_SECONDS = 60 * 60 * 26;
 
 type VisitorView = {
   id: string;
@@ -43,6 +43,7 @@ type VisitorView = {
   holdSecondsRemaining: number | null;
   showWaitingCount?: boolean;
   nextPollAfterMs?: number | null;
+  nextCheckAt?: number | null;
 };
 
 function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean }) {
@@ -58,6 +59,7 @@ function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean
       ? { holdSecondsRemaining: visitor.holdSecondsRemaining }
       : {}),
     ...(visitor.nextPollAfterMs != null ? { nextPollAfterMs: visitor.nextPollAfterMs } : {}),
+    ...(visitor.nextCheckAt != null ? { nextCheckAt: visitor.nextCheckAt } : {}),
   };
   if (!includeDepth) {
     return base;
@@ -102,11 +104,24 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
   }
 
   const room = getQueueRoom(env, queue);
-  const joined = await room.join({
-    queue,
-    config,
-    ...(visitorId ? { visitorId } : {}),
-  });
+  let joined;
+  try {
+    joined = await room.join({
+      queue,
+      config,
+      ...(visitorId ? { visitorId } : {}),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === "queue_full" || message.includes("queue_full")) {
+      throw new ApiError(
+        "queue_full",
+        "The waiting room is at capacity. Please try again later.",
+        503,
+      );
+    }
+    throw err;
+  }
 
   const cookies: string[] = [];
   const ticket = await signVisitorTicket(

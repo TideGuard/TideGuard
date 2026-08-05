@@ -221,7 +221,8 @@ export function renderCostCalculatorPage(): string {
       <h1>Calculate cost</h1>
       <p class="lede">
         Ballpark Cloudflare spend for a waiting-room event. TideGuard’s default
-        <strong>adaptive</strong> polling slows check-ins when you’re far back and speeds up near your turn — that usually dominates cost far less than fixed frequent polls.
+        <strong>timeslot</strong> check-ins keep Durable Object status load near 750/s
+        (period = max(5s, waiting÷750)) — usually far cheaper than fixed frequent polls.
       </p>
 
       <div class="layout">
@@ -253,7 +254,7 @@ export function renderCostCalculatorPage(): string {
             </label>
           </fieldset>
           <p class="mode-note" id="adaptiveNote">
-            Model uses ~42s average poll (5s near front → 60s far back) and no dedicated heartbeats.
+            Model uses timeslot period max(5s, ceil(visitors/750)) and no dedicated heartbeats.
           </p>
           <div id="fixedFields" hidden>
             <p class="warn-note">Fixed frequent polling usually costs more. Prefer adaptive unless you have a custom client.</p>
@@ -305,8 +306,10 @@ export function renderCostCalculatorPage(): string {
           return (billable / 1_000_000) * usdPerMillion;
         }
 
-        function adaptiveAveragePollSeconds() {
-          return 5 + (60 - 5) * (2 / 3);
+        function timeslotAveragePollSeconds(waiting) {
+          const w = Math.max(0, Math.floor(waiting));
+          if (w <= 0) return 5;
+          return Math.max(5, Math.ceil(w / 750));
         }
 
         function selectedMode() {
@@ -332,7 +335,7 @@ export function renderCostCalculatorPage(): string {
           let heartbeatsPerVisitor;
 
           if (pollingMode === "adaptive") {
-            pollIntervalSeconds = adaptiveAveragePollSeconds();
+            pollIntervalSeconds = timeslotAveragePollSeconds(Math.max(1, visitors));
             heartbeatIntervalSeconds = 0;
             statusPollsPerVisitor =
               averageWaitSeconds <= 0 ? 0 : Math.ceil(averageWaitSeconds / pollIntervalSeconds);
@@ -435,7 +438,7 @@ export function renderCostCalculatorPage(): string {
           totalEl.textContent = formatUsd(result.totalUsd);
           const pollLabel =
             result.pollingMode === "adaptive"
-              ? "Avg status poll (adaptive)"
+              ? "Avg status poll (timeslot)"
               : "Status poll interval";
           rowsEl.innerHTML = [
             ["Polling mode", result.pollingMode],

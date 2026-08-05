@@ -9,11 +9,14 @@ import {
   type OriginHealthConfig,
 } from "../health/origin-probe";
 import {
+  DEFAULT_MAX_WAITING_VISITORS,
+  MIN_CHECK_IN_PERIOD_SEC,
   QUEUE_ALARM_INTERVAL_MS,
   admissionsForTick,
-  nextPollAfterMs,
+  effectiveCheckInPeriodSeconds,
+  isCheckInDue,
+  nextCheckAtMs,
   openSlots,
-  queuePollProgress,
   waitingPosition,
 } from "../queue/engine";
 import { TRAFFIC_BUCKET_MS, TRAFFIC_RETENTION_MS, parseAdmitPerSecond } from "../queue/traffic";
@@ -118,11 +121,24 @@ export class QueueRoom extends DurableObject<Env> {
         lastHeartbeatAt: now,
         admittedAt: now,
         entered: !this.effectiveConfig(request.config).requireClickToEnter,
+        nextCheckAt: null,
       });
       this.recordTraffic(now, request.config, { joins: 1, admits: 1 });
       await this.ensureAlarm();
       return this.toView(this.getVisitor(visitorId)!, request.config, now);
     }
+
+    const waiting = this.countByStatus("waiting");
+    const maxWaiting = this.maxWaitingVisitors();
+    if (waiting >= maxWaiting) {
+      throw new Error("queue_full");
+    }
+
+    const nextCheckAt = this.assignCheckIn(visitorId, waiting + 1, request.config, now, {
+      position: waiting + 1,
+      estimatedWaitSeconds: 0,
+      minLeadMs: MIN_CHECK_IN_PERIOD_SEC * 1000,
+    });
 
     this.insertVisitor({
       id: visitorId,
@@ -131,6 +147,7 @@ export class QueueRoom extends DurableObject<Env> {
       lastHeartbeatAt: now,
       admittedAt: null,
       entered: false,
+      nextCheckAt,
     });
     this.recordTraffic(now, request.config, { joins: 1, admits: 0 });
     await this.ensureAlarm();
@@ -148,17 +165,16 @@ export class QueueRoom extends DurableObject<Env> {
       return { ok: false, code: "not_found" };
     }
 
-    // Status polls renew liveness so adaptive (status-only) clients stay alive.
     if (visitor.status === "waiting") {
-      this.ctx.storage.sql.exec(
-        `UPDATE visitors SET last_heartbeat_at = ? WHERE id = ? AND status = 'waiting'`,
-        now,
-        request.visitorId,
-      );
-      return {
-        ok: true,
-        visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
-      };
+      if (isCheckInDue(now, visitor.next_check_at)) {
+        this.renewCheckIn(visitor, request.config, now);
+        return {
+          ok: true,
+          visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
+        };
+      }
+      // Early status: read-only — do not write or advance the slot.
+      return { ok: true, visitor: this.toView(visitor, request.config, now) };
     }
 
     return { ok: true, visitor: this.toView(visitor, request.config, now) };
@@ -235,16 +251,16 @@ export class QueueRoom extends DurableObject<Env> {
       return { ok: false, code: "not_found" };
     }
 
-    this.ctx.storage.sql.exec(
-      `UPDATE visitors SET last_heartbeat_at = ? WHERE id = ? AND status = 'waiting'`,
-      now,
-      request.visitorId,
-    );
+    // Heartbeat is a fallback for long gaps; only write when the timeslot is due.
+    if (isCheckInDue(now, visitor.next_check_at)) {
+      this.renewCheckIn(visitor, request.config, now);
+      return {
+        ok: true,
+        visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
+      };
+    }
 
-    return {
-      ok: true,
-      visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
-    };
+    return { ok: true, visitor: this.toView(visitor, request.config, now) };
   }
 
   async metrics(request: QueueMetricsRequest): Promise<QueueMetricsResponse> {
@@ -537,18 +553,26 @@ export class QueueRoom extends DurableObject<Env> {
     this.setMeta("last_sweep", String(now));
 
     const effective = this.effectiveConfig(config);
-    const heartbeatCutoff = now - effective.heartbeatTimeoutSeconds * 1000;
     const stayCutoff = now - effective.queueTimeoutSeconds * 1000;
     const holdCutoff = now - effective.admitHoldSeconds * 1000;
     const tokenCutoff = now - effective.tokenTTLSeconds * 1000;
+    const missedSlotCutoff = now - 120_000;
+    const legacyHeartbeatCutoff = now - effective.heartbeatTimeoutSeconds * 1000;
 
     let expired = 0;
+    // Waiting liveness is timeslot-based: miss next_check_at by >120s → expire.
+    // Pre-migration rows (null next_check_at) keep heartbeat timeout.
     expired += this.ctx.storage.sql.exec(
       `UPDATE visitors SET status = 'expired'
        WHERE status = 'waiting'
-         AND (last_heartbeat_at <= ? OR joined_at <= ?)`,
-      heartbeatCutoff,
+         AND (
+           joined_at <= ?
+           OR (next_check_at IS NOT NULL AND next_check_at <= ?)
+           OR (next_check_at IS NULL AND last_heartbeat_at <= ?)
+         )`,
       stayCutoff,
+      missedSlotCutoff,
+      legacyHeartbeatCutoff,
     ).rowsWritten;
     expired += this.ctx.storage.sql.exec(
       `UPDATE visitors SET status = 'expired'
@@ -637,7 +661,7 @@ export class QueueRoom extends DurableObject<Env> {
     for (const row of rows) {
       const result = this.ctx.storage.sql.exec(
         `UPDATE visitors
-         SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?
+         SET status = 'admitted', admitted_at = ?, last_heartbeat_at = ?, entered = ?, next_check_at = NULL
          WHERE id = ? AND status = 'waiting'`,
         now,
         now,
@@ -826,11 +850,12 @@ export class QueueRoom extends DurableObject<Env> {
     lastHeartbeatAt: number;
     admittedAt: number | null;
     entered: boolean;
+    nextCheckAt: number | null;
   }): void {
     const sequence = this.nextSequence();
     this.ctx.storage.sql.exec(
-      `INSERT INTO visitors (id, status, joined_at, last_heartbeat_at, admitted_at, sequence, entered)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO visitors (id, status, joined_at, last_heartbeat_at, admitted_at, sequence, entered, next_check_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       input.id,
       input.status,
       input.joinedAt,
@@ -838,6 +863,7 @@ export class QueueRoom extends DurableObject<Env> {
       input.admittedAt,
       sequence,
       input.entered ? 1 : 0,
+      input.nextCheckAt,
     );
     if (input.status === "waiting") {
       this.bumpDepth(1, 0);
@@ -977,17 +1003,18 @@ export class QueueRoom extends DurableObject<Env> {
     }
 
     const showDepth = this.showWaitingCount();
-    const effective = this.effectiveConfig(config);
     let pollAfterMs: number | null = null;
+    let nextCheckAt: number | null = null;
     if (status === "waiting") {
-      const progress = queuePollProgress({
-        admissionMode: mode,
-        position,
-        waiting,
-        estimatedWaitSeconds,
-        queueTimeoutSeconds: effective.queueTimeoutSeconds,
-      });
-      pollAfterMs = nextPollAfterMs(progress, effective.heartbeatTimeoutSeconds);
+      nextCheckAt =
+        visitor.next_check_at != null && Number.isFinite(visitor.next_check_at)
+          ? visitor.next_check_at
+          : this.assignCheckIn(visitor.id, waiting, config, now, {
+              position,
+              estimatedWaitSeconds,
+              minLeadMs: MIN_CHECK_IN_PERIOD_SEC * 1000,
+            });
+      pollAfterMs = Math.max(0, nextCheckAt - now);
     }
 
     return {
@@ -1007,7 +1034,98 @@ export class QueueRoom extends DurableObject<Env> {
       holdSecondsRemaining,
       showWaitingCount: showDepth,
       nextPollAfterMs: pollAfterMs,
+      nextCheckAt,
     };
+  }
+
+  private maxWaitingVisitors(): number {
+    const raw = this.getMeta("max_waiting_visitors");
+    if (raw) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 1) {
+        return Math.floor(n);
+      }
+    }
+    return DEFAULT_MAX_WAITING_VISITORS;
+  }
+
+  async getMaxWaitingVisitors(): Promise<{ maxWaitingVisitors: number }> {
+    return { maxWaitingVisitors: this.maxWaitingVisitors() };
+  }
+
+  async setMaxWaitingVisitors(request: {
+    maxWaitingVisitors: number;
+  }): Promise<{ maxWaitingVisitors: number }> {
+    const n = Math.floor(request.maxWaitingVisitors);
+    if (!Number.isFinite(n) || n < 1 || n > 50_000_000) {
+      throw new Error("max_waiting_visitors out of range");
+    }
+    this.setMeta("max_waiting_visitors", String(n));
+    return { maxWaitingVisitors: n };
+  }
+
+  private assignCheckIn(
+    visitorKey: string,
+    waiting: number,
+    config: QueueConfig,
+    now: number,
+    opts: {
+      position: number | null;
+      estimatedWaitSeconds: number;
+      minLeadMs?: number;
+    },
+  ): number {
+    const periodSec = effectiveCheckInPeriodSeconds({
+      waiting,
+      position: opts.position,
+      admissionMode: this.admissionMode(config),
+      estimatedWaitSeconds: opts.estimatedWaitSeconds,
+      admitPerSecond: this.effectiveAdmitPerSecond(config, now),
+    });
+    return nextCheckAtMs({
+      now,
+      periodSec,
+      visitorKey,
+      minLeadMs: opts.minLeadMs ?? 0,
+    });
+  }
+
+  private renewCheckIn(visitor: VisitorRow, config: QueueConfig, now: number): void {
+    const waiting = this.countByStatus("waiting");
+    const mode = this.admissionMode(config);
+    let position: number | null = null;
+    let estimatedWaitSeconds = 0;
+    if (mode === "lottery") {
+      estimatedWaitSeconds = Math.ceil(
+        waiting / Math.max(this.effectiveAdmitPerSecond(config, now), 0.0001),
+      );
+    } else {
+      position = waitingPosition(this.waitingAhead(visitor.sequence));
+      estimatedWaitSeconds = Math.ceil(
+        position / Math.max(this.effectiveAdmitPerSecond(config, now), 0.0001),
+      );
+    }
+    const periodSec = effectiveCheckInPeriodSeconds({
+      waiting,
+      position,
+      admissionMode: mode,
+      estimatedWaitSeconds,
+      admitPerSecond: this.effectiveAdmitPerSecond(config, now),
+    });
+    const nextCheckAt = nextCheckAtMs({
+      now,
+      periodSec,
+      visitorKey: visitor.id,
+      minLeadMs: 1_000,
+    });
+    this.ctx.storage.sql.exec(
+      `UPDATE visitors
+       SET last_heartbeat_at = ?, next_check_at = ?
+       WHERE id = ? AND status = 'waiting'`,
+      now,
+      nextCheckAt,
+      visitor.id,
+    );
   }
 
   private rememberConfig(config: QueueConfig): void {

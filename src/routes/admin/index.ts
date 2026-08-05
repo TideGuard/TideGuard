@@ -62,5 +62,7 @@ export {
   handleAdminTraffic,
   handleAdminSchedule,
   handleAdminHealth,
+  handleAdminQueueLimitsGet,
+  handleAdminQueueLimitsPut,
   handleAdminReset,
 } from "./traffic";

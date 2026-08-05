@@ -114,9 +114,15 @@ export function waitingRoomStyles(vars: WaitingRoomStyleVars): string {
       .stats[data-cols="4"] {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+      .stats[data-cols="5"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       @media (min-width: 420px) {
         .stats[data-cols="4"] {
           grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .stats[data-cols="5"] {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
       }
       .stat[hidden] { display: none; }
@@ -141,6 +147,11 @@ export function waitingRoomStyles(vars: WaitingRoomStyleVars): string {
       .status {
         min-height: 1.4em;
         font-size: 0.95rem;
+        color: var(--tg-muted);
+      }
+      .hint {
+        margin: 0.35rem 0 0;
+        font-size: 0.85rem;
         color: var(--tg-muted);
       }
       .status[data-tone="ok"] { color: var(--tg-accent); }

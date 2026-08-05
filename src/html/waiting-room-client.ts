@@ -42,6 +42,8 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         let turnSoundPlayed = false;
         let turnAudio = null;
         let lastPollHintMs = pollMs;
+        let nextCheckAtMs = null;
+        let checkInPaintTimer = null;
         let stopped = false;
 
         const el = {
@@ -49,6 +51,8 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           primaryLabel: document.getElementById("primary-label"),
           position: document.getElementById("position"),
           eta: document.getElementById("eta"),
+          checkin: document.getElementById("checkin"),
+          checkinHint: document.getElementById("checkin-hint"),
           depthAStat: document.getElementById("depth-a-stat"),
           depthALabel: document.getElementById("depth-a-label"),
           depthA: document.getElementById("depth-a"),
@@ -188,19 +192,21 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
           if (data.admissionMode === "lottery") {
             el.primaryLabel.textContent = "Chance";
-            el.position.textContent = "Equal";
+            el.position.textContent = "equal";
             setStatus("Lottery · everyone has an equal chance", "ok");
             if (showWaitingCount && el.depthA) {
               el.depthALabel.textContent = "In pool";
               el.depthA.textContent = Number.isFinite(data.waiting) ? String(data.waiting) : "—";
               if (el.depthBStat) el.depthBStat.hidden = true;
-              if (el.stats) el.stats.dataset.cols = "3";
+              if (el.stats) el.stats.dataset.cols = "4";
+            } else if (el.stats) {
+              el.stats.dataset.cols = "3";
             }
-          } else {
-            el.primaryLabel.textContent = "Position";
-            el.position.textContent = String(data.position ?? "—");
+          } else if (showWaitingCount && Number.isFinite(data.position) && Number.isFinite(data.waiting)) {
+            el.primaryLabel.textContent = "Your place";
+            el.position.textContent = "#" + data.position + " of " + data.waiting;
             setStatus("Queue Mode · waiting in “" + queue + "”", "ok");
-            if (showWaitingCount && el.depthA) {
+            if (el.depthA) {
               const ahead = Number.isFinite(data.ahead) ? data.ahead : Math.max(0, (data.position || 1) - 1);
               const behind = Number.isFinite(data.behind)
                 ? data.behind
@@ -212,19 +218,62 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
                 el.depthBLabel.textContent = "Behind";
                 el.depthB.textContent = String(behind);
               }
-              if (el.stats) el.stats.dataset.cols = "4";
+              if (el.stats) el.stats.dataset.cols = "5";
             }
+          } else {
+            el.primaryLabel.textContent = "Position";
+            el.position.textContent = String(data.position ?? "—");
+            setStatus("Queue Mode · waiting in “" + queue + "”", "ok");
+            if (el.stats) el.stats.dataset.cols = "3";
           }
           el.eta.textContent = formatEta(data.estimatedWaitSeconds);
           updateProgress(data);
           notePollHint(data);
+          paintCheckIn();
+        }
+
+        function formatCheckInRemaining(ms) {
+          const sec = Math.max(0, Math.ceil(ms / 1000));
+          if (sec < 60) return sec + "s";
+          const mins = Math.floor(sec / 60);
+          const rem = sec % 60;
+          if (mins < 60) return mins + "m " + String(rem).padStart(2, "0") + "s";
+          const hours = Math.floor(mins / 60);
+          const m2 = mins % 60;
+          return hours + "h " + m2 + "m";
+        }
+
+        function paintCheckIn() {
+          if (!el.checkin) return;
+          if (useFixedIntervals || !nextCheckAtMs) {
+            el.checkin.textContent = "—";
+            if (el.checkinHint) el.checkinHint.hidden = true;
+            return;
+          }
+          const remaining = nextCheckAtMs - Date.now();
+          el.checkin.textContent = formatCheckInRemaining(remaining);
+          if (el.checkinHint) {
+            if (remaining > 60_000) {
+              el.checkinHint.hidden = false;
+              el.checkinHint.textContent = "Place in line updates at your next check-in.";
+            } else {
+              el.checkinHint.hidden = true;
+            }
+          }
         }
 
         function notePollHint(data) {
           if (useFixedIntervals) return;
+          const absolute = Number(data.nextCheckAt);
+          if (Number.isFinite(absolute) && absolute > 0) {
+            nextCheckAtMs = absolute;
+            lastPollHintMs = Math.max(2000, absolute - Date.now());
+            return;
+          }
           const hint = Number(data.nextPollAfterMs);
           if (Number.isFinite(hint) && hint >= 2000) {
             lastPollHintMs = hint;
+            nextCheckAtMs = Date.now() + hint;
           }
         }
 
@@ -399,6 +448,10 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           stopped = true;
           clearPollTimer();
           clearHeartbeatTimer();
+          if (checkInPaintTimer) {
+            clearInterval(checkInPaintTimer);
+            checkInPaintTimer = null;
+          }
         }
 
         function needsDedicatedHeartbeat(intervalMs) {
@@ -416,8 +469,17 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         function scheduleAdaptive() {
           if (stopped || useFixedIntervals) return;
           clearPollTimer();
-          const delay = Math.max(2000, lastPollHintMs || pollMs);
+          if (checkInPaintTimer) {
+            clearInterval(checkInPaintTimer);
+            checkInPaintTimer = null;
+          }
+          const delay = Math.max(
+            2000,
+            nextCheckAtMs != null ? nextCheckAtMs - Date.now() : (lastPollHintMs || pollMs),
+          );
           syncHeartbeatFallback(delay);
+          paintCheckIn();
+          checkInPaintTimer = setInterval(paintCheckIn, 1000);
           timer = setTimeout(async () => {
             await tick();
             scheduleAdaptive();

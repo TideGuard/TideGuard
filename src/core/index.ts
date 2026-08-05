@@ -26,8 +26,11 @@ export {
   estimateWaitingRoomCost,
   DEFAULT_CLOUDFLARE_PAID_RATES,
   adaptiveAveragePollSeconds,
+  timeslotAveragePollSeconds,
   ADAPTIVE_POLL_MIN_SECONDS,
   ADAPTIVE_POLL_MAX_SECONDS,
+  STATUS_RPS_BUDGET,
+  MIN_CHECK_IN_PERIOD_SEC,
   formatUsd,
   formatCount,
 } from "./cost-estimate";
