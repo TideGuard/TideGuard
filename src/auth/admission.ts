@@ -19,9 +19,11 @@ export async function requireAdmission(
   }
 
   try {
-    const claims = await verifyAccessToken(token, requireTokenSecret(env), {
-      ...(expectedQueue ? { expectedQueue } : {}),
-    });
+    const claims = await verifyAccessToken(
+      token,
+      requireTokenSecret(env),
+      expectedQueue ? { expectedQueue } : undefined,
+    );
     return { visitorId: claims.sub, queue: claims.queue, token };
   } catch (error) {
     if (error instanceof TokenError) {

@@ -1,4 +1,6 @@
 import { ApiError } from "../core/errors";
+import { findUserById, readAdminConfig } from "../admin/store";
+import { hasAcceptedCurrentTos, TOS_VERSION } from "../admin/tos";
 import { TokenError } from "./token";
 import { timingSafeEqual } from "./crypto";
 import {
@@ -39,21 +41,38 @@ export async function requireOperator(request: Request, env: Env): Promise<void>
   }
 }
 
-export async function requireAdminSession(request: Request, env: Env): Promise<AdminActor> {
+export async function requireAdminSession(
+  request: Request,
+  env: Env,
+  options?: { allowStaleTos?: boolean },
+): Promise<AdminActor> {
   const secret = requireTokenSecret(env);
   const session = readAdminSessionCookie(request);
   if (!session) {
     throw new ApiError("unauthorized", "Admin session required", 401);
   }
+  let actor: AdminActor;
   try {
     const claims = await verifyAdminSession(session, secret);
-    return { id: claims.sub, username: claims.username };
+    actor = { id: claims.sub, username: claims.username };
   } catch (error) {
     if (error instanceof TokenError) {
       throw new ApiError("unauthorized", error.message, 401, { reason: error.code });
     }
     throw error;
   }
+
+  if (!options?.allowStaleTos) {
+    const admin = await readAdminConfig(env);
+    const user = admin ? findUserById(admin, actor.id) : null;
+    if (!hasAcceptedCurrentTos(user)) {
+      throw new ApiError("tos_required", "Accept the current Terms of Service to continue.", 403, {
+        tosVersion: TOS_VERSION,
+      });
+    }
+  }
+
+  return actor;
 }
 
 export function requireTokenSecret(env: Env): string {

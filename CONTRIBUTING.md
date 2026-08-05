@@ -2,6 +2,8 @@
 
 Thanks for helping improve TideGuard. This project aims to stay small, readable, and easy to operate.
 
+**Upstream:** [github.com/TideGuard/TideGuard](https://github.com/TideGuard/TideGuard) · docs and product site [tideguard.dev](https://tideguard.dev). Deploy-to-Cloudflare and personal forks are common — please send useful fixes and features back as pull requests so others benefit, and keep an `upstream` remote so you can pull security and upgrade notes (see [docs/upgrading.md](docs/upgrading.md)).
+
 ## Docs first
 
 If you are new to the codebase, skim:
@@ -10,16 +12,18 @@ If you are new to the codebase, skim:
 2. [docs/getting-started.md](docs/getting-started.md)
 3. [docs/architecture.md](docs/architecture.md)
 
+AI coding assistants should start with [AGENTS.md](AGENTS.md) (constraints, repo map, and how to contribute features safely).
+
 Update docs in the same PR when you change user-facing behavior.
 
 ## Development setup
 
 1. Fork and clone the repository.
-2. Install dependencies with `npm install`.
+2. Install dependencies with `npm install` (Node **≥ 24**, TypeScript 7 via `devDependencies`).
 3. Generate Worker types with `npm run types`.
 4. Copy `.dev.vars.example` to `.dev.vars` and set `TOKEN_SECRET`.
 5. Run `npm run dev` for the local Worker.
-6. Run `npm run ci` before opening a pull request.
+6. Run `npm run ci` before opening a pull request (`format`, **Oxlint**, typecheck, coverage).
 
 ## Guidelines
 
@@ -28,6 +32,7 @@ Update docs in the same PR when you change user-facing behavior.
 - Add or update tests for behavior changes.
 - Document user-facing changes in `CHANGELOG.md` and the matching guide under `docs/`.
 - Do not commit secrets, `.dev.vars`, or account-specific resource IDs.
+- Lint with `npm run lint` (Oxlint / Oxc). Formatting stays Prettier (`npm run format`).
 
 ## Shipping upgrades
 

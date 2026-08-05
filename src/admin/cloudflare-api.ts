@@ -578,13 +578,14 @@ function isSettingOn(value: string | boolean | number | null): boolean {
 }
 
 async function cfFetch<T>(apiToken: string, url: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${apiToken}`);
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
   const response = await fetch(url, {
     ...init,
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      "content-type": "application/json",
-      ...(init.headers ?? {}),
-    },
+    headers,
   });
 
   let body: {

@@ -71,6 +71,11 @@ export interface BootstrapResponse {
   version: string;
   turnstileSitekey: string | null;
   setupPending: SetupPendingPublic | null;
+  tosVersion: number;
+  tosSummary: string;
+  tosUrl: string;
+  /** null when not signed in or never accepted; compare to tosVersion for currency. */
+  acceptedTosVersion: number | null;
 }
 
 export interface WaitingRoomBranding {

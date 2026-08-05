@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**Canonical releases:** [GitHub Releases](https://github.com/TideGuard/TideGuard/releases) (what the admin Updates panel checks) · site mirror [tideguard.dev/changelog](https://tideguard.dev/changelog) · upgrade path [docs/upgrading.md](docs/upgrading.md).
+
 ## [Unreleased]
+
+### Added
+
+- **Versioned operator Terms of Service** ([`TERMS.md`](TERMS.md), `TOS_VERSION`) — claim / invite / re-accept require `acceptedTosVersion` matching the current version; re-accept on login after a version bump; session APIs return `403 tos_required` until accepted; admin footer links Terms / License / Issues
+
+### Changed
+
+- **Lint:** ESLint + `typescript-eslint` → [Oxlint](https://oxc.rs/) (`oxlint` + `oxlint-tsgolint`) for TypeScript 7–compatible, type-aware linting
+- **TypeScript 7.0** as the project compiler (`tsc` / typecheck)
+
+### Upgrade notes
+
+- After upgrading to a build that introduces or bumps `TOS_VERSION`, each admin must accept the Terms of Service in `/admin` before the control room APIs work again.
+- Contributors: use `npm run lint` (Oxlint), not ESLint. Node 24+ and TypeScript 7 are required for local typecheck/lint.
 
 ## [0.3.0] - 2026-08-04
 

@@ -34,14 +34,11 @@ describe("cloudflare-api", () => {
       status: "active",
       id: "tok-1",
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.cloudflare.com/client/v4/user/tokens/verify",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          authorization: "Bearer cf-token",
-        }),
-      }),
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toBeInstanceOf(Headers);
+    expect((init.headers as Headers).get("authorization")).toBe("Bearer cf-token");
+    expect((init.headers as Headers).get("content-type")).toBe("application/json");
   });
 
   it("verifyApiToken maps inactive tokens to CloudflareApiError", async () => {

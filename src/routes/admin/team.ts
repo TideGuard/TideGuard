@@ -30,6 +30,12 @@ import {
   toPublicInvite,
 } from "../../admin/invite-store";
 import { validateUsername } from "../../admin/types";
+import {
+  requireAcceptedTosVersion,
+  TOS_VERSION,
+  tosPublicFields,
+  readAcceptedTosVersion,
+} from "../../admin/tos";
 import { readJsonBody } from "../validation";
 import { clientKey, parsePassword, requireTurnstileResponse, withCookie } from "./helpers";
 
@@ -88,6 +94,7 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
 
   const body = await readJsonBody(request);
   await requireTurnstileResponse(request, env, body);
+  requireAcceptedTosVersion(body);
   const rawToken = typeof body.token === "string" ? body.token : "";
   let username: string;
   try {
@@ -131,6 +138,7 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
       passwordSalt: salt,
       recoveryHash: recovery.hash,
       recoverySalt: recovery.salt,
+      acceptedTosVersion: TOS_VERSION,
       createdAt: Date.now(),
     });
   } catch (error) {
@@ -158,6 +166,8 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
       username,
       queue: admin?.defaultQueue ?? "default",
       recoveryMnemonic: recovery.mnemonic,
+      acceptedTosVersion: TOS_VERSION,
+      ...tosPublicFields(),
     }),
     buildAdminSessionCookie(session, request),
   );
@@ -252,7 +262,12 @@ export async function handleAdminPasswordRecover(request: Request, env: Env): Pr
   const actor = { id: user.id, username: user.username };
   const session = await signAdminSession(requireTokenSecret(env), actor);
   return withCookie(
-    jsonOk({ ok: true, username: user.username }),
+    jsonOk({
+      ok: true,
+      username: user.username,
+      acceptedTosVersion: readAcceptedTosVersion(user),
+      ...tosPublicFields(),
+    }),
     buildAdminSessionCookie(session, request),
   );
 }

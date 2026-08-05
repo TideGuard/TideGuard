@@ -84,7 +84,7 @@ export function defaultHealthUrlFromOrigin(originUrl: string | null | undefined)
 export function parseHealthConfig(
   raw: Partial<OriginHealthConfig> | null | undefined,
 ): OriginHealthConfig {
-  const base = { ...DEFAULT_HEALTH_CONFIG, ...(raw ?? {}) };
+  const base = raw ? { ...DEFAULT_HEALTH_CONFIG, ...raw } : { ...DEFAULT_HEALTH_CONFIG };
   const url = sanitizeHealthUrl(base.url);
   return {
     enabled: Boolean(base.enabled) && url !== null,

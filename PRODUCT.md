@@ -14,7 +14,9 @@ product
 
 TideGuard is a lightweight waiting room for Cloudflare Workers. It queues visitors fairly (FIFO), admits them at a controlled rate, and issues signed access tokens for protected resources. Success means a product that is cheap to run and trustworthy under load.
 
-Primary website: https://tideguard.dev
+Primary website: https://tideguard.dev  
+Source repository: https://github.com/TideGuard/TideGuard  
+Published docs: https://tideguard.dev/docs/
 
 ## Brand Personality
 

@@ -17,6 +17,8 @@ export interface AdminUser {
   /** PBKDF2 of normalized BIP39 English mnemonic; never store the phrase. */
   recoveryHash?: string;
   recoverySalt?: string;
+  /** Last accepted operator ToS version (`TOS_VERSION`); missing ⇒ must accept. */
+  acceptedTosVersion?: number;
   createdAt: number;
 }
 

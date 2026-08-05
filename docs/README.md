@@ -2,6 +2,8 @@
 
 TideGuard docs are short on purpose. Start with the guide that matches your job.
 
+**Canonical project:** [github.com/TideGuard/TideGuard](https://github.com/TideGuard/TideGuard) · site [tideguard.dev](https://tideguard.dev). Operator guides here are mirrored at [tideguard.dev/docs](https://tideguard.dev/docs/). If you forked or deployed from a copy, check upstream for newer guides and releases before assuming this checkout is current. AI assistants: see [AGENTS.md](../AGENTS.md).
+
 | Guide                                                 | Audience                                                                          |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
 | [Getting started](getting-started.md)                 | Operators deploying or running locally for the first time                         |
@@ -21,4 +23,4 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 | [TOKEN_SECRET rotation](token-secret-rotation.md)     | Rotate the master secret safely                                                   |
 | [Load testing](load-testing.md)                       | Contributors validating queue behavior at scale                                   |
 
-Project overview and sales pitch live in the root [README](../README.md). Published guides: [tideguard.dev/docs](https://tideguard.dev/docs/). Security expectations live in [SECURITY.md](../SECURITY.md).
+Project overview and sales pitch live in the root [README](../README.md). Published guides: [tideguard.dev/docs](https://tideguard.dev/docs/). Security expectations live in [SECURITY.md](../SECURITY.md). Operator Terms of Service: [TERMS.md](../TERMS.md). MIT license: [LICENSE](../LICENSE).

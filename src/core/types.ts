@@ -153,6 +153,7 @@ export type ApiErrorCode =
   | "not_found"
   | "unauthorized"
   | "forbidden"
+  | "tos_required"
   | "conflict"
   | "queue_full"
   | "internal_error"

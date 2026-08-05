@@ -4,13 +4,18 @@ info:
   version: 0.2.0
   description: |
     HTTP contracts for TideGuard waiting-room Workers.
-    See docs/api.md for narrative detail. Base URL is your Worker hostname.
+    Narrative guide: https://tideguard.dev/docs/api/ (source: docs/api.md in the repo).
+    Base URL is your Worker hostname.
+    Canonical project: https://github.com/TideGuard/TideGuard · https://tideguard.dev
   license:
     name: MIT
     url: https://github.com/TideGuard/TideGuard/blob/main/LICENSE
   contact:
     name: TideGuard
     url: https://tideguard.dev
+  externalDocs:
+    description: TideGuard documentation
+    url: https://tideguard.dev/docs/
 servers:
   - url: https://{workerHost}
     variables:
@@ -340,7 +345,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [username, password]
+              required: [username, password, acceptedTosVersion]
               properties:
                 username:
                   type: string
@@ -348,9 +353,41 @@ paths:
                   type: string
                   minLength: 8
                   maxLength: 128
+                confirmPassword:
+                  type: string
+                queue:
+                  type: string
+                acceptedTosVersion:
+                  type: integer
+                  description: Must equal the current TOS_VERSION; stamped on the user
       responses:
         "200":
           description: Claimed; session cookie set; setupComplete still false
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/tos/accept:
+    post:
+      tags: [Admin]
+      summary: Accept current operator Terms of Service
+      operationId: adminTosAccept
+      description: Allowed with a session even when ToS is stale. Other admin session APIs return 403 tos_required until accepted.
+      security:
+        - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acceptedTosVersion]
+              properties:
+                acceptedTosVersion:
+                  type: integer
+                  description: Must equal the current TOS_VERSION
+      responses:
+        "200":
+          description: User acceptedTosVersion set to current TOS_VERSION
         "4XX":
           $ref: "#/components/responses/ApiError"
 

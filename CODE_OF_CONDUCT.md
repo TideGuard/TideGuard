@@ -50,8 +50,10 @@ an individual is officially representing the community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement via GitHub issues
-or by contacting the repository maintainers.
+reported to the community leaders responsible for enforcement via the
+[TideGuard GitHub repository](https://github.com/TideGuard/TideGuard)
+(issues or maintainers) or through channels listed on
+[tideguard.dev/about](https://tideguard.dev/about).
 
 All complaints will be reviewed and investigated promptly and fairly.
 

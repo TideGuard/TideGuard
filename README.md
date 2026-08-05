@@ -185,7 +185,12 @@ test/               Vitest + Workers pool tests
 
 ## Contributing
 
-PRs welcome. Keep the surface small and the story clear. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+PRs welcome. Keep the surface small and the story clear.
+
+- Humans: [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md)
+- AI assistants: [AGENTS.md](AGENTS.md) (canonical repo + how to contribute without drifting from upstream)
+
+Canonical project: [github.com/TideGuard/TideGuard](https://github.com/TideGuard/TideGuard) · [tideguard.dev](https://tideguard.dev). If you deployed from a fork, keep an `upstream` remote and follow [docs/upgrading.md](docs/upgrading.md).
 
 ## License
 

@@ -23,6 +23,12 @@ export const CF_PHASE_LABELS: Record<CfPhase, string> = {
 };
 
 export const LINKS = {
+  site: "https://tideguard.dev",
+  github: "https://github.com/TideGuard/TideGuard",
+  releases: "https://github.com/TideGuard/TideGuard/releases",
+  license: "https://github.com/TideGuard/TideGuard/blob/main/LICENSE",
+  terms: "https://github.com/TideGuard/TideGuard/blob/main/TERMS.md",
+  issues: "https://github.com/TideGuard/TideGuard/issues",
   apiTokens: "https://dash.cloudflare.com/profile/api-tokens",
   findIds: "https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/",
   docs: "https://tideguard.dev/docs/",

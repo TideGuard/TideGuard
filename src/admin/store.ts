@@ -70,6 +70,12 @@ function normalizeUsers(config: Partial<AdminConfig>): AdminUser[] {
           next.recoveryHash = user.recoveryHash;
           next.recoverySalt = user.recoverySalt;
         }
+        if (
+          typeof user.acceptedTosVersion === "number" &&
+          Number.isFinite(user.acceptedTosVersion)
+        ) {
+          next.acceptedTosVersion = user.acceptedTosVersion;
+        }
         out.push(next);
       }
     }
@@ -176,6 +182,27 @@ export async function updateAdminUserRecovery(
   const users = [...config.users];
   const current = users[idx]!;
   users[idx] = { ...current, recoveryHash, recoverySalt };
+  const next: AdminConfig = { ...config, users };
+  await writeAdminConfig(env, next);
+  return next;
+}
+
+export async function updateAdminUserAcceptedTos(
+  env: Env,
+  userId: string,
+  acceptedTosVersion: number,
+): Promise<AdminConfig> {
+  const config = await readAdminConfig(env);
+  if (!config) {
+    throw new Error("Admin has not been claimed");
+  }
+  const idx = config.users.findIndex((u) => u.id === userId);
+  if (idx < 0) {
+    throw new Error("User not found");
+  }
+  const users = [...config.users];
+  const current = users[idx]!;
+  users[idx] = { ...current, acceptedTosVersion };
   const next: AdminConfig = { ...config, users };
   await writeAdminConfig(env, next);
   return next;

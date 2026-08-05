@@ -4,26 +4,35 @@ import type { WaitingRoomBranding } from "../../core/branding";
 import { hashPassword, verifyPassword } from "../../auth/password";
 import { assertAdminPassword } from "../../auth/password-policy";
 import { createRecoveryVerifier } from "../../auth/recovery";
-import { signAdminSession } from "../../auth/admin-session";
+import { signAdminSession, verifyAdminSession } from "../../auth/admin-session";
 import {
   buildAdminSessionCookie,
   clearAdminSessionCookie,
+  readAdminSessionCookie,
   requireAdminSession,
   requireTokenSecret,
 } from "../../auth/operator";
 import { rateLimitOrThrow, withSecurityHeaders } from "../../auth";
 import {
+  findUserById,
   findUserByUsername,
   isAdminClaimed,
   isAdminSetupComplete,
   newAdminUserId,
   readAdminConfig,
   sanitizeBrandingInput,
+  updateAdminUserAcceptedTos,
   writeAdminConfig,
   writeBranding,
 } from "../../admin/store";
 import { appendAuditEvent } from "../../admin/audit-store";
 import { validateUsername } from "../../admin/types";
+import {
+  readAcceptedTosVersion,
+  requireAcceptedTosVersion,
+  tosPublicFields,
+  TOS_VERSION,
+} from "../../admin/tos";
 import { writeCloudflareLink } from "../../admin/bypass-store";
 import {
   clearSetupPending,
@@ -57,12 +66,25 @@ export async function handleAdminPage(_request: Request, _env: Env): Promise<Res
   );
 }
 
-export async function handleAdminBootstrap(_request: Request, env: Env): Promise<Response> {
+export async function handleAdminBootstrap(request: Request, env: Env): Promise<Response> {
   const admin = await readAdminConfig(env);
   const claimed = admin !== null;
   const setupComplete = admin?.setupComplete === true;
   const turnstile = await readTurnstileSettings(env);
   const pending = setupComplete ? null : await readSetupPending(env);
+
+  let acceptedTosVersion: number | null = null;
+  const session = readAdminSessionCookie(request);
+  if (session && admin) {
+    try {
+      const claims = await verifyAdminSession(session, requireTokenSecret(env));
+      const user = findUserById(admin, claims.sub);
+      acceptedTosVersion = readAcceptedTosVersion(user);
+    } catch {
+      acceptedTosVersion = null;
+    }
+  }
+
   return jsonOk({
     setupComplete,
     claimed,
@@ -71,6 +93,8 @@ export async function handleAdminBootstrap(_request: Request, env: Env): Promise
     version: VERSION,
     turnstileSitekey: turnstile?.sitekey ?? pending?.turnstile?.sitekey ?? null,
     setupPending: pending ? toSetupPendingPublic(pending) : null,
+    ...tosPublicFields(),
+    acceptedTosVersion,
   });
 }
 
@@ -88,6 +112,7 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
   requireSetupBearer(request, env);
 
   const body = await readJsonBody(request);
+  requireAcceptedTosVersion(body);
   let username: string;
   try {
     username = validateUsername(typeof body.username === "string" ? body.username : "");
@@ -123,6 +148,7 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
         passwordSalt: salt,
         recoveryHash: recovery.hash,
         recoverySalt: recovery.salt,
+        acceptedTosVersion: TOS_VERSION,
         createdAt: now,
       },
     ],
@@ -146,6 +172,8 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
       username,
       queue,
       recoveryMnemonic: recovery.mnemonic,
+      acceptedTosVersion: TOS_VERSION,
+      ...tosPublicFields(),
     }),
     buildAdminSessionCookie(session, request),
   );
@@ -268,11 +296,49 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
   const actor = { id: user.id, username: user.username };
   const session = await signAdminSession(requireTokenSecret(env), actor);
   return withCookie(
-    jsonOk({ ok: true, queue: admin.defaultQueue, username: user.username }),
+    jsonOk({
+      ok: true,
+      queue: admin.defaultQueue,
+      username: user.username,
+      acceptedTosVersion: readAcceptedTosVersion(user),
+      ...tosPublicFields(),
+    }),
     buildAdminSessionCookie(session, request),
   );
 }
 
 export async function handleAdminLogout(request: Request, _env: Env): Promise<Response> {
   return withCookie(jsonOk({ ok: true }), clearAdminSessionCookie(request));
+}
+
+/** Session may have stale ToS; stamps current TOS_VERSION on the signed-in user. */
+export async function handleAdminTosAccept(request: Request, env: Env): Promise<Response> {
+  rateLimitOrThrow(clientKey(request, "tos-accept"), { limit: 20, windowMs: 60_000 });
+  const actor = await requireAdminSession(request, env, { allowStaleTos: true });
+  const body = await readJsonBody(request);
+  requireAcceptedTosVersion(body);
+
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
+  }
+  const user = findUserById(admin, actor.id);
+  if (!user) {
+    throw new ApiError("not_found", "User not found", 404);
+  }
+
+  await updateAdminUserAcceptedTos(env, actor.id, TOS_VERSION);
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "tos.accept",
+    summary: `Accepted Terms of Service version ${TOS_VERSION}`,
+    meta: { tosVersion: TOS_VERSION },
+  });
+
+  return jsonOk({
+    ok: true,
+    acceptedTosVersion: TOS_VERSION,
+    ...tosPublicFields(),
+  });
 }

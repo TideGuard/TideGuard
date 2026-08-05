@@ -26,6 +26,30 @@ createRoot(document.getElementById("root")!).render(
           <a href="https://tideguard.dev/docs/" target="_blank" rel="noreferrer">
             Docs
           </a>
+          <span aria-hidden="true"> · </span>
+          <a href="https://github.com/TideGuard/TideGuard" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          <span aria-hidden="true"> · </span>
+          <a
+            href="https://github.com/TideGuard/TideGuard/blob/main/TERMS.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Terms
+          </a>
+          <span aria-hidden="true"> · </span>
+          <a
+            href="https://github.com/TideGuard/TideGuard/blob/main/LICENSE"
+            target="_blank"
+            rel="noreferrer"
+          >
+            License
+          </a>
+          <span aria-hidden="true"> · </span>
+          <a href="https://github.com/TideGuard/TideGuard/issues" target="_blank" rel="noreferrer">
+            Issues or ideas?
+          </a>
         </footer>
       </div>
     </MantineProvider>

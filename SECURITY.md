@@ -2,9 +2,11 @@
 
 TideGuard protects origin capacity with a waiting room and signed admission tokens. This document is for operators and reporters.
 
+**Canonical:** [github.com/TideGuard/TideGuard](https://github.com/TideGuard/TideGuard) · [tideguard.dev/security](https://tideguard.dev/security) · published guides [tideguard.dev/docs](https://tideguard.dev/docs/).
+
 ## Reporting a vulnerability
 
-Please open a private GitHub security advisory when possible, or contact the maintainers through the repository. Do not open a public issue for sensitive reports.
+Please open a [private GitHub security advisory](https://github.com/TideGuard/TideGuard/security/advisories/new) when possible, or contact the maintainers through the [repository](https://github.com/TideGuard/TideGuard). Do not open a public issue for sensitive reports.
 
 Include:
 

@@ -2,6 +2,8 @@
 
 How to pull a newer TideGuard release into an existing Cloudflare deployment without recreating the Worker, losing KV config, or rotating secrets by accident.
 
+Canonical source: [github.com/TideGuard/TideGuard](https://github.com/TideGuard/TideGuard) · [Releases](https://github.com/TideGuard/TideGuard/releases) · [CHANGELOG](../CHANGELOG.md) · site [tideguard.dev/changelog](https://tideguard.dev/changelog).
+
 First-time install: [getting-started.md](getting-started.md). Pre-launch checks: [launch-checklist.md](launch-checklist.md).
 
 ## What survives a normal upgrade

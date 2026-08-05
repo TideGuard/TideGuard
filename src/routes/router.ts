@@ -28,6 +28,7 @@ import {
   handleAdminListInvites,
   handleAdminLogin,
   handleAdminLogout,
+  handleAdminTosAccept,
   handleAdminMetrics,
   handleAdminPage,
   handleAdminPass,
@@ -231,6 +232,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "POST" && url.pathname === "/api/admin/logout") {
     return await handleAdminLogout(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/tos/accept") {
+    return await handleAdminTosAccept(request, env);
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/state") {
@@ -478,6 +483,8 @@ function landingPage(): string {
       </p>
       <p class="meta">
         <a href="https://tideguard.dev">Website</a>
+        <a href="https://tideguard.dev/docs/">Docs</a>
+        <a href="https://github.com/TideGuard/TideGuard">GitHub</a>
         <a href="/demo">Try the demo</a>
         <a href="/wait?queue=default&return=/demo">Waiting room</a>
         <a href="/admin">Admin</a>

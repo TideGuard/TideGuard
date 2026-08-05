@@ -2,6 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { expect } from "vitest";
 import { seedSetupPendingForTests } from "../../src/admin/setup-pending-store";
 import { TURNSTILE_TEST_PASS_SECRET } from "../../src/admin/cloudflare-api";
+import { TOS_VERSION } from "../../src/admin/tos";
 
 export const ADMIN_SECRET = "test-token-secret-do-not-use-in-production";
 
@@ -40,6 +41,7 @@ export async function claimAdmin(username = "ops", password = ADMIN_PASSWORD): P
         password,
         confirmPassword: password,
         queue: "default",
+        acceptedTosVersion: TOS_VERSION,
       }),
     }),
   );

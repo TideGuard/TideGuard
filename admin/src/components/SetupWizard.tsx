@@ -128,6 +128,7 @@ export function SetupWizard({
             password,
             confirmPassword,
             queue: bootstrap.defaultQueue || "default",
+            acceptedTosVersion: bootstrap.tosVersion,
           }),
         },
       );
@@ -354,6 +355,9 @@ export function SetupWizard({
             password={password}
             confirmPassword={confirmPassword}
             busy={busy}
+            tosVersion={bootstrap.tosVersion}
+            tosSummary={bootstrap.tosSummary}
+            tosUrl={bootstrap.tosUrl}
             onTokenSecretChange={setTokenSecret}
             onUsernameChange={setUsername}
             onPasswordChange={setPassword}

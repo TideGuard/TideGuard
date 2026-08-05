@@ -5,6 +5,7 @@ export {
   handleAdminSetup,
   handleAdminLogin,
   handleAdminLogout,
+  handleAdminTosAccept,
 } from "./auth";
 
 export {

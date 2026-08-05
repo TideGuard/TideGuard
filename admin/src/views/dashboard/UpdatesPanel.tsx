@@ -26,9 +26,17 @@ export function UpdatesPanel() {
       id="updates"
       title="Updates"
       description={
-        <Anchor href={LINKS.docsUpgrading} target="_blank" rel="noreferrer" size="sm">
-          Upgrading guide
-        </Anchor>
+        <Group gap="xs">
+          <Anchor href={LINKS.docsUpgrading} target="_blank" rel="noreferrer" size="sm">
+            Upgrading guide
+          </Anchor>
+          <Text size="sm" c="dimmed" span>
+            ·
+          </Text>
+          <Anchor href={LINKS.releases} target="_blank" rel="noreferrer" size="sm">
+            GitHub Releases
+          </Anchor>
+        </Group>
       }
       actions={
         <Button size="xs" variant="default" onClick={() => check(true)}>

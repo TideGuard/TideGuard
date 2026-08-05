@@ -84,7 +84,7 @@ export class QueueRoom extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
 
-    this.ctx.blockConcurrencyWhile(async () => {
+    void this.ctx.blockConcurrencyWhile(async () => {
       this.migrate();
     });
   }

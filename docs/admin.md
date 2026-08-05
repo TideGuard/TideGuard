@@ -15,7 +15,7 @@ Shown until first-time setup is finished (`setupComplete`). Until then, `GET /` 
 
 | Step          | You set                                                                                                         | Stored when                                                          |
 | ------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 1. Account    | `TOKEN_SECRET` + username + password                                                                            | **Immediately on Claim** — locks account + issues `tg_admin` session |
+| 1. Account    | `TOKEN_SECRET` + username + password + **Terms of Service** ack                                                 | **Immediately on Claim** — locks account + issues `tg_admin` session |
 | 2. Cloudflare | **2a** verify API token → **2b** zone/hostname verify (+ Fix) → **2c** SSL Set/Skip → **2d** domain Attach/Skip | Pending KV; promoted on Finish                                       |
 | 3. Turnstile  | Create widget → complete challenge → **Click to verify**                                                        | Pending KV; promoted on Finish                                       |
 | 4. Queue      | Queue name, mode, depth, redirect path, click-to-enter / hold                                                   | Finish setup                                                         |
@@ -26,8 +26,11 @@ Cloudflare step 2 is progressive: the API token must verify before zone fields; 
 On **claim**, TideGuard:
 
 - Requires Bearer `TOKEN_SECRET` so a stranger cannot claim a public Worker
+- Requires `acceptedTosVersion` equal to the current operator [Terms of Service](../TERMS.md) version (stamped on the user)
 - Locks in the first admin account and shows a 12-word recovery phrase once
 - Issues an admin session (`tg_admin`)
+
+Invite accept uses the **same** Terms acknowledgment. After an upgrade that bumps `TOS_VERSION` in code, each admin must re-accept on next login before other control-room APIs work (`403 tos_required` until `POST /api/admin/tos/accept`).
 
 On **finish**, TideGuard:
 

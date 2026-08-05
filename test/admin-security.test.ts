@@ -1,6 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { cookieFrom, resetAdmin, setupAdmin, turnstileBody } from "./helpers/admin-setup";
+import { TOS_VERSION } from "../src/admin/tos";
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
@@ -56,6 +57,7 @@ describe("multi-admin invites and audit", () => {
           username: "teammate",
           password: "Another-horse1",
           confirmPassword: "Another-horse1",
+          acceptedTosVersion: TOS_VERSION,
           ...turnstileBody(),
         }),
       }),
@@ -73,6 +75,7 @@ describe("multi-admin invites and audit", () => {
           username: "other",
           password: "Another-horse1",
           confirmPassword: "Another-horse1",
+          acceptedTosVersion: TOS_VERSION,
           ...turnstileBody(),
         }),
       }),
@@ -145,6 +148,7 @@ describe("multi-admin invites and audit", () => {
           username: "nope",
           password: "Correct-horse1",
           confirmPassword: "Correct-horse1",
+          acceptedTosVersion: TOS_VERSION,
           ...turnstileBody(),
         }),
       }),

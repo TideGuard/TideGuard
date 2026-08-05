@@ -30,13 +30,13 @@ Paddle + Convex + Cloudflare for SaaS successfully.
 TideGuard is already a Worker + Durable Object + KV waiting room. An instance is
 **not** a container or VM.
 
-| Piece | Role |
-| --- | --- |
-| Worker | HTTP, tokens, proxy, visitor UI |
-| `QueueRoom` DO | Authoritative queue state + alarms |
-| `CONFIG_KV` | Config / branding (no operator passwords in hosted mode) |
-| Assets | Optional; prefer admin UI on the platform |
-| `TOKEN_SECRET` | We mint and inject; customer never sees it |
+| Piece          | Role                                                     |
+| -------------- | -------------------------------------------------------- |
+| Worker         | HTTP, tokens, proxy, visitor UI                          |
+| `QueueRoom` DO | Authoritative queue state + alarms                       |
+| `CONFIG_KV`    | Config / branding (no operator passwords in hosted mode) |
+| Assets         | Optional; prefer admin UI on the platform                |
+| `TOKEN_SECRET` | We mint and inject; customer never sees it               |
 
 Spin-up = create bindings + route traffic + hardlink org → runtime.
 
@@ -46,10 +46,10 @@ Spin-up = create bindings + route traffic + hardlink org → runtime.
 
 Sell **outcomes**, not architecture names.
 
-| Customer-facing tier | Under the hood | What they get |
-| --- | --- | --- |
-| **Starter / Launch** | Soft multi-tenant (**B**): one shared Worker; `DO idFromName(tenant:…)` + KV key prefixes | Instant `you.tideguard.app`, lower price |
-| **Pro / Dedicated** | Workers for Platforms User Worker (**A**): dedicated script + bindings per tenant | Isolation, higher limits, quieter neighbors, vanity domain |
+| Customer-facing tier | Under the hood                                                                            | What they get                                              |
+| -------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Starter / Launch** | Soft multi-tenant (**B**): one shared Worker; `DO idFromName(tenant:…)` + KV key prefixes | Instant `you.tideguard.app`, lower price                   |
+| **Pro / Dedicated**  | Workers for Platforms User Worker (**A**): dedicated script + bindings per tenant         | Isolation, higher limits, quieter neighbors, vanity domain |
 
 ```text
 Starter (B)
@@ -80,18 +80,18 @@ Pro (A)
 
 ### Cloudflare products by layer
 
-| Layer | Product | Why |
-| --- | --- | --- |
-| Multi-tenant compute (Pro) | [Workers for Platforms](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/) | Dispatch namespace + User Workers |
-| Soft tenancy (Starter) | Single Worker + DO names | Cheap, instant |
-| Routing / TLS | [Cloudflare for SaaS](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/) | Custom hostnames → Worker-as-origin |
-| Queue state | Durable Objects | Same as OSS |
-| Config | KV (per-tenant or prefixed) | Same as OSS |
-| Secrets | Secrets Store / WfP secrets API | Per-tenant `TOKEN_SECRET` |
-| Provisioning | Workflows (or Convex actions) | Create KV → deploy → secret → hostname → Turnstile |
-| Control plane data | Convex (as in MonoRepo) | Orgs, memberships, subscriptions, domains |
-| Metering | Workers Analytics Engine + GraphQL | Per-tenant usage for support / future usage bills |
-| Limits (Pro) | WfP custom limits | Cap CPU / subrequests by plan |
+| Layer                      | Product                                                                                                    | Why                                                |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Multi-tenant compute (Pro) | [Workers for Platforms](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/) | Dispatch namespace + User Workers                  |
+| Soft tenancy (Starter)     | Single Worker + DO names                                                                                   | Cheap, instant                                     |
+| Routing / TLS              | [Cloudflare for SaaS](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/)     | Custom hostnames → Worker-as-origin                |
+| Queue state                | Durable Objects                                                                                            | Same as OSS                                        |
+| Config                     | KV (per-tenant or prefixed)                                                                                | Same as OSS                                        |
+| Secrets                    | Secrets Store / WfP secrets API                                                                            | Per-tenant `TOKEN_SECRET`                          |
+| Provisioning               | Workflows (or Convex actions)                                                                              | Create KV → deploy → secret → hostname → Turnstile |
+| Control plane data         | Convex (as in MonoRepo)                                                                                    | Orgs, memberships, subscriptions, domains          |
+| Metering                   | Workers Analytics Engine + GraphQL                                                                         | Per-tenant usage for support / future usage bills  |
+| Limits (Pro)               | WfP custom limits                                                                                          | Cap CPU / subrequests by plan                      |
 
 **Not used:** Containers, VMs, Redis, external queue brokers, per-customer
 Cloudflare accounts (except white-glove edge cases).
@@ -112,12 +112,12 @@ Cloudflare accounts (except white-glove edge cases).
 
 ### 2. Control plane (new app — clone SourceTrust shape)
 
-| Concern | Owner |
-| --- | --- |
-| Login, org, roles, invites | WorkOS (identity) + Convex (tenancy/RBAC) |
-| Payment, plan, suspend | Paddle + Convex subscription mirror |
-| Tenant ↔ runtime hardlink | Convex `orgId` → instance id / script name / hostname |
-| Provision / upgrade / teardown | Workflow or Convex actions |
+| Concern                        | Owner                                                 |
+| ------------------------------ | ----------------------------------------------------- |
+| Login, org, roles, invites     | WorkOS (identity) + Convex (tenancy/RBAC)             |
+| Payment, plan, suspend         | Paddle + Convex subscription mirror                   |
+| Tenant ↔ runtime hardlink      | Convex `orgId` → instance id / script name / hostname |
+| Provision / upgrade / teardown | Workflow or Convex actions                            |
 
 ### 3. Edge routing plane
 
@@ -143,13 +143,13 @@ TideGuard instance (headless runtime)
 
 ### What lives where
 
-| Concern | Platform | Instance |
-| --- | --- | --- |
-| Login, org, roles, invites | WorkOS + Convex | No |
-| Payment, plan, suspend | Paddle + Convex | Entitlement check only if needed |
-| Visitor HMAC `TOKEN_SECRET` | We mint & inject | Holds binding; no UI |
-| Queue / branding / admit rate | Edit in platform UI | Stores operational config |
-| Admin passwords / TideGuard invites | — | **Off** in hosted mode |
+| Concern                             | Platform            | Instance                         |
+| ----------------------------------- | ------------------- | -------------------------------- |
+| Login, org, roles, invites          | WorkOS + Convex     | No                               |
+| Payment, plan, suspend              | Paddle + Convex     | Entitlement check only if needed |
+| Visitor HMAC `TOKEN_SECRET`         | We mint & inject    | Holds binding; no UI             |
+| Queue / branding / admit rate       | Edit in platform UI | Stores operational config        |
+| Admin passwords / TideGuard invites | —                   | **Off** in hosted mode           |
 
 ### Hardlink chain (copy from SourceTrust)
 
@@ -216,15 +216,15 @@ Paddle is the **money source of truth**; Convex mirrors it. Custom domains use
 
 Key files:
 
-| Role | Path |
-| --- | --- |
-| Headless auth (password, magic, OAuth, reset, step-up) | `MonoRepo/apps/app/src/lib/auth.ts` |
-| OAuth callback | `MonoRepo/apps/app/src/routes/api/auth/callback.tsx` |
-| Middleware (`authkitMiddleware`, CSRF, refresh) | `MonoRepo/apps/app/src/start.ts` |
-| Route gate | `MonoRepo/apps/app/src/routes/_authenticated.tsx` |
-| Convex JWT → WorkOS JWKS | `MonoRepo/packages/backend/convex/auth.config.ts` |
-| Viewer / `orgQuery` / `orgMutation` | `MonoRepo/packages/backend/convex/lib/auth.ts` |
-| Architecture doc | `MonoRepo/docs/architecture/05-authentication.md` |
+| Role                                                   | Path                                                 |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| Headless auth (password, magic, OAuth, reset, step-up) | `MonoRepo/apps/app/src/lib/auth.ts`                  |
+| OAuth callback                                         | `MonoRepo/apps/app/src/routes/api/auth/callback.tsx` |
+| Middleware (`authkitMiddleware`, CSRF, refresh)        | `MonoRepo/apps/app/src/start.ts`                     |
+| Route gate                                             | `MonoRepo/apps/app/src/routes/_authenticated.tsx`    |
+| Convex JWT → WorkOS JWKS                               | `MonoRepo/packages/backend/convex/auth.config.ts`    |
+| Viewer / `orgQuery` / `orgMutation`                    | `MonoRepo/packages/backend/convex/lib/auth.ts`       |
+| Architecture doc                                       | `MonoRepo/docs/architecture/05-authentication.md`    |
 
 Patterns to copy:
 
@@ -245,16 +245,16 @@ Patterns to copy:
 
 Key files:
 
-| Role | Path |
-| --- | --- |
-| Checkout / cancel / interval | `MonoRepo/packages/backend/convex/lib/billing/checkoutActions.ts` |
-| Webhook apply + subscription mirror | `MonoRepo/packages/backend/convex/lib/billing/webhooks.ts` |
-| Entitlement gates | `MonoRepo/packages/backend/convex/lib/billing.ts` |
-| Pure entitlement rules | `MonoRepo/packages/shared/src/billing/entitlements.ts` |
-| HTTP ingress | `MonoRepo/packages/backend/convex/http.ts` (`POST /paddle-webhook`) |
-| Signature verify | `MonoRepo/packages/backend/convex/lib/paddleWebhook.ts` |
-| Price/env config | `MonoRepo/packages/backend/convex/lib/paddleConfig.ts` |
-| Docs | `MonoRepo/docs/architecture/07-billing.md` |
+| Role                                | Path                                                                |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| Checkout / cancel / interval        | `MonoRepo/packages/backend/convex/lib/billing/checkoutActions.ts`   |
+| Webhook apply + subscription mirror | `MonoRepo/packages/backend/convex/lib/billing/webhooks.ts`          |
+| Entitlement gates                   | `MonoRepo/packages/backend/convex/lib/billing.ts`                   |
+| Pure entitlement rules              | `MonoRepo/packages/shared/src/billing/entitlements.ts`              |
+| HTTP ingress                        | `MonoRepo/packages/backend/convex/http.ts` (`POST /paddle-webhook`) |
+| Signature verify                    | `MonoRepo/packages/backend/convex/lib/paddleWebhook.ts`             |
+| Price/env config                    | `MonoRepo/packages/backend/convex/lib/paddleConfig.ts`              |
+| Docs                                | `MonoRepo/docs/architecture/07-billing.md`                          |
 
 Patterns to copy:
 
@@ -275,27 +275,27 @@ Patterns to copy:
 
 TideGuard mapping (rename carefully):
 
-| SourceTrust unit | TideGuard candidate |
-| --- | --- |
-| Active projects qty | Waiting rooms / instances |
-| Custom domain add-on qty | Vanity hostnames |
+| SourceTrust unit          | TideGuard candidate                                         |
+| ------------------------- | ----------------------------------------------------------- |
+| Active projects qty       | Waiting rooms / instances                                   |
+| Custom domain add-on qty  | Vanity hostnames                                            |
 | Branch / security add-ons | Higher admit rate, dedicated (A), analytics retention, etc. |
 
 ### 3. Convex — tenancy + mirror
 
 Core tables to replicate (names can match):
 
-| Table | Purpose |
-| --- | --- |
-| `users` | `authSubject`, `email`, `activeOrgId` |
-| `organizations` | `slug`, suspended, billing terms, teardown |
-| `memberships` | `orgId`, `userId`, `role` |
-| `invitations` | email, role, token, TTL |
-| `subscriptions` | Paddle mirror (`status`, period, quantities) |
-| `payments` | Transaction mirror |
-| `processedWebhookEvents` | Idempotency |
-| `billingAlerts` | Drift / unbound subscription |
-| `customDomainHostnames` | Hostname lifecycle |
+| Table                          | Purpose                                                                    |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| `users`                        | `authSubject`, `email`, `activeOrgId`                                      |
+| `organizations`                | `slug`, suspended, billing terms, teardown                                 |
+| `memberships`                  | `orgId`, `userId`, `role`                                                  |
+| `invitations`                  | email, role, token, TTL                                                    |
+| `subscriptions`                | Paddle mirror (`status`, period, quantities)                               |
+| `payments`                     | Transaction mirror                                                         |
+| `processedWebhookEvents`       | Idempotency                                                                |
+| `billingAlerts`                | Drift / unbound subscription                                               |
+| `customDomainHostnames`        | Hostname lifecycle                                                         |
 | **`tideguardInstances`** (new) | `orgId`, tier (`shared`\|`dedicated`), slug, script name, hostname, status |
 
 Isolation pattern (copy this):
@@ -312,12 +312,12 @@ enforced tenancy.
 
 Key files:
 
-| Role | Path |
-| --- | --- |
-| Domain CRUD + poll + Paddle sync | `MonoRepo/packages/backend/convex/customDomains.ts` |
-| CF API | `MonoRepo/packages/backend/convex/lib/cloudflareCustomHostnames.ts` |
-| Host boundary | `MonoRepo/apps/app/src/lib/host-boundary.ts` |
-| Multi-tenancy doc | `MonoRepo/docs/architecture/06-multi-tenancy.md` |
+| Role                             | Path                                                                |
+| -------------------------------- | ------------------------------------------------------------------- |
+| Domain CRUD + poll + Paddle sync | `MonoRepo/packages/backend/convex/customDomains.ts`                 |
+| CF API                           | `MonoRepo/packages/backend/convex/lib/cloudflareCustomHostnames.ts` |
+| Host boundary                    | `MonoRepo/apps/app/src/lib/host-boundary.ts`                        |
+| Multi-tenancy doc                | `MonoRepo/docs/architecture/06-multi-tenancy.md`                    |
 
 Status machine:
 
@@ -343,11 +343,11 @@ Pending older than ~14 days → `failed`; re-poll failed rows periodically.
 
 Copy SourceTrust’s three-host idea:
 
-| Host | Job |
-| --- | --- |
-| Marketing apex (e.g. `tideguard.dev`) | Sales site (may already be TideGuard-Website) |
-| Product app (e.g. `app.tideguard.dev`) | WorkOS login, org, billing, instance controls |
-| Runtime / wait hosts (e.g. `*.tideguard.app` or customer vanity) | Visitor waiting room + token issuance |
+| Host                                                             | Job                                           |
+| ---------------------------------------------------------------- | --------------------------------------------- |
+| Marketing apex (e.g. `tideguard.dev`)                            | Sales site (may already be TideGuard-Website) |
+| Product app (e.g. `app.tideguard.dev`)                           | WorkOS login, org, billing, instance controls |
+| Runtime / wait hosts (e.g. `*.tideguard.app` or customer vanity) | Visitor waiting room + token issuance         |
 
 Rules:
 
@@ -391,18 +391,18 @@ sequenceDiagram
 
 ### 7. Edge-case cheat sheet (from SourceTrust)
 
-| Scenario | Behavior to replicate |
-| --- | --- |
-| Cancel | Access / existing room until `billingPeriodEnd`; block new rooms immediately |
-| Past due | Keep existing waiting room operable; block new activations; warn in UI |
-| Paused / expired | Block paid operator actions; product choice on whether visitors still admit |
-| Domain DNS fail | `failed` + `lastError`; re-poll; do not orphan CF hostnames |
-| CF create OK, DB insert fail | Delete CF hostname |
-| Paddle domain sync fail | Domain can still verify; retry qty sync |
-| Invite wrong account | Email mismatch error |
-| Duplicate Paddle sub | Alert + cancel duplicate |
-| Org deleting | Snapshot external ids (Paddle, CF, Worker script); retry teardown cron |
-| Auth on wait/custom host | Forbidden — redirect to product app |
+| Scenario                     | Behavior to replicate                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| Cancel                       | Access / existing room until `billingPeriodEnd`; block new rooms immediately |
+| Past due                     | Keep existing waiting room operable; block new activations; warn in UI       |
+| Paused / expired             | Block paid operator actions; product choice on whether visitors still admit  |
+| Domain DNS fail              | `failed` + `lastError`; re-poll; do not orphan CF hostnames                  |
+| CF create OK, DB insert fail | Delete CF hostname                                                           |
+| Paddle domain sync fail      | Domain can still verify; retry qty sync                                      |
+| Invite wrong account         | Email mismatch error                                                         |
+| Duplicate Paddle sub         | Alert + cancel duplicate                                                     |
+| Org deleting                 | Snapshot external ids (Paddle, CF, Worker script); retry teardown cron       |
+| Auth on wait/custom host     | Forbidden — redirect to product app                                          |
 
 ### 8. Env / secrets checklist
 
@@ -430,15 +430,15 @@ Templates to steal from: `MonoRepo/.env.example`, `MonoRepo/apps/app/.dev.vars.e
 
 ## Hosted vs OSS matrix
 
-| Capability | OSS self-host | Hosted |
-| --- | --- | --- |
-| Deploy | Customer Cloudflare account | Our account (B or A) |
-| Admin auth | Local claim / passwords / invites | WorkOS + Convex membership |
-| Cloudflare API token in setup | Customer pastes | We own zone / Turnstile |
-| `TOKEN_SECRET` | Customer sets | We mint |
-| Custom domain | Their zone / docs | Cloudflare for SaaS + guided DNS |
-| Billing | — | Paddle |
-| Upgrades | Customer redeploys | We fan-out User Workers / shared Worker |
+| Capability                    | OSS self-host                     | Hosted                                  |
+| ----------------------------- | --------------------------------- | --------------------------------------- |
+| Deploy                        | Customer Cloudflare account       | Our account (B or A)                    |
+| Admin auth                    | Local claim / passwords / invites | WorkOS + Convex membership              |
+| Cloudflare API token in setup | Customer pastes                   | We own zone / Turnstile                 |
+| `TOKEN_SECRET`                | Customer sets                     | We mint                                 |
+| Custom domain                 | Their zone / docs                 | Cloudflare for SaaS + guided DNS        |
+| Billing                       | —                                 | Paddle                                  |
+| Upgrades                      | Customer redeploys                | We fan-out User Workers / shared Worker |
 
 ---
 

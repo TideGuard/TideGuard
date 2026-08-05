@@ -8,6 +8,7 @@ import {
   turnstileBody,
 } from "./helpers/admin-setup";
 import { DEFAULT_QUEUE_CONFIG } from "../src/core/config";
+import { TOS_VERSION } from "../src/admin/tos";
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
@@ -105,6 +106,7 @@ describe("admin password and team users", () => {
           username: "teammate",
           password: "Another-horse1",
           confirmPassword: "Another-horse1",
+          acceptedTosVersion: TOS_VERSION,
           ...turnstileBody(),
         }),
       }),

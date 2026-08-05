@@ -16,10 +16,21 @@ import { isPasswordReady } from "../lib/setup-guidance";
 import { ensureTurnstile } from "../views/setup/helpers";
 import { PasswordChecklist } from "../views/dashboard/PasswordChecklist";
 import { RecoveryPhraseModal } from "../views/setup/RecoveryPhraseModal";
+import { TosAckPanel } from "../views/setup/TosAckPanel";
+import { TosGate } from "../views/setup/TosGate";
 import { Dashboard } from "./Dashboard";
 import { SetupWizard } from "./SetupWizard";
 
-type View = "loading" | "login" | "invite" | "wizard" | "dashboard";
+type View = "loading" | "login" | "invite" | "wizard" | "dashboard" | "tos";
+
+function isTosRequiredError(e: unknown): boolean {
+  if (!(e instanceof ApiError) || e.status !== 403) return false;
+  const code =
+    e.body && typeof e.body === "object" && e.body !== null && "error" in e.body
+      ? (e.body as { error?: { code?: string } }).error?.code
+      : undefined;
+  return code === "tos_required";
+}
 
 export function App() {
   const [view, setView] = useState<View>("loading");
@@ -59,6 +70,10 @@ export function App() {
         setState(dash);
         setView("dashboard");
       } catch (e) {
+        if (isTosRequiredError(e)) {
+          setView("tos");
+          return;
+        }
         if (e instanceof ApiError && e.status === 401) {
           setView("login");
           return;
@@ -71,16 +86,33 @@ export function App() {
     }
   }
 
-  async function afterAuth(bootData: BootstrapResponse) {
-    if (!bootData.setupComplete) {
+  async function afterAuth() {
+    const refreshed = await api<BootstrapResponse>("/api/admin/bootstrap");
+    setBootstrap(refreshed);
+
+    if (refreshed.acceptedTosVersion !== refreshed.tosVersion) {
+      setView("tos");
+      return;
+    }
+
+    if (!refreshed.setupComplete) {
       setView("wizard");
       return;
     }
-    const dash = await api<AdminState>(
-      `/api/admin/state?queue=${encodeURIComponent(bootData.defaultQueue)}`,
-    );
-    setState(dash);
-    setView("dashboard");
+
+    try {
+      const dash = await api<AdminState>(
+        `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
+      );
+      setState(dash);
+      setView("dashboard");
+    } catch (e) {
+      if (isTosRequiredError(e)) {
+        setView("tos");
+        return;
+      }
+      throw e;
+    }
   }
 
   if (view === "loading") {
@@ -88,6 +120,29 @@ export function App() {
       <Text c="dimmed" ta="center" py="xl">
         Loading…
       </Text>
+    );
+  }
+
+  if (view === "tos" && bootstrap) {
+    return (
+      <TosGate
+        tosVersion={bootstrap.tosVersion}
+        tosSummary={bootstrap.tosSummary}
+        tosUrl={bootstrap.tosUrl}
+        onAccepted={async () => {
+          const refreshed = await api<BootstrapResponse>("/api/admin/bootstrap");
+          setBootstrap(refreshed);
+          if (!refreshed.setupComplete) {
+            setView("wizard");
+            return;
+          }
+          const dash = await api<AdminState>(
+            `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
+          );
+          setState(dash);
+          setView("dashboard");
+        }}
+      />
     );
   }
 
@@ -119,10 +174,15 @@ export function App() {
       <InviteView
         sitekey={bootstrap.turnstileSitekey}
         token={inviteToken}
+        tosVersion={bootstrap.tosVersion}
+        tosSummary={bootstrap.tosSummary}
+        tosUrl={bootstrap.tosUrl}
         onSuccess={async () => {
           window.history.replaceState({}, "", "/admin/");
+          const refreshed = await api<BootstrapResponse>("/api/admin/bootstrap");
+          setBootstrap(refreshed);
           const dash = await api<AdminState>(
-            `/api/admin/state?queue=${encodeURIComponent(bootstrap.defaultQueue)}`,
+            `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
           );
           setState(dash);
           setView("dashboard");
@@ -152,7 +212,7 @@ export function App() {
       onSuccess={async () => {
         const bootData = bootstrap ?? (await api<BootstrapResponse>("/api/admin/bootstrap"));
         setBootstrap(bootData);
-        await afterAuth(bootData);
+        await afterAuth();
       }}
     />
   );
@@ -184,7 +244,7 @@ function LoginView({
 
   useEffect(() => {
     if (!requireTurnstile || !sitekey || !widgetRef.current) return;
-    ensureTurnstile().then(() => {
+    void ensureTurnstile().then(() => {
       if (!widgetRef.current || !window.turnstile) return;
       if (widgetId.current) window.turnstile.remove(widgetId.current);
       widgetId.current = window.turnstile.render(widgetRef.current, {
@@ -318,16 +378,23 @@ function LoginView({
 function InviteView({
   sitekey,
   token,
+  tosVersion,
+  tosSummary,
+  tosUrl,
   onSuccess,
 }: {
   sitekey: string | null;
   token: string;
+  tosVersion: number;
+  tosSummary: string;
+  tosUrl: string;
   onSuccess: () => Promise<void>;
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [tosAcked, setTosAcked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [recoveryMnemonic, setRecoveryMnemonic] = useState<string | null>(null);
@@ -336,7 +403,7 @@ function InviteView({
 
   useEffect(() => {
     if (!sitekey || !widgetRef.current) return;
-    ensureTurnstile().then(() => {
+    void ensureTurnstile().then(() => {
       if (!widgetRef.current || !window.turnstile) return;
       widgetId.current = window.turnstile.render(widgetRef.current, {
         sitekey,
@@ -385,6 +452,13 @@ function InviteView({
           autoComplete="new-password"
         />
         <PasswordChecklist password={password} confirm={confirmPassword} />
+        <TosAckPanel
+          tosVersion={tosVersion}
+          tosSummary={tosSummary}
+          tosUrl={tosUrl}
+          checked={tosAcked}
+          onCheckedChange={setTosAcked}
+        />
         <div ref={widgetRef} />
         {msg ? (
           <Text size="sm" c="red">
@@ -393,7 +467,7 @@ function InviteView({
         ) : null}
         <Button
           loading={busy}
-          disabled={!isPasswordReady(password, confirmPassword)}
+          disabled={!isPasswordReady(password, confirmPassword) || !tosAcked}
           onClick={() => {
             setBusy(true);
             setMsg(null);
@@ -405,6 +479,7 @@ function InviteView({
                 password,
                 confirmPassword,
                 turnstileToken,
+                acceptedTosVersion: tosVersion,
               }),
             })
               .then((result) => {

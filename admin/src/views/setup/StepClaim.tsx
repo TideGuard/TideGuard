@@ -3,6 +3,7 @@ import { useState } from "react";
 import { LINKS } from "../../lib/setup-guidance";
 import { PasswordChecklist } from "../dashboard/PasswordChecklist";
 import { TokenSecretAckModal } from "./TokenSecretAckModal";
+import { TosAckPanel } from "./TosAckPanel";
 
 export function StepClaim({
   claimed,
@@ -13,6 +14,9 @@ export function StepClaim({
   password,
   confirmPassword,
   busy,
+  tosVersion,
+  tosSummary,
+  tosUrl,
   onTokenSecretChange,
   onUsernameChange,
   onPasswordChange,
@@ -29,6 +33,9 @@ export function StepClaim({
   password: string;
   confirmPassword: string;
   busy: boolean;
+  tosVersion: number;
+  tosSummary: string;
+  tosUrl: string;
   onTokenSecretChange: (v: string) => void;
   onUsernameChange: (v: string) => void;
   onPasswordChange: (v: string) => void;
@@ -38,6 +45,7 @@ export function StepClaim({
   onNeedLogin: () => void;
 }) {
   const [secretAcked, setSecretAcked] = useState(false);
+  const [tosAcked, setTosAcked] = useState(false);
 
   if (claimed || signedInAs) {
     return (
@@ -96,7 +104,14 @@ export function StepClaim({
         autoComplete="new-password"
       />
       <PasswordChecklist password={password} confirm={confirmPassword} />
-      <Button loading={busy} onClick={onClaim} disabled={!secretAcked}>
+      <TosAckPanel
+        tosVersion={tosVersion}
+        tosSummary={tosSummary}
+        tosUrl={tosUrl}
+        checked={tosAcked}
+        onCheckedChange={setTosAcked}
+      />
+      <Button loading={busy} onClick={() => onClaim()} disabled={!secretAcked || !tosAcked}>
         Claim & continue
       </Button>
     </>

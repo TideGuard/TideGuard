@@ -173,8 +173,9 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 
 | Method | Path                                       | Auth                         | Notes                                                             |
 | ------ | ------------------------------------------ | ---------------------------- | ----------------------------------------------------------------- |
-| `GET`  | `/api/admin/bootstrap`                     | public                       | `{ setupComplete, claimed, turnstileSitekey, version, … }`        |
-| `POST` | `/api/admin/claim`                         | `TOKEN_SECRET` bearer (once) | Locks first admin + session; `setupComplete` stays false          |
+| `GET`  | `/api/admin/bootstrap`                     | public                       | Setup flags, version, `tosVersion` / `tosSummary` / `acceptedTosVersion` |
+| `POST` | `/api/admin/claim`                         | `TOKEN_SECRET` bearer (once) | Requires `acceptedTosVersion` (= current); locks first admin + session |
+| `POST` | `/api/admin/tos/accept`                    | session (stale ToS OK)       | Requires `acceptedTosVersion` (= current); stamps that version on the user |
 | `POST` | `/api/admin/setup/cloudflare/token-verify` | admin session                | Validates API token and seals it in setup-pending (no zone write) |
 
 | `POST` | `/api/admin/setup/cloudflare/verify` | admin session | Token + zone verify; stores setup pending |
@@ -202,7 +203,7 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `GET` | `/api/admin/invites` | session | Pending invites (no raw tokens) |
 | `POST` | `/api/admin/invites` | session | Create 72h invite; returns accept URL once |
 | `DELETE` | `/api/admin/invites/:id` | session | Revoke invite |
-| `POST` | `/api/admin/invites/accept` | public (rate-limited) | Token + username + password + Turnstile → session |
+| `POST` | `/api/admin/invites/accept` | public (rate-limited) | Token + username + password + Turnstile + `acceptedTosVersion` → session |
 | `PUT` | `/api/admin/password` | session | Change own password (current + new + confirm) |
 | `POST` | `/api/admin/password/recover` | public (rate-limited) | Recovery phrase + Turnstile → new password + session |
 | `POST` | `/api/admin/recovery/regenerate` | session | Regenerate recovery phrase (current password); returns phrase once |
