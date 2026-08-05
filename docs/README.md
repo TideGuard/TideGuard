@@ -11,6 +11,7 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 | [Protecting a domain or origin](protecting-origin.md) | Origin proxy, AOP, WAF/bot notes once DNS is on Cloudflare                        |
 | [Verifying admission](verifying-admission.md)         | Redirect URL, click-to-enter hold, how to verify tokens at the origin             |
 | [Architecture](architecture.md)                       | Engineers who need the Workers / Durable Object / KV story                        |
+| [Hosted SaaS](hosted-saas.md)                         | Planning: hosted tier, WorkOS/Paddle/Convex patterns, Starter vs Dedicated        |
 | [API](api.md)                                         | Anyone integrating join, status, tokens, or operator routes                       |
 | [Admin](admin.md)                                     | Operators using setup (Cloudflare + Turnstile), team invites, audit log, branding |
 | [Analytics](analytics.md)                             | Live metrics + 24h traffic chart / CSV export; geo-block hits                     |

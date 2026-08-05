@@ -17,7 +17,7 @@ npm install
 npm run setup
 ```
 
-`npm run setup` regenerates Worker Env types (`wrangler types`), creates `.dev.vars` with a generated `TOKEN_SECRET` if needed, prints the admin handoff checklist, and can start `npm run dev`. Use `npm run setup -- --yes` in scripts/CI (no prompts; does not start the long-running dev server unless you also pass `--dev`).
+`npm run setup` regenerates Worker Env types, creates `.dev.vars` with a generated `TOKEN_SECRET` if needed, prints the admin handoff checklist, and can start `npm run dev`. For scripts/CI: `npm run setup -- --yes` (add `--dev` to also start the server).
 
 ### Or do it by hand
 
@@ -47,14 +47,12 @@ After setup (or `npm run dev`):
 ### First-run admin
 
 1. Open `/` or `/admin` (unfinished setups redirect from `/`).
-2. **Claim:** paste your `TOKEN_SECRET` (from `.dev.vars` / setup output), choose a **username** and a strong password (8+, uppercase, digit or symbol). Write down the **12-word BIP39 recovery phrase** shown once — you need it for Forgot password. Claim locks the account in and signs you in — browser Back cannot recreate the password.
+2. **Claim:** paste your `TOKEN_SECRET` (from `.dev.vars` / setup output), choose a username and password, and save the **12-word recovery phrase** shown once (needed for Forgot password).
 3. **Cloudflare:** create an API token ([link in the wizard](https://dash.cloudflare.com/profile/api-tokens)) → **verify token** → zone/hostname verify (+ Fix if needed) → **SSL** Set/Skip → **domain** Attach/Skip.
 4. **Turnstile:** create the widget, complete the challenge → **Click to verify**.
 5. Choose queue / mode, then branding → Finish setup.
-6. Later logins use username + password + Turnstile. If you leave mid-wizard, **Sign in** resumes setup (claim is not shown again).
+6. Later logins use username + password + Turnstile. If you leave mid-wizard, **Sign in** resumes setup.
 7. **Demo mode:** after setup, origin proxy stays off — smoke-test at `/demo` (or `/wait?return=/demo` in an incognito window). When ready, use **Go live** in the control room (or Access → Origin) to enable the proxy and protect paths. See [protecting-origin.md](protecting-origin.md).
-
-Claim requires `Authorization: Bearer <TOKEN_SECRET>` so a public Workers URL cannot be taken by a stranger. Localhost is included on the Turnstile widget domains for `npm run dev`.
 
 Details: [admin.md](admin.md). Before production traffic: [launch-checklist.md](launch-checklist.md).
 
@@ -69,9 +67,9 @@ Generate a secret first (so you can copy it):
 - [tideguard.dev/token](https://tideguard.dev/token), or
 - `openssl rand -hex 32`
 
-When Deploy prompts for `TOKEN_SECRET`, paste that value (the field starts empty). Keep the same string for the `/admin` Claim step — the Deploy UI masks secrets.
+When Deploy prompts for `TOKEN_SECRET`, paste that value. Use the same string for the `/admin` Claim step.
 
-Capacity, admit rate, timeouts, origin URL, queue name, admission mode, Cloudflare API token, Zone ID, and Turnstile are **not** Deploy fields — configure those in `/admin` after deploy (queue knobs boot from code defaults).
+Only `TOKEN_SECRET` is a Deploy prompt. Capacity, origin, Turnstile, and the rest are configured in `/admin` after deploy.
 
 ### Option B: Wrangler CLI
 
@@ -80,7 +78,7 @@ npm run deploy
 npx wrangler secret put TOKEN_SECRET
 ```
 
-Placeholder KV IDs in `wrangler.jsonc` are intentional. Deploy-to-Cloudflare / Wrangler can replace them with real resource IDs on first provision.
+Placeholder KV IDs in `wrangler.jsonc` are intentional — Wrangler replaces them on first provision.
 
 After deploy:
 
