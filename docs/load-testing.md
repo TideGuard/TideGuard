@@ -48,7 +48,7 @@ Notes:
 - Full `npm test` excludes `test/load/**`
 - CI runs a small **in-memory** smoke (`LOAD_TEST_USERS=50`) on every PR via the `load-smoke` job
 - 100k **DO** joins will be slow and burn CPU; prefer in-memory for that scale
-- Production cost still hinges on adaptive polling (far-back check-ins are slower) and idle alarm cleanup
+- Production cost still hinges on timeslot status check-ins (≈750 RPS budget) and idle alarm cleanup
 
 ## Interpreting results
 

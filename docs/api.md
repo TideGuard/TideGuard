@@ -151,17 +151,21 @@ Admin session only. Temporary country block list (`CF-IPCountry`) with required 
 
 Query params:
 
-| Param                      | Default        | Meaning                                                         |
-| -------------------------- | -------------- | --------------------------------------------------------------- |
-| `visitors`                 | `5000000`      | Unique waiting-room visitors                                    |
-| `averageWaitSeconds`       | `900`          | Typical wait before admission                                   |
-| `pollingMode`              | `adaptive`     | `adaptive` (default) or `fixed` (advanced, not recommended)     |
-| `pollIntervalSeconds`      | ~`41.7` / `15` | Adaptive average, or fixed status poll when `pollingMode=fixed` |
-| `heartbeatIntervalSeconds` | `0` / `30`     | Unused in adaptive; fixed heartbeat when `pollingMode=fixed`    |
+| Param                      | Default         | Meaning                                                                            |
+| -------------------------- | --------------- | ---------------------------------------------------------------------------------- |
+| `visitors`                 | `5000000`       | Unique waiting-room visitors                                                       |
+| `averageWaitSeconds`       | `900`           | Typical wait before admission                                                      |
+| `pollingMode`              | `adaptive`      | `adaptive` (default timeslot) or `fixed` (advanced, not recommended)               |
+| `pollIntervalSeconds`      | timeslot / `15` | Adaptive: `max(5, ceil(visitors/750))`; fixed status poll when `pollingMode=fixed` |
+| `heartbeatIntervalSeconds` | `0` / `30`      | Unused in adaptive; fixed heartbeat when `pollingMode=fixed`                       |
 
-Interactive UI: `GET /cost` (adaptive by default; fixed intervals under advanced).
+Interactive UI: `GET /cost` (timeslot/adaptive by default; fixed intervals under advanced).
 
 ## Admin
+
+### Queue limits
+
+`GET` / `PUT` `/api/admin/queue-limits` — admin session. Read or set per-queue **max waiting visitors** (default `1000000`, range 1…50_000_000). `PUT` body: `{ queue?, maxWaitingVisitors, previousMaxWaitingVisitors, confirmChanges: true }` (A→B confirm; `previousMaxWaitingVisitors` must match the current value). When the cap is reached, public `/join` returns `503 queue_full`.
 
 ### `GET /admin`
 
@@ -215,8 +219,8 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `POST` | `/api/admin/pause` | session | Silent pause / resume |
 | `PUT` | `/api/admin/rate` | session | Set max outflow (`admitPerSecond` override) |
 | `DELETE` | `/api/admin/rate` | session | Clear rate override (env `ADMIT_PER_SECOND`) |
+| `GET`/`PUT` | `/api/admin/queue-limits` | session | Max waiting visitors (default 1M; Danger zone A→B confirm on PUT) |
 | `GET` | `/api/admin/traffic` | session | Inflow/outflow (~15s buckets, ~24h; `format=csv`) |
-| `PUT` | `/api/admin/webhooks` | session | Operator outbound webhooks |
 | `PUT` | `/api/admin/health` | session | Origin health config / override / clear override |
 | `POST` | `/api/admin/reset` | `TOKEN_SECRET` bearer only | Clears admin, CF link, Turnstile, pending, origin |
 

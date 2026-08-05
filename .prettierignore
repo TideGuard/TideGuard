@@ -2,6 +2,7 @@ node_modules
 dist
 .wrangler
 coverage
+.impeccable
 worker-configuration.d.ts
 package-lock.json
 CHANGELOG.md
