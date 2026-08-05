@@ -27,8 +27,8 @@ describe("cost calculator surfaces", () => {
     expect(body.estimate.pollingMode).toBe("adaptive");
     expect(body.estimate.heartbeatsPerVisitor).toBe(0);
     expect(body.estimate.workerRequests).toBeLessThan(465_000_000);
-    expect(body.estimate.totalUsd).toBeGreaterThan(20);
-    expect(body.estimate.totalUsd).toBeLessThan(200);
+    expect(body.estimate.totalUsd).toBeGreaterThan(5);
+    expect(body.estimate.totalUsd).toBeLessThan(100);
   });
 
   it("supports fixed polling mode for comparison", async () => {

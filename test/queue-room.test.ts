@@ -97,7 +97,7 @@ describe("QueueRoom FIFO behavior", () => {
     }
   });
 
-  it("expires silent waiting visitors on sweep", async () => {
+  it("expires waiting visitors who miss their timeslot on sweep", async () => {
     const stub = room("heartbeat-expiry");
     const cfg = config({
       maxConcurrentUsers: 1,
@@ -112,18 +112,20 @@ describe("QueueRoom FIFO behavior", () => {
       visitorId: "keeper",
       now: t0,
     });
-    await stub.join({
+    const silent = await stub.join({
       queue: "heartbeat-expiry",
       config: cfg,
       visitorId: "silent",
       now: t0,
     });
+    expect(silent.nextCheckAt).toBeGreaterThan(t0);
 
+    // Past next_check_at + 120s grace — sweep expires before status can renew.
     const expired = await stub.status({
       queue: "heartbeat-expiry",
       config: cfg,
       visitorId: "silent",
-      now: t0 + 10_000,
+      now: (silent.nextCheckAt ?? t0) + 121_000,
     });
     expect(expired).toEqual({ ok: false, code: "not_found" });
   });
