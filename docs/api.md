@@ -171,12 +171,12 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 
 ### Admin API
 
-| Method | Path                                       | Auth                         | Notes                                                             |
-| ------ | ------------------------------------------ | ---------------------------- | ----------------------------------------------------------------- |
-| `GET`  | `/api/admin/bootstrap`                     | public                       | Setup flags, version, `tosVersion` / `tosSummary` / `acceptedTosVersion` |
-| `POST` | `/api/admin/claim`                         | `TOKEN_SECRET` bearer (once) | Requires `acceptedTosVersion` (= current); locks first admin + session |
+| Method | Path                                       | Auth                         | Notes                                                                      |
+| ------ | ------------------------------------------ | ---------------------------- | -------------------------------------------------------------------------- |
+| `GET`  | `/api/admin/bootstrap`                     | public                       | Setup flags, version, `tosVersion` / `tosSummary` / `acceptedTosVersion`   |
+| `POST` | `/api/admin/claim`                         | `TOKEN_SECRET` bearer (once) | Requires `acceptedTosVersion` (= current); locks first admin + session     |
 | `POST` | `/api/admin/tos/accept`                    | session (stale ToS OK)       | Requires `acceptedTosVersion` (= current); stamps that version on the user |
-| `POST` | `/api/admin/setup/cloudflare/token-verify` | admin session                | Validates API token and seals it in setup-pending (no zone write) |
+| `POST` | `/api/admin/setup/cloudflare/token-verify` | admin session                | Validates API token and seals it in setup-pending (no zone write)          |
 
 | `POST` | `/api/admin/setup/cloudflare/verify` | admin session | Token + zone verify; stores setup pending |
 | `POST` | `/api/admin/setup/cloudflare/fix` | admin session | Orange-cloud DNS + IP Geolocation |

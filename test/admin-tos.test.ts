@@ -120,12 +120,12 @@ describe("admin Terms of Service", () => {
         headers: { cookie },
       }),
     );
-    expect(await json<{ acceptedTosVersion: number | null; tosVersion: number }>(boot)).toMatchObject(
-      {
-        acceptedTosVersion: 0,
-        tosVersion: TOS_VERSION,
-      },
-    );
+    expect(
+      await json<{ acceptedTosVersion: number | null; tosVersion: number }>(boot),
+    ).toMatchObject({
+      acceptedTosVersion: 0,
+      tosVersion: TOS_VERSION,
+    });
 
     const missing = await exports.default.fetch(
       new Request("https://example.com/api/admin/tos/accept", {
