@@ -246,7 +246,7 @@ export function renderCostCalculatorPage(): string {
             <legend>Polling mode</legend>
             <label class="mode-option">
               <input type="radio" name="pollingMode" value="adaptive" checked />
-              <span>Adaptive (default) — relative to place in line; status renews liveness</span>
+              <span>Timeslot / adaptive (default) — period grows with waiting depth; due status renews liveness</span>
             </label>
             <label class="mode-option">
               <input type="radio" name="pollingMode" value="fixed" />
