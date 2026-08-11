@@ -116,6 +116,28 @@ describe("opening schedule and silent pause", () => {
       // Repair is not a due renew — heartbeat timestamp stays at join.
       expect(repaired.visitor.lastHeartbeatAt).toBe(t0);
     }
+
+    // Heartbeat repair path after joining while open, then scheduling a future opensAt.
+    await stub.setOpensAt(null);
+    const lateJoin = await stub.join({
+      queue: "opens-repair",
+      config: cfg,
+      visitorId: "repair-hb-2",
+      now: t0 + 7_000,
+    });
+    expect(lateJoin.nextCheckAt).toBeLessThan(opensAt);
+    await stub.setOpensAt(opensAt);
+    const hb = await stub.heartbeat({
+      queue: "opens-repair",
+      config: cfg,
+      visitorId: "repair-hb-2",
+      now: t0 + 8_000,
+    });
+    expect(hb.ok).toBe(true);
+    if (hb.ok) {
+      expect(hb.visitor.nextCheckAt).toBeGreaterThanOrEqual(opensAt);
+      expect(hb.visitor.lastHeartbeatAt).toBe(t0 + 7_000);
+    }
   });
 
   it("silently blocks admits while paused", async () => {
