@@ -103,15 +103,15 @@ curl -s "http://localhost:8787/api/cost-estimate?visitors=100000&averageWaitSeco
 
 ## Configuration cheat sheet
 
-| Knob                             | Where                             | Notes                                                                 |
-| -------------------------------- | --------------------------------- | --------------------------------------------------------------------- |
-| Capacity / timeouts              | Code defaults (optional env vars) | Override with wrangler vars if needed; redeploy to apply              |
-| Admit rate (max outflow)         | `/admin` traffic panel            | Live override; env/code default when cleared                          |
-| Default admission mode           | `/admin` wizard or `POST /mode`   | Not a Deploy prompt; optional advanced env override                   |
-| Origin proxy                     | `/admin` Origin panel             | Stored in KV; not a Deploy prompt                                     |
-| Branding + depth display         | `/admin` → Save branding          | KV write on save only                                                 |
-| Admin password                   | `/admin` claim (step 1)           | Emergency reset with `TOKEN_SECRET` / Forgot password recovery phrase |
-| Cloudflare API token / Turnstile | `/admin` setup + Cloudflare panel | Required on first setup; seals token + Turnstile secret in KV         |
+| Knob                             | Where                             | Notes                                                                    |
+| -------------------------------- | --------------------------------- | ------------------------------------------------------------------------ |
+| Capacity / timeouts              | Code defaults (optional env vars) | Override with wrangler vars if needed; redeploy to apply                 |
+| Admit rate (max outflow)         | `/admin` traffic panel            | Live override; env/code default when cleared                             |
+| Default admission mode           | `/admin` wizard or `POST /mode`   | Not a Deploy prompt; optional advanced env override                      |
+| Origin proxy                     | `/admin` Origin panel             | Stored in KV; not a Deploy prompt                                        |
+| Branding + depth display         | `/admin` → Save branding          | KV write on save only; optional GA4 Measurement ID loads gtag on `/wait` |
+| Admin password                   | `/admin` claim (step 1)           | Emergency reset with `TOKEN_SECRET` / Forgot password recovery phrase    |
+| Cloudflare API token / Turnstile | `/admin` setup + Cloudflare panel | Required on first setup; seals token + Turnstile secret in KV            |
 
 Full var table: [README configuration](../README.md#configuration)  
 API reference: [api.md](api.md)

@@ -62,6 +62,7 @@ Use `/cost` for Cloudflare Workers paid-plan estimates (adaptive by default).
 - [ ] `GET /health` → 200
 - [ ] `/wait?queue=…&return=/demo` joins and eventually admits
 - [ ] Branding redirect path (if set) lands on the expected same-origin URL
+- [ ] Google Analytics Measurement ID (if set): `/wait` HTML includes gtag; Realtime shows a hit
 - [ ] Click-to-enter (if enabled): Continue issues cookie; hold expiry rejoins
 - [ ] `/demo` (or origin path) loads with a valid admission cookie
 - [ ] Origin sees `X-TideGuard-Visitor` when proxying (or your app verifies HMAC)

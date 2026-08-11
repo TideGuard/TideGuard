@@ -174,6 +174,7 @@ export function SetupWizard({
             admitHoldSeconds: hold,
             enterButtonLabel: "Continue",
             playTurnSound: true,
+            googleAnalyticsId: "",
           },
         }),
       });

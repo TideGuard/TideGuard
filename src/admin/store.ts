@@ -1,6 +1,7 @@
 import {
   DEFAULT_BRANDING,
   mergeBranding,
+  sanitizeGoogleAnalyticsId,
   sanitizeRedirectUrl,
   type WaitingRoomBranding,
 } from "../core/branding";
@@ -307,6 +308,7 @@ export function sanitizeBrandingInput(
     admitHoldSeconds,
     enterButtonLabel: clampText(merged.enterButtonLabel, 40) || DEFAULT_BRANDING.enterButtonLabel,
     playTurnSound: Boolean(merged.playTurnSound),
+    googleAnalyticsId: sanitizeGoogleAnalyticsId(merged.googleAnalyticsId),
   };
 }
 

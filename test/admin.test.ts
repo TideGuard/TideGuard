@@ -255,6 +255,7 @@ describe("admin setup wizard and dashboard", () => {
             showWaitingCount: false,
             requireClickToEnter: true,
             playTurnSound: true,
+            googleAnalyticsId: "G-ADMINTEST1",
           },
         }),
       }),
@@ -267,6 +268,9 @@ describe("admin setup wizard and dashboard", () => {
     expect(html).toContain("Updated message");
     expect(html).toContain("Play a sound when it is your turn");
     expect(html).toContain("const playTurnSound = true");
+    expect(html).toContain("https://www.googletagmanager.com/gtag/js?id=G-ADMINTEST1");
+    expect(html).toContain("gtag('config', 'G-ADMINTEST1')");
+    expect(wait.headers.get("content-security-policy")).toContain("googletagmanager.com");
 
     const sound = await exports.default.fetch(
       new Request("https://example.com/sounds/notification.mp3"),

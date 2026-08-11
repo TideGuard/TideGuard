@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Google Analytics** — optional GA4 Measurement ID (`G-…`) in Branding; injects Google’s official gtag snippet on `/wait` (CSP allowlists Google analytics hosts)
 - **Timeslot status check-ins** — fixed 750 RPS budget, ≥5s period; server assigns `nextCheckAt`; early `/status` is read-only; missed-slot expiry; default queue stay timeout 24h
 - **Max waiting visitors** cap (default 1M) with `/api/admin/queue-limits` and System → Danger zone A→B confirm
 - **Versioned operator Terms of Service** ([`TERMS.md`](TERMS.md), `TOS_VERSION`) — claim / invite / re-accept require `acceptedTosVersion` matching the current version; re-accept on login after a version bump; session APIs return `403 tos_required` until accepted; admin footer links Terms / License / Issues
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cost estimate adaptive path uses timeslot period (`max(5, ceil(waiting/750))`) instead of √progress average
 - **Lint:** ESLint + `typescript-eslint` → [Oxlint](https://oxc.rs/) (`oxlint` + `oxlint-tsgolint`) for TypeScript 7–compatible, type-aware linting
 - **TypeScript 7.0** as the project compiler (`tsc` / typecheck)
+- Dev dependencies bumped (notably `wrangler` 4.121, `@cloudflare/vitest-pool-workers` 0.21, `vite` 8.2.1, `oxlint` 1.78, `@scure/bip39` 2.3)
 
 ### Upgrade notes
 

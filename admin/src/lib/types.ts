@@ -94,6 +94,7 @@ export interface WaitingRoomBranding {
   admitHoldSeconds: number;
   enterButtonLabel: string;
   playTurnSound: boolean;
+  googleAnalyticsId: string;
 }
 
 export interface OriginSettings {

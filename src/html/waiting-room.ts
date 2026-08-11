@@ -1,5 +1,6 @@
 import type { WaitingRoomBranding } from "../core/branding";
 import { mergeBranding } from "../core/branding";
+import { waitingRoomAnalyticsSnippet } from "./waiting-room-analytics";
 import { waitingRoomClientScript } from "./waiting-room-client";
 import { waitingRoomStyles } from "./waiting-room-styles";
 import {
@@ -55,6 +56,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   const showWaitingCount = branding.showWaitingCount;
   const opensAt = options.opensAt ?? null;
   const playTurnSound = branding.playTurnSound && branding.requireClickToEnter;
+  const analytics = waitingRoomAnalyticsSnippet(branding.googleAnalyticsId);
 
   const styles = waitingRoomStyles({
     backgroundColor: escapeCss(branding.backgroundColor),
@@ -89,7 +91,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
-    <style>${styles}</style>
+    <style>${styles}</style>${analytics}
   </head>
   <body>
     <main>

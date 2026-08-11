@@ -34,6 +34,11 @@ export interface WaitingRoomBranding {
    * jingle when Continue appears so visitors notice in another tab.
    */
   playTurnSound: boolean;
+  /**
+   * GA4 Measurement ID (`G-…`). When set, `/wait` loads Google’s official gtag
+   * snippet. Empty string disables analytics.
+   */
+  googleAnalyticsId: string;
 }
 
 export const DEFAULT_BRANDING: WaitingRoomBranding = {
@@ -52,6 +57,7 @@ export const DEFAULT_BRANDING: WaitingRoomBranding = {
   admitHoldSeconds: 120,
   enterButtonLabel: "Continue",
   playTurnSound: false,
+  googleAnalyticsId: "",
 };
 
 export function mergeBranding(
@@ -76,4 +82,19 @@ export function sanitizeRedirectUrl(value: unknown, fallback = ""): string {
     return fallback;
   }
   return trimmed;
+}
+
+/** GA4 Measurement ID only (`G-…`); anything else → empty. */
+export function sanitizeGoogleAnalyticsId(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (!/^G-[A-Z0-9]+$/i.test(trimmed)) {
+    return "";
+  }
+  return trimmed.toUpperCase();
 }

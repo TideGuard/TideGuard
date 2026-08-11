@@ -14,6 +14,9 @@ import { dispatchWebhook, maybeDispatchDepthWebhook } from "../src/admin/webhook
 import { TRAFFIC_RETENTION_MS } from "../src/queue/traffic";
 import { resolveWaitingRoomLocale, waitingRoomStrings } from "../src/html/waiting-room-i18n";
 import { renderWaitingRoom } from "../src/html/waiting-room";
+import { sanitizeBrandingInput } from "../src/admin/store";
+import { sanitizeGoogleAnalyticsId } from "../src/core/branding";
+import { securityHeaders } from "../src/auth/cookies";
 import { parsePathPrefixes } from "../src/core/origin";
 
 function mockEnv(store = new Map<string, string>()): Env {
@@ -177,5 +180,39 @@ describe("waiting room i18n / a11y / embed", () => {
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("tideguard-embed-height");
+    expect(html).not.toContain("googletagmanager.com/gtag/js");
+  });
+
+  it("injects Google Analytics gtag when Measurement ID is set", () => {
+    const html = renderWaitingRoom({
+      queue: "default",
+      branding: { googleAnalyticsId: "G-ABC123XYZ" },
+    });
+    expect(html).toContain("https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ");
+    expect(html).toContain("gtag('config', 'G-ABC123XYZ')");
+  });
+});
+
+describe("Google Analytics Measurement ID", () => {
+  it("sanitizes valid G- IDs and clears junk", () => {
+    expect(sanitizeGoogleAnalyticsId("g-abc123")).toBe("G-ABC123");
+    expect(sanitizeGoogleAnalyticsId("G-XYZ9")).toBe("G-XYZ9");
+    expect(sanitizeGoogleAnalyticsId("")).toBe("");
+    expect(sanitizeGoogleAnalyticsId("UA-12345-1")).toBe("");
+    expect(sanitizeGoogleAnalyticsId("<script>")).toBe("");
+    expect(sanitizeGoogleAnalyticsId("GTM-XXXX")).toBe("");
+  });
+
+  it("persists Measurement ID through branding sanitize", () => {
+    const branding = sanitizeBrandingInput({ googleAnalyticsId: "g-test99" });
+    expect(branding.googleAnalyticsId).toBe("G-TEST99");
+    expect(sanitizeBrandingInput({ googleAnalyticsId: "not-an-id" }).googleAnalyticsId).toBe("");
+  });
+
+  it("allows Google Analytics hosts in CSP", () => {
+    const csp = String(securityHeaders()["content-security-policy"]);
+    expect(csp).toContain("https://www.googletagmanager.com");
+    expect(csp).toContain("https://*.google-analytics.com");
+    expect(csp).toContain("https://*.analytics.google.com");
   });
 });

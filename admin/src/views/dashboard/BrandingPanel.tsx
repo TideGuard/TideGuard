@@ -54,6 +54,7 @@ export function BrandingPanel({
   const [redirectUrl, setRedirectUrl] = useState(b.redirectUrl ?? "");
   const [hold, setHold] = useState(Number(b.admitHoldSeconds ?? 60));
   const [enterLabel, setEnterLabel] = useState(b.enterButtonLabel ?? "Continue");
+  const [googleAnalyticsId, setGoogleAnalyticsId] = useState(b.googleAnalyticsId ?? "");
 
   const draft: WaitingRoomBranding = {
     title,
@@ -71,6 +72,7 @@ export function BrandingPanel({
     redirectUrl,
     admitHoldSeconds: hold,
     enterButtonLabel: enterLabel,
+    googleAnalyticsId,
   };
 
   return (
@@ -166,6 +168,13 @@ export function BrandingPanel({
             label="Enter button label"
             value={enterLabel}
             onChange={(e) => setEnterLabel(e.currentTarget.value)}
+          />
+          <TextInput
+            label="Google Analytics Measurement ID"
+            description="Optional GA4 ID (G-…). Loads Google’s tag on the waiting room. You are responsible for consent and cookie policy."
+            placeholder="G-XXXXXXXX"
+            value={googleAnalyticsId}
+            onChange={(e) => setGoogleAnalyticsId(e.currentTarget.value)}
           />
           <Group>
             <Button

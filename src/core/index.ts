@@ -21,7 +21,12 @@ export {
   createEtaCalculator,
   defaultEtaCalculator,
 } from "./eta";
-export { DEFAULT_BRANDING, mergeBranding, sanitizeRedirectUrl } from "./branding";
+export {
+  DEFAULT_BRANDING,
+  mergeBranding,
+  sanitizeGoogleAnalyticsId,
+  sanitizeRedirectUrl,
+} from "./branding";
 export {
   estimateWaitingRoomCost,
   DEFAULT_CLOUDFLARE_PAID_RATES,
