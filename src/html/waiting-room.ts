@@ -80,6 +80,11 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
     playTurnSound,
     opensAt,
     initialVisitorId,
+    copy: {
+      opensIn: copy.opensIn,
+      queueOpenKeepPage: copy.queueOpenKeepPage,
+      nextUpdateHint: copy.nextUpdateHint,
+    },
   });
 
   return `<!DOCTYPE html>
@@ -128,9 +133,9 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
             : ""
         }
       </div>
+      <p class="status" id="open-status" data-tone="ok" role="status" aria-live="polite"></p>
       <p class="status" id="status" data-tone="ok" role="status" aria-live="polite">Connecting to queue…</p>
       <p class="hint" id="checkin-hint" hidden></p>
-      <p class="status" id="open-status" data-tone="ok" role="status" aria-live="polite" hidden></p>
       <div class="enter-panel" id="enter-panel" hidden>
         <p class="hold" id="hold-text">${escapeHtml(copy.statusHold)}</p>
         <button type="button" id="enter-btn">${escapeHtml(branding.enterButtonLabel)}</button>

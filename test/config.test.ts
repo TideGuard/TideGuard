@@ -22,7 +22,24 @@ describe("parseQueueConfig", () => {
       admissionMode: "queue",
       requireClickToEnter: false,
       admitHoldSeconds: 120,
+      missedSlotGraceSeconds: 120,
     });
+  });
+
+  it("parses missed-slot grace override", () => {
+    const config = parseQueueConfig({
+      MISSED_SLOT_GRACE_SECONDS: "60",
+    });
+    expect(config.missedSlotGraceSeconds).toBe(60);
+  });
+
+  it("rejects missed-slot grace outside 30…900", () => {
+    expect(() => parseQueueConfig({ MISSED_SLOT_GRACE_SECONDS: "10" })).toThrow(
+      /MISSED_SLOT_GRACE_SECONDS/,
+    );
+    expect(() => parseQueueConfig({ MISSED_SLOT_GRACE_SECONDS: "901" })).toThrow(
+      /MISSED_SLOT_GRACE_SECONDS/,
+    );
   });
 
   it("parses lottery admission mode", () => {

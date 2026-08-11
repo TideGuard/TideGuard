@@ -39,12 +39,12 @@ Enter a queue.
 
 Every successful join sets cookie `tg_ticket` (visitor ownership proof). `/status`, `/leave`, and `/heartbeat` require that cookie to match the visitor id and queue.
 
-Waiting responses include `admissionMode` (`queue` | `lottery`), while waiting `nextCheckAt` (absolute unix ms, second-aligned timeslot) and `nextPollAfterMs` (compat delay hint). Depth fields (`waiting`, `ahead`, `behind`, `lotteryOdds`) are included **only** when branding `showWaitingCount` (“Show place in line”) is enabled. Public join/status never expose pause, health, `opensAt`, or capacity.
+Waiting responses include `admissionMode` (`queue` | `lottery`), while waiting `nextCheckAt` (absolute unix ms, second-aligned timeslot — the visitor’s **next place/ETA update**), `nextPollAfterMs` (compat delay hint), `admissionOpen` (whether the opening schedule allows admission), and `opensAt` (**only while still scheduled closed**). Depth fields (`waiting`, `ahead`, `behind`, `lotteryOdds`) are included **only** when branding `showWaitingCount` (“Show place in line”) is enabled. Public join/status never expose pause, health, or capacity.
 
 - **Queue Mode** — `position` (1-based FIFO), optional `ahead` / `behind` / `#X of Y`, `estimatedWaitSeconds`, `nextCheckAt`
 - **Lottery Mode** — `position` omitted, `estimatedWaitSeconds`, optional `lotteryOdds` / `waiting`, plus `nextCheckAt`
 
-Check-in timeslots keep Durable Object status load near a fixed **750 RPS** budget (`periodSec = max(5, ceil(waiting/750))`). Front-of-line waiters stay on a 5s period. Early `/status` before `nextCheckAt` is **read-only** (does not renew liveness). The built-in waiting room (full page and `?embed=1`) schedules on `nextCheckAt`. Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended.
+Check-in timeslots keep Durable Object status load near a fixed **750 RPS** budget (`periodSec = max(5, ceil(waiting/750))`). Front-of-line waiters stay on a 5s period **after the room is open**. When `opensAt` is still in the future, `nextCheckAt` is deferred to a timeslot **at or after** `opensAt` (full-depth period, no front-band rush), so status polls do not run until admission can start. Early `/status` before `nextCheckAt` is **read-only** (does not renew liveness). The built-in waiting room (full page and `?embed=1`) schedules on `nextCheckAt`. Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended.
 
 If a valid `tg_ticket` cookie is already present for the queue, join **resumes that visitor** and ignores a conflicting body `visitorId` (same-browser multi-tab). When the waiting-row cap is reached, `/join` returns `503 queue_full`.
 
@@ -165,7 +165,7 @@ Interactive UI: `GET /cost` (timeslot/adaptive by default; fixed intervals under
 
 ### Queue limits
 
-`GET` / `PUT` `/api/admin/queue-limits` — admin session. Read or set per-queue **max waiting visitors** (default `1000000`, range 1…50_000_000). `PUT` body: `{ queue?, maxWaitingVisitors, previousMaxWaitingVisitors, confirmChanges: true }` (A→B confirm; `previousMaxWaitingVisitors` must match the current value). When the cap is reached, public `/join` returns `503 queue_full`.
+`GET` / `PUT` `/api/admin/queue-limits` — admin session. Read or set per-queue **max waiting visitors** (default `1000000`, range 1…50_000_000) and **missed-slot grace** seconds (default `120`, range 30…900). `PUT` body: `{ queue?, maxWaitingVisitors, previousMaxWaitingVisitors, missedSlotGraceSeconds, previousMissedSlotGraceSeconds, confirmChanges: true }` (A→B confirm; previous values must match). When the waiting cap is reached, public `/join` returns `503 queue_full`. Missed-slot grace is how long after a due `nextCheckAt` a silent waiter stays before expiry (never shorter than one check-in period).
 
 ### `GET /admin`
 
@@ -219,7 +219,7 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `POST` | `/api/admin/pause` | session | Silent pause / resume |
 | `PUT` | `/api/admin/rate` | session | Set max outflow (`admitPerSecond` override) |
 | `DELETE` | `/api/admin/rate` | session | Clear rate override (env `ADMIT_PER_SECOND`) |
-| `GET`/`PUT` | `/api/admin/queue-limits` | session | Max waiting visitors (default 1M; Danger zone A→B confirm on PUT) |
+| `GET`/`PUT` | `/api/admin/queue-limits` | session | Max waiting visitors + missed-slot grace (Danger zone A→B confirm on PUT) |
 | `GET` | `/api/admin/traffic` | session | Inflow/outflow (~15s buckets, ~24h; `format=csv`) |
 | `PUT` | `/api/admin/health` | session | Origin health config / override / clear override |
 | `POST` | `/api/admin/reset` | `TOKEN_SECRET` bearer only | Clears admin, CF link, Turnstile, pending, origin |

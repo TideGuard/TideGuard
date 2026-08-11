@@ -11,6 +11,11 @@ export interface WaitingRoomClientConfig {
   playTurnSound: boolean;
   opensAt: number | null;
   initialVisitorId: string;
+  copy: {
+    opensIn: string;
+    queueOpenKeepPage: string;
+    nextUpdateHint: string;
+  };
 }
 
 /**
@@ -29,7 +34,9 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         const showWaitingCount = ${JSON.stringify(config.showWaitingCount)};
         const requireClickToEnter = ${JSON.stringify(config.requireClickToEnter)};
         const playTurnSound = ${JSON.stringify(config.playTurnSound)};
-        const opensAt = ${JSON.stringify(config.opensAt)};
+        let scheduledOpensAt = ${JSON.stringify(config.opensAt)};
+        let admissionOpen = !scheduledOpensAt || scheduledOpensAt <= Date.now();
+        const copy = ${JSON.stringify(config.copy)};
         const storageKey = "tg_visitor:" + queue;
         const soundPrefKey = "tg_turn_sound:" + queue;
         const turnSoundUrl = "/sounds/notification.mp3";
@@ -104,26 +111,57 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           } catch (_) {}
         }
 
-        function paintOpenCountdown() {
-          if (!opensAt || !el.openStatus) return;
-          const remaining = Math.max(0, Math.ceil((opensAt - Date.now()) / 1000));
-          if (remaining <= 0) {
-            el.openStatus.hidden = true;
-            if (openTimer) { clearInterval(openTimer); openTimer = null; }
+        function paintRoomPhase() {
+          if (!el.openStatus) return;
+          const opensAt = scheduledOpensAt;
+          const open = admissionOpen || !opensAt || opensAt <= Date.now();
+          if (!open && opensAt) {
+            const remaining = Math.max(0, Math.ceil((opensAt - Date.now()) / 1000));
+            if (remaining <= 0) {
+              admissionOpen = true;
+              scheduledOpensAt = null;
+              el.openStatus.hidden = false;
+              el.openStatus.textContent = copy.queueOpenKeepPage;
+              if (openTimer) { clearInterval(openTimer); openTimer = null; }
+              return;
+            }
+            el.openStatus.hidden = false;
+            const mins = Math.floor(remaining / 60);
+            const secs = remaining % 60;
+            const when = new Date(opensAt).toLocaleString();
+            el.openStatus.textContent = mins > 0
+              ? (copy.opensIn + " " + mins + "m " + String(secs).padStart(2, "0") + "s · " + when)
+              : (copy.opensIn + " " + secs + "s · " + when);
             return;
           }
           el.openStatus.hidden = false;
-          const mins = Math.floor(remaining / 60);
-          const secs = remaining % 60;
-          const when = new Date(opensAt).toLocaleString();
-          el.openStatus.textContent = mins > 0
-            ? ("Opens in " + mins + "m " + String(secs).padStart(2, "0") + "s · " + when)
-            : ("Opens in " + secs + "s · " + when);
+          el.openStatus.textContent = copy.queueOpenKeepPage;
+          if (openTimer) { clearInterval(openTimer); openTimer = null; }
         }
 
-        if (opensAt && opensAt > Date.now()) {
-          paintOpenCountdown();
-          openTimer = setInterval(paintOpenCountdown, 1000);
+        function noteRoomPhase(data) {
+          if (typeof data.admissionOpen === "boolean") {
+            admissionOpen = data.admissionOpen;
+          }
+          if (data.opensAt != null && Number.isFinite(Number(data.opensAt))) {
+            scheduledOpensAt = Number(data.opensAt);
+            admissionOpen = false;
+          } else if (data.admissionOpen === true) {
+            scheduledOpensAt = null;
+          }
+          paintRoomPhase();
+          if (!admissionOpen && scheduledOpensAt && scheduledOpensAt > Date.now()) {
+            if (!openTimer) {
+              openTimer = setInterval(paintRoomPhase, 1000);
+            }
+          }
+        }
+
+        if (!admissionOpen && scheduledOpensAt && scheduledOpensAt > Date.now()) {
+          paintRoomPhase();
+          openTimer = setInterval(paintRoomPhase, 1000);
+        } else {
+          paintRoomPhase();
         }
 
         function setStatus(text, tone) {
@@ -229,6 +267,7 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           el.eta.textContent = formatEta(data.estimatedWaitSeconds);
           updateProgress(data);
           notePollHint(data);
+          noteRoomPhase(data);
           paintCheckIn();
         }
 
@@ -253,9 +292,9 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           const remaining = nextCheckAtMs - Date.now();
           el.checkin.textContent = formatCheckInRemaining(remaining);
           if (el.checkinHint) {
-            if (remaining > 60_000) {
+            if (remaining > 15_000) {
               el.checkinHint.hidden = false;
-              el.checkinHint.textContent = "Place in line updates at your next check-in.";
+              el.checkinHint.textContent = copy.nextUpdateHint;
             } else {
               el.checkinHint.hidden = true;
             }

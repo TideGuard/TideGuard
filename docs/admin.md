@@ -68,7 +68,7 @@ Toggles that change visitor-visible or security-sensitive behavior (pause, mode,
 React SPA (Mantine + Chart.js) served from Workers Static Assets under `/admin/`. Dark teal theme (Source Sans). Layout:
 
 - **Sticky event toolbar** — waiting/admitted chips, pause, admit rate (+ clear override), force-admit, Pass queue
-- **Tabs** — Live (metrics + 24h traffic chart / CSV), Admission (schedule + health), Branding (preview + embed snippet), Access (origin + Cloudflare Access guidance), Cloudflare (+ Turnstile), Team, System (activity, updates, webhooks, TOKEN_SECRET rotation, max waiting visitors / Danger zone, factory reset)
+- **Tabs** — Live (metrics + 24h traffic chart / CSV), Admission (schedule + health), Branding (preview + embed snippet), Access (origin + Cloudflare Access guidance), Cloudflare (+ Turnstile), Team, System (activity, updates, webhooks, TOKEN_SECRET rotation, max waiting / missed-slot grace / Danger zone, factory reset)
 
 Build with `npm run build:admin` (also runs before `npm run dev` / `npm run deploy`).
 

@@ -15,6 +15,8 @@ export interface WaitingRoomStrings {
   checkInLabel: string;
   openNow: string;
   opensIn: string;
+  queueOpenKeepPage: string;
+  nextUpdateHint: string;
   soundLabel: string;
   statusJoining: string;
   statusWaiting: string;
@@ -30,9 +32,11 @@ export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings>
     lotteryLabel: "Your chance",
     waitLabel: "Est. wait",
     depthLabel: "Waiting",
-    checkInLabel: "Next check-in",
+    checkInLabel: "Next update",
     openNow: "Admissions are open",
     opensIn: "Opens in",
+    queueOpenKeepPage: "Queue is open — keep this page open",
+    nextUpdateHint: "Keep this page open. Your place updates at the time above.",
     soundLabel: "Play a sound when it is your turn",
     statusJoining: "Joining the line…",
     statusWaiting: "Waiting for your turn…",

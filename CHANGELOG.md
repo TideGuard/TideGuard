@@ -14,11 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Google Analytics** — optional GA4 Measurement ID (`G-…`) in Branding; injects Google’s official gtag snippet on `/wait` (CSP allowlists Google analytics hosts)
 - **Timeslot status check-ins** — fixed 750 RPS budget, ≥5s period; server assigns `nextCheckAt`; early `/status` is read-only; missed-slot expiry; default queue stay timeout 24h
 - **Max waiting visitors** cap (default 1M) with `/api/admin/queue-limits` and System → Danger zone A→B confirm
+- **Missed-slot grace** override (default **120s**, clamp **30…900**) via queue config / `MISSED_SLOT_GRACE_SECONDS` and System → Danger zone (`/api/admin/queue-limits`)
 - **Versioned operator Terms of Service** ([`TERMS.md`](TERMS.md), `TOS_VERSION`) — claim / invite / re-accept require `acceptedTosVersion` matching the current version; re-accept on login after a version bump; session APIs return `403 tos_required` until accepted; admin footer links Terms / License / Issues
 
 ### Changed
 
 - Waiting UI / embed / API: schedule on `nextCheckAt`; optional **#X of Y** via Branding “Show place in line”
+- **Pre-open check-ins** — when `opensAt` is in the future, `nextCheckAt` is assigned at/after opening (full-depth timeslot spread); status does not renew liveness until then
+- **Room phase + next update** — public join/status include `admissionOpen` and (while scheduled closed) `opensAt`; waiting UI shows “Queue is open — keep this page open” / opening countdown plus **Next update** from `nextCheckAt`
 - Cost estimate adaptive path uses timeslot period (`max(5, ceil(waiting/750))`) instead of √progress average
 - **Lint:** ESLint + `typescript-eslint` → [Oxlint](https://oxc.rs/) (`oxlint` + `oxlint-tsgolint`) for TypeScript 7–compatible, type-aware linting
 - **TypeScript 7.0** as the project compiler (`tsc` / typecheck)
@@ -27,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Upgrade notes
 
 - Default `QUEUE_TIMEOUT_SECONDS` is now **86400** (24h). Override only if you intentionally want shorter max stays; too-short values expire deep-queue waiters between timeslots.
+- Missed-slot grace defaults to **120s** (unchanged behavior). Optionally tune in System → Danger zone or `MISSED_SLOT_GRACE_SECONDS` (30–900); lower values expire backgrounded waiters sooner.
 - After upgrading to a build that introduces or bumps `TOS_VERSION`, each admin must accept the Terms of Service in `/admin` before the control room APIs work again.
 - Contributors: use `npm run lint` (Oxlint), not ESLint. Node 24+ and TypeScript 7 are required for local typecheck/lint.
 

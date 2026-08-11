@@ -32,9 +32,19 @@ export interface QueueRoomVisitorView {
   nextPollAfterMs: number | null;
   /**
    * Absolute unix ms (second-aligned) when this visitor should next call /status.
-   * Null when not waiting.
+   * Null when not waiting. This is the visitor's next place/ETA update.
    */
   nextCheckAt: number | null;
+  /**
+   * True when the opening schedule allows admission (`opensAt` null or in the past).
+   * Does not reflect silent pause or origin-health throttle.
+   */
+  admissionOpen: boolean;
+  /**
+   * Future opening time (unix ms) while the room is still scheduled closed; null once open
+   * or when no schedule is set.
+   */
+  opensAt: number | null;
 }
 
 export interface QueueJoinRequest {

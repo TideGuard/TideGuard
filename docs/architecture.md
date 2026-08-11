@@ -120,8 +120,9 @@ Cloudflare bills for Worker requests, Durable Object requests/duration, KV opera
 | Admin users                     | Named accounts in `admin:config.users[]`; invites hashed with 72h TTL         |
 | Activity audit                  | KV ring `admin:audit` (~200 events); no secrets                               |
 | Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV           |
-| Status polling                  | Timeslots (`nextCheckAt`); early status is read-only; density ≤ ~750/s        |
+| Status polling                  | Timeslots (`nextCheckAt`); early status is read-only; density ≤ ~750/s; deferred until `opensAt` when scheduled |
 | Heartbeat                       | Due status renews liveness; dedicated `/heartbeat` is fallback for long gaps  |
+| Missed-slot expiry              | After `nextCheckAt` + grace (default 120s, admin 30…900; ≥ one period)        |
 
 Avoid:
 
@@ -141,7 +142,7 @@ admitRate = baseAdmitPerSecond × healthRateMultiplier   // 1.0 | slowFactor | 0
 
 | Control       | Persistence                                           | Visitor surface                           |
 | ------------- | ----------------------------------------------------- | ----------------------------------------- |
-| `opensAt`     | DO meta                                               | Countdown injected into `/wait` HTML only |
+| `opensAt`     | DO meta                                               | Countdown / “Queue is open” on `/wait`; floors `nextCheckAt`; public API exposes `admissionOpen` + `opensAt` while closed |
 | Manual pause  | DO meta                                               | Silent — no join/status fields            |
 | Origin health | DO meta + alarm probes (`src/health/origin-probe.ts`) | Silent; ops via admin / `/metrics`        |
 

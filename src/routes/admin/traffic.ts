@@ -1,4 +1,9 @@
-import { parseAdmissionMode } from "../../core/config";
+import {
+  DEFAULT_MISSED_SLOT_GRACE_SECONDS,
+  MAX_MISSED_SLOT_GRACE_SECONDS,
+  MIN_MISSED_SLOT_GRACE_SECONDS,
+  parseAdmissionMode,
+} from "../../core/config";
 import { ApiError, jsonOk } from "../../core/errors";
 import { sanitizeRedirectUrl } from "../../core/branding";
 import { buildAccessCookie, buildAdmissionClaims, signAccessToken } from "../../auth";
@@ -346,33 +351,49 @@ export async function handleAdminHealth(request: Request, env: Env): Promise<Res
   return jsonOk(result);
 }
 
-/** Read waiting-row cap (danger-zone). */
+/** Read waiting-row cap and missed-slot grace (danger-zone). */
 export async function handleAdminQueueLimitsGet(request: Request, env: Env): Promise<Response> {
   await requireAdminSession(request, env);
   const url = new URL(request.url);
   const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
   const room = getQueueRoom(env, queue);
-  const { maxWaitingVisitors } = await room.getMaxWaitingVisitors();
+  const limits = await room.getQueueLimits();
   return jsonOk({
     queue,
-    maxWaitingVisitors,
+    maxWaitingVisitors: limits.maxWaitingVisitors,
     defaultMaxWaitingVisitors: DEFAULT_MAX_WAITING_VISITORS,
+    missedSlotGraceSeconds: limits.missedSlotGraceSeconds,
+    defaultMissedSlotGraceSeconds: DEFAULT_MISSED_SLOT_GRACE_SECONDS,
+    minMissedSlotGraceSeconds: MIN_MISSED_SLOT_GRACE_SECONDS,
+    maxMissedSlotGraceSeconds: MAX_MISSED_SLOT_GRACE_SECONDS,
   });
 }
 
 /**
- * Update waiting-row cap. Requires explicit confirmChanges and A→B acknowledgement
- * of the previous value (danger zone).
+ * Update waiting-row cap and/or missed-slot grace. Requires explicit confirmChanges
+ * and A→B acknowledgement of previous values (danger zone).
  */
 export async function handleAdminQueueLimitsPut(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
   const body = await readJsonBody(request);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
-  const next = Math.floor(Number(body.maxWaitingVisitors));
-  if (!Number.isFinite(next) || next < 1 || next > 50_000_000) {
+  const nextMax = Math.floor(Number(body.maxWaitingVisitors));
+  const nextGrace = Math.floor(Number(body.missedSlotGraceSeconds));
+  if (!Number.isFinite(nextMax) || nextMax < 1 || nextMax > 50_000_000) {
     throw new ApiError(
       "bad_request",
       "maxWaitingVisitors must be an integer from 1 to 50000000",
+      400,
+    );
+  }
+  if (
+    !Number.isFinite(nextGrace) ||
+    nextGrace < MIN_MISSED_SLOT_GRACE_SECONDS ||
+    nextGrace > MAX_MISSED_SLOT_GRACE_SECONDS
+  ) {
+    throw new ApiError(
+      "bad_request",
+      `missedSlotGraceSeconds must be an integer from ${MIN_MISSED_SLOT_GRACE_SECONDS} to ${MAX_MISSED_SLOT_GRACE_SECONDS}`,
       400,
     );
   }
@@ -384,7 +405,7 @@ export async function handleAdminQueueLimitsPut(request: Request, env: Env): Pro
     );
   }
   const room = getQueueRoom(env, queue);
-  const before = await room.getMaxWaitingVisitors();
+  const before = await room.getQueueLimits();
   if (Number(body.previousMaxWaitingVisitors) !== before.maxWaitingVisitors) {
     throw new ApiError(
       "conflict",
@@ -392,29 +413,60 @@ export async function handleAdminQueueLimitsPut(request: Request, env: Env): Pro
       409,
     );
   }
-  const result = await room.setMaxWaitingVisitors({ maxWaitingVisitors: next });
+  if (Number(body.previousMissedSlotGraceSeconds) !== before.missedSlotGraceSeconds) {
+    throw new ApiError(
+      "conflict",
+      "previousMissedSlotGraceSeconds does not match the current value — reload and try again",
+      409,
+    );
+  }
+
+  const changed: Array<{ field: string; from: number; to: number }> = [];
+  let maxWaitingVisitors = before.maxWaitingVisitors;
+  let missedSlotGraceSeconds = before.missedSlotGraceSeconds;
+
+  if (nextMax !== before.maxWaitingVisitors) {
+    const result = await room.setMaxWaitingVisitors({ maxWaitingVisitors: nextMax });
+    maxWaitingVisitors = result.maxWaitingVisitors;
+    changed.push({
+      field: "maxWaitingVisitors",
+      from: before.maxWaitingVisitors,
+      to: result.maxWaitingVisitors,
+    });
+  }
+  if (nextGrace !== before.missedSlotGraceSeconds) {
+    const result = await room.setMissedSlotGraceSeconds({ missedSlotGraceSeconds: nextGrace });
+    missedSlotGraceSeconds = result.missedSlotGraceSeconds;
+    changed.push({
+      field: "missedSlotGraceSeconds",
+      from: before.missedSlotGraceSeconds,
+      to: result.missedSlotGraceSeconds,
+    });
+  }
+
+  if (changed.length === 0) {
+    throw new ApiError("bad_request", "No queue limit changes to apply", 400);
+  }
+
   await appendAuditEvent(env, {
     actorId: actor.id,
     actorUsername: actor.username,
     action: "queue.limits",
-    summary: `Max waiting visitors ${before.maxWaitingVisitors} → ${result.maxWaitingVisitors}`,
+    summary: changed.map((c) => `${c.field} ${c.from} → ${c.to}`).join("; "),
     meta: {
       queue,
-      from: before.maxWaitingVisitors,
-      to: result.maxWaitingVisitors,
+      changed: changed.map((c) => `${c.field}:${c.from}->${c.to}`).join(","),
     },
   });
   return jsonOk({
     queue,
-    maxWaitingVisitors: result.maxWaitingVisitors,
+    maxWaitingVisitors,
     defaultMaxWaitingVisitors: DEFAULT_MAX_WAITING_VISITORS,
-    changed: [
-      {
-        field: "maxWaitingVisitors",
-        from: before.maxWaitingVisitors,
-        to: result.maxWaitingVisitors,
-      },
-    ],
+    missedSlotGraceSeconds,
+    defaultMissedSlotGraceSeconds: DEFAULT_MISSED_SLOT_GRACE_SECONDS,
+    minMissedSlotGraceSeconds: MIN_MISSED_SLOT_GRACE_SECONDS,
+    maxMissedSlotGraceSeconds: MAX_MISSED_SLOT_GRACE_SECONDS,
+    changed,
   });
 }
 

@@ -51,6 +51,7 @@ describe("queue REST API", () => {
 
     expect(body).toMatchObject({ visitorId: "u1", status: "admitted" });
     expect(body.accessToken).toBeTypeOf("string");
+    expect((body as { admissionOpen?: boolean }).admissionOpen).toBe(true);
     expect(cookiesFrom(response)).toContain("tg_ticket=");
     expect(cookiesFrom(response)).toContain("tg_access=");
 
@@ -122,6 +123,8 @@ describe("queue REST API", () => {
       ahead?: number;
       behind?: number;
       accessToken?: string;
+      admissionOpen?: boolean;
+      nextCheckAt?: number;
     }>(waiting);
     expect(waitingBody.status).toBe("waiting");
     expect(waitingBody.position).toBe(1);
@@ -129,6 +132,8 @@ describe("queue REST API", () => {
     expect(waitingBody.waiting).toBe(1);
     expect(waitingBody.ahead).toBe(0);
     expect(waitingBody.behind).toBe(0);
+    expect(waitingBody.admissionOpen).toBe(true);
+    expect(waitingBody.nextCheckAt).toBeTypeOf("number");
     expect(waitingBody.accessToken).toBeUndefined();
 
     const beat = await exports.default.fetch(

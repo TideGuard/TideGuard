@@ -5,25 +5,32 @@ import { Panel } from "./Panel";
 import { notifyError, notifyOk } from "./notify";
 import { TokenSecretAckModal } from "../setup/TokenSecretAckModal";
 
+type QueueLimits = {
+  maxWaitingVisitors: number;
+  missedSlotGraceSeconds: number;
+  minMissedSlotGraceSeconds?: number;
+  maxMissedSlotGraceSeconds?: number;
+};
+
 export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: () => void }) {
   const [tokenSecret, setTokenSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [secretAcked, setSecretAcked] = useState(false);
-  const [maxWaiting, setMaxWaiting] = useState<number | null>(null);
+  const [limits, setLimits] = useState<QueueLimits | null>(null);
   const [draftMaxWaiting, setDraftMaxWaiting] = useState<number | null>(null);
+  const [draftGrace, setDraftGrace] = useState<number | null>(null);
   const [limitsBusy, setLimitsBusy] = useState(false);
   const [confirmAck, setConfirmAck] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    void api<{ maxWaitingVisitors: number }>(
-      `/api/admin/queue-limits?queue=${encodeURIComponent(queue)}`,
-    )
+    void api<QueueLimits>(`/api/admin/queue-limits?queue=${encodeURIComponent(queue)}`)
       .then((data) => {
         if (cancelled) return;
-        setMaxWaiting(data.maxWaitingVisitors);
+        setLimits(data);
         setDraftMaxWaiting(data.maxWaitingVisitors);
+        setDraftGrace(data.missedSlotGraceSeconds);
       })
       .catch(() => {
         /* ignore — panel still usable for reset */
@@ -33,8 +40,17 @@ export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: ()
     };
   }, [queue]);
 
-  const changed =
-    maxWaiting !== null && draftMaxWaiting !== null && Math.floor(draftMaxWaiting) !== maxWaiting;
+  const maxChanged =
+    limits !== null &&
+    draftMaxWaiting !== null &&
+    Math.floor(draftMaxWaiting) !== limits.maxWaitingVisitors;
+  const graceChanged =
+    limits !== null &&
+    draftGrace !== null &&
+    Math.floor(draftGrace) !== limits.missedSlotGraceSeconds;
+  const changed = maxChanged || graceChanged;
+  const graceMin = limits?.minMissedSlotGraceSeconds ?? 30;
+  const graceMax = limits?.maxMissedSlotGraceSeconds ?? 900;
 
   return (
     <Panel
@@ -53,7 +69,9 @@ export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: ()
       <Stack>
         <Alert color="orange" title="DO NOT EDIT UNLESS YOU KNOW WHAT YOU ARE DOING">
           THESE CHANGES COULD BE BREAKING. Lowering max waiting visitors rejects new joins when
-          full. Status RPS budget and check-in period are fixed in code and cannot be changed here.
+          full. Lowering missed-slot grace expires silent waiters sooner (background tabs / flaky
+          networks). Status RPS budget and check-in period are fixed in code and cannot be changed
+          here.
         </Alert>
 
         <NumberInput
@@ -68,12 +86,32 @@ export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: ()
           max={50_000_000}
           step={1000}
         />
+        <NumberInput
+          label="Missed-slot grace (seconds)"
+          description={`After a waiter’s check-in timeslot is due, how long before they expire if silent (default 120; ${graceMin}–${graceMax}).`}
+          value={draftGrace ?? undefined}
+          onChange={(v) => {
+            setDraftGrace(typeof v === "number" ? v : Number(v) || null);
+            setConfirmAck(false);
+          }}
+          min={graceMin}
+          max={graceMax}
+          step={15}
+        />
         {changed ? (
           <Alert color="red" title="Review changes (A → B)">
             <List size="sm">
-              <List.Item>
-                maxWaitingVisitors: {maxWaiting} → {Math.floor(draftMaxWaiting!)}
-              </List.Item>
+              {maxChanged ? (
+                <List.Item>
+                  maxWaitingVisitors: {limits!.maxWaitingVisitors} → {Math.floor(draftMaxWaiting!)}
+                </List.Item>
+              ) : null}
+              {graceChanged ? (
+                <List.Item>
+                  missedSlotGraceSeconds: {limits!.missedSlotGraceSeconds} →{" "}
+                  {Math.floor(draftGrace!)}
+                </List.Item>
+              ) : null}
             </List>
             <Button
               mt="sm"
@@ -89,27 +127,39 @@ export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: ()
         <Button
           color="orange"
           loading={limitsBusy}
-          disabled={!changed || !confirmAck || draftMaxWaiting === null}
+          disabled={!changed || !confirmAck || draftMaxWaiting === null || draftGrace === null}
           onClick={() => {
-            if (!changed || maxWaiting === null || draftMaxWaiting === null) return;
+            if (!changed || limits === null || draftMaxWaiting === null || draftGrace === null)
+              return;
             setLimitsBusy(true);
             void api("/api/admin/queue-limits", {
               method: "PUT",
               body: JSON.stringify({
                 queue,
                 maxWaitingVisitors: Math.floor(draftMaxWaiting),
-                previousMaxWaitingVisitors: maxWaiting,
+                previousMaxWaitingVisitors: limits.maxWaitingVisitors,
+                missedSlotGraceSeconds: Math.floor(draftGrace),
+                previousMissedSlotGraceSeconds: limits.missedSlotGraceSeconds,
                 confirmChanges: true,
               }),
             })
               .then((data) => {
-                const next = Number(
+                const nextMax = Number(
                   (data as { maxWaitingVisitors?: number }).maxWaitingVisitors ?? draftMaxWaiting,
                 );
-                setMaxWaiting(next);
-                setDraftMaxWaiting(next);
+                const nextGrace = Number(
+                  (data as { missedSlotGraceSeconds?: number }).missedSlotGraceSeconds ??
+                    draftGrace,
+                );
+                setLimits({
+                  ...limits,
+                  maxWaitingVisitors: nextMax,
+                  missedSlotGraceSeconds: nextGrace,
+                });
+                setDraftMaxWaiting(nextMax);
+                setDraftGrace(nextGrace);
                 setConfirmAck(false);
-                notifyOk(`Max waiting visitors set to ${next}`);
+                notifyOk("Queue limits saved");
               })
               .catch(notifyError)
               .finally(() => setLimitsBusy(false));

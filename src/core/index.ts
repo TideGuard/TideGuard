@@ -1,5 +1,14 @@
 export { isDemoMode } from "./demo-mode";
-export { parseQueueConfig, ConfigError, DEFAULT_QUEUE_CONFIG, parseAdmissionMode } from "./config";
+export {
+  parseQueueConfig,
+  ConfigError,
+  DEFAULT_QUEUE_CONFIG,
+  parseAdmissionMode,
+  DEFAULT_MISSED_SLOT_GRACE_SECONDS,
+  MIN_MISSED_SLOT_GRACE_SECONDS,
+  MAX_MISSED_SLOT_GRACE_SECONDS,
+  clampMissedSlotGraceSeconds,
+} from "./config";
 export {
   parseOriginConfigFromEnv,
   mergeOriginConfig,

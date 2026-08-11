@@ -1,4 +1,8 @@
 import type { AdmissionMode, QueueConfig } from "../core/types";
+import {
+  DEFAULT_MISSED_SLOT_GRACE_SECONDS,
+  clampMissedSlotGraceSeconds,
+} from "../core/config";
 
 /** Default Durable Object alarm period for admit + expiry sweeps. */
 export const QUEUE_ALARM_INTERVAL_MS = 1_000;
@@ -188,9 +192,16 @@ export function nextCheckAtMs(input: {
   return (earliestSec + delta) * 1000;
 }
 
-/** Grace after next_check_at before a waiting visitor is expired for missing their slot. */
-export function missedSlotGraceMs(periodSec: number): number {
-  return Math.max(120_000, Math.max(1, Math.floor(periodSec)) * 1000);
+/**
+ * Grace after `next_check_at` before a waiting visitor is expired for missing their slot.
+ * At least the configured grace; never shorter than one full check-in period.
+ */
+export function missedSlotGraceMs(
+  periodSec: number,
+  graceSeconds: number = DEFAULT_MISSED_SLOT_GRACE_SECONDS,
+): number {
+  const baseMs = clampMissedSlotGraceSeconds(graceSeconds) * 1000;
+  return Math.max(baseMs, Math.max(1, Math.floor(periodSec)) * 1000);
 }
 
 /** Whether a status request may renew liveness / advance the slot. */

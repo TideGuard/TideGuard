@@ -173,5 +173,8 @@ describe("timeslot check-in", () => {
     expect(isCheckInDue(next + 1, next)).toBe(true);
     expect(missedSlotGraceMs(5)).toBe(120_000);
     expect(missedSlotGraceMs(180)).toBe(180_000);
+    expect(missedSlotGraceMs(5, 60)).toBe(60_000);
+    expect(missedSlotGraceMs(5, 10)).toBe(30_000); // clamped to min 30
+    expect(missedSlotGraceMs(5, 999)).toBe(900_000); // clamped to max 900
   });
 });

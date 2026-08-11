@@ -38,6 +38,11 @@ export interface QueueConfig {
   requireClickToEnter: boolean;
   /** Hold window for unconfirmed admits, in seconds. */
   admitHoldSeconds: number;
+  /**
+   * Seconds after `nextCheckAt` before a silent waiting visitor is expired.
+   * Clamped 30…900; default 120. Admins may override per queue (Danger zone).
+   */
+  missedSlotGraceSeconds: number;
 }
 
 export interface QueueVisitor {
@@ -120,8 +125,14 @@ export interface JoinResult {
    * visitors; clients may ignore it when using fixed-interval overrides.
    */
   nextPollAfterMs?: number | null;
-  /** Absolute unix ms (second-aligned) for the next status check-in. */
+  /** Absolute unix ms (second-aligned) for the next status check-in / place update. */
   nextCheckAt?: number | null;
+  /**
+   * True when the opening schedule allows admission. Silent pause / health stay omitted.
+   */
+  admissionOpen?: boolean;
+  /** Future opening time while still scheduled closed; omitted/null once open. */
+  opensAt?: number | null;
   accessToken?: string;
 }
 
@@ -139,8 +150,10 @@ export interface StatusResult {
   entered?: boolean;
   holdSecondsRemaining?: number;
   nextPollAfterMs?: number | null;
-  /** Absolute unix ms (second-aligned) for the next status check-in. */
+  /** Absolute unix ms (second-aligned) for the next status check-in / place update. */
   nextCheckAt?: number | null;
+  admissionOpen?: boolean;
+  opensAt?: number | null;
   accessToken?: string;
 }
 

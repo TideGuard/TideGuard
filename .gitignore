@@ -12,3 +12,4 @@ coverage/
 !.dev.vars.example
 worker-configuration.d.ts
 README.local.md
+.impeccable/hook.cache.json

@@ -53,7 +53,8 @@ paths:
       description: |
         Successful joins set HttpOnly `tg_ticket`. Admitted joins also set `tg_access`.
         Depth fields appear only when branding `showWaitingCount` is enabled.
-        Waiting responses include `nextCheckAt` (timeslot) and `nextPollAfterMs` (compat).
+        Waiting responses include `nextCheckAt` (timeslot / next place update), `admissionOpen`,
+        optional `opensAt` while still scheduled closed, and `nextPollAfterMs` (compat).
       requestBody:
         required: true
         content:
@@ -696,7 +697,14 @@ components:
         nextCheckAt:
           type: integer
           format: int64
-          description: Absolute unix ms (second-aligned) for the next status check-in while waiting.
+          description: Absolute unix ms (second-aligned) for this visitor's next status update while waiting.
+        admissionOpen:
+          type: boolean
+          description: True when the opening schedule allows admission (opensAt null or past). Does not reflect silent pause or health throttle.
+        opensAt:
+          type: integer
+          format: int64
+          description: Future opening time (unix ms) while still scheduled closed; omitted once open.
         accessToken:
           type: string
         waiting:

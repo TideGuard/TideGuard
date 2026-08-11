@@ -130,6 +130,48 @@ describe("QueueRoom FIFO behavior", () => {
     expect(expired).toEqual({ ok: false, code: "not_found" });
   });
 
+  it("honors a shorter missed-slot grace from queue config / DO override", async () => {
+    const stub = room("grace-override");
+    const cfg = config({
+      maxConcurrentUsers: 1,
+      missedSlotGraceSeconds: 30,
+    });
+    await stub.setMissedSlotGraceSeconds({ missedSlotGraceSeconds: 30 });
+
+    const t0 = 2_000_000;
+    await stub.join({
+      queue: "grace-override",
+      config: cfg,
+      visitorId: "keeper",
+      now: t0,
+    });
+    const silent = await stub.join({
+      queue: "grace-override",
+      config: cfg,
+      visitorId: "silent",
+      now: t0,
+    });
+    const due = silent.nextCheckAt ?? t0;
+
+    // Early read-only status (before the slot) must not renew or expire.
+    const early = await stub.status({
+      queue: "grace-override",
+      config: cfg,
+      visitorId: "silent",
+      now: due - 1_000,
+    });
+    expect(early.ok).toBe(true);
+
+    // Past due + 30s grace — expired (default 120s would still keep them).
+    const expired = await stub.status({
+      queue: "grace-override",
+      config: cfg,
+      visitorId: "silent",
+      now: due + 31_000,
+    });
+    expect(expired).toEqual({ ok: false, code: "not_found" });
+  });
+
   it("updates heartbeats for waiting visitors when the timeslot is due", async () => {
     const stub = room("heartbeat-ok");
     const cfg = config({ maxConcurrentUsers: 1 });

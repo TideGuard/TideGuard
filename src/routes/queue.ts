@@ -44,6 +44,8 @@ type VisitorView = {
   showWaitingCount?: boolean;
   nextPollAfterMs?: number | null;
   nextCheckAt?: number | null;
+  admissionOpen?: boolean;
+  opensAt?: number | null;
 };
 
 function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean }) {
@@ -55,6 +57,8 @@ function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean
     estimatedWaitSeconds: visitor.estimatedWaitSeconds,
     admissionMode: visitor.admissionMode,
     entered: visitor.entered,
+    admissionOpen: visitor.admissionOpen ?? true,
+    ...(visitor.opensAt != null ? { opensAt: visitor.opensAt } : {}),
     ...(visitor.holdSecondsRemaining !== null
       ? { holdSecondsRemaining: visitor.holdSecondsRemaining }
       : {}),

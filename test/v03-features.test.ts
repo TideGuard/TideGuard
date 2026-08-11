@@ -180,6 +180,8 @@ describe("waiting room i18n / a11y / embed", () => {
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("tideguard-embed-height");
+    expect(html).toContain("Next update");
+    expect(html).toContain("Queue is open — keep this page open");
     expect(html).not.toContain("googletagmanager.com/gtag/js");
   });
 

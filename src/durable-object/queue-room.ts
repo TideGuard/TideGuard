@@ -13,12 +13,20 @@ import {
   MIN_CHECK_IN_PERIOD_SEC,
   QUEUE_ALARM_INTERVAL_MS,
   admissionsForTick,
+  checkInPeriodSeconds,
   effectiveCheckInPeriodSeconds,
   isCheckInDue,
+  missedSlotGraceMs,
   nextCheckAtMs,
   openSlots,
   waitingPosition,
 } from "../queue/engine";
+import {
+  DEFAULT_MISSED_SLOT_GRACE_SECONDS,
+  MAX_MISSED_SLOT_GRACE_SECONDS,
+  MIN_MISSED_SLOT_GRACE_SECONDS,
+  clampMissedSlotGraceSeconds,
+} from "../core/config";
 import { TRAFFIC_BUCKET_MS, TRAFFIC_RETENTION_MS, parseAdmitPerSecond } from "../queue/traffic";
 import { buildMetrics } from "../queue/types";
 import type {
@@ -166,6 +174,12 @@ export class QueueRoom extends DurableObject<Env> {
     }
 
     if (visitor.status === "waiting") {
+      if (this.repairCheckInBeforeOpen(visitor, request.config, now)) {
+        return {
+          ok: true,
+          visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
+        };
+      }
       if (isCheckInDue(now, visitor.next_check_at)) {
         this.renewCheckIn(visitor, request.config, now);
         return {
@@ -251,7 +265,14 @@ export class QueueRoom extends DurableObject<Env> {
       return { ok: false, code: "not_found" };
     }
 
-    // Heartbeat is a fallback for long gaps; only write when the timeslot is due.
+    // Heartbeat is a fallback for long gaps; only write when the timeslot is due
+    // (or when repairing a pre-open slot that must wait until opensAt).
+    if (this.repairCheckInBeforeOpen(visitor, request.config, now)) {
+      return {
+        ok: true,
+        visitor: this.toView(this.getVisitor(request.visitorId)!, request.config, now),
+      };
+    }
     if (isCheckInDue(now, visitor.next_check_at)) {
       this.renewCheckIn(visitor, request.config, now);
       return {
@@ -556,11 +577,13 @@ export class QueueRoom extends DurableObject<Env> {
     const stayCutoff = now - effective.queueTimeoutSeconds * 1000;
     const holdCutoff = now - effective.admitHoldSeconds * 1000;
     const tokenCutoff = now - effective.tokenTTLSeconds * 1000;
-    const missedSlotCutoff = now - 120_000;
+    const waiting = this.countByStatus("waiting");
+    const periodSec = checkInPeriodSeconds(waiting);
+    const missedSlotCutoff = now - missedSlotGraceMs(periodSec, effective.missedSlotGraceSeconds);
     const legacyHeartbeatCutoff = now - effective.heartbeatTimeoutSeconds * 1000;
 
     let expired = 0;
-    // Waiting liveness is timeslot-based: miss next_check_at by >120s → expire.
+    // Waiting liveness is timeslot-based: miss next_check_at by > grace → expire.
     // Pre-migration rows (null next_check_at) keep heartbeat timeout.
     expired += this.ctx.storage.sql.exec(
       `UPDATE visitors SET status = 'expired'
@@ -786,12 +809,18 @@ export class QueueRoom extends DurableObject<Env> {
     const holdRaw = this.getMeta("admit_hold_seconds");
     const hold = holdRaw !== null ? Number(holdRaw) : config.admitHoldSeconds;
     const rateOverride = this.getAdmitPerSecondOverride();
+    const graceRaw = this.getMeta("missed_slot_grace_seconds");
+    const grace =
+      graceRaw !== null && graceRaw !== ""
+        ? Number(graceRaw)
+        : (config.missedSlotGraceSeconds ?? DEFAULT_MISSED_SLOT_GRACE_SECONDS);
     return {
       ...config,
       admitPerSecond: rateOverride ?? config.admitPerSecond,
       requireClickToEnter: click === null ? config.requireClickToEnter : click === "1",
       admitHoldSeconds:
         Number.isFinite(hold) && hold >= 15 && hold <= 900 ? hold : config.admitHoldSeconds,
+      missedSlotGraceSeconds: clampMissedSlotGraceSeconds(grace),
     };
   }
 
@@ -1017,6 +1046,9 @@ export class QueueRoom extends DurableObject<Env> {
       pollAfterMs = Math.max(0, nextCheckAt - now);
     }
 
+    const opensAt = this.getOpensAt();
+    const admissionOpen = opensAt === null || now >= opensAt;
+
     return {
       id: visitor.id,
       status,
@@ -1035,6 +1067,8 @@ export class QueueRoom extends DurableObject<Env> {
       showWaitingCount: showDepth,
       nextPollAfterMs: pollAfterMs,
       nextCheckAt,
+      admissionOpen,
+      opensAt: admissionOpen ? null : opensAt,
     };
   }
 
@@ -1049,6 +1083,17 @@ export class QueueRoom extends DurableObject<Env> {
     return DEFAULT_MAX_WAITING_VISITORS;
   }
 
+  async getQueueLimits(): Promise<{
+    maxWaitingVisitors: number;
+    missedSlotGraceSeconds: number;
+  }> {
+    return {
+      maxWaitingVisitors: this.maxWaitingVisitors(),
+      missedSlotGraceSeconds: this.missedSlotGraceSeconds(),
+    };
+  }
+
+  /** @deprecated Prefer getQueueLimits — kept for callers that only need the waiting cap. */
   async getMaxWaitingVisitors(): Promise<{ maxWaitingVisitors: number }> {
     return { maxWaitingVisitors: this.maxWaitingVisitors() };
   }
@@ -1064,6 +1109,58 @@ export class QueueRoom extends DurableObject<Env> {
     return { maxWaitingVisitors: n };
   }
 
+  async setMissedSlotGraceSeconds(request: {
+    missedSlotGraceSeconds: number;
+  }): Promise<{ missedSlotGraceSeconds: number }> {
+    const n = Math.floor(request.missedSlotGraceSeconds);
+    if (
+      !Number.isFinite(n) ||
+      n < MIN_MISSED_SLOT_GRACE_SECONDS ||
+      n > MAX_MISSED_SLOT_GRACE_SECONDS
+    ) {
+      throw new Error("missed_slot_grace_seconds out of range");
+    }
+    this.setMeta("missed_slot_grace_seconds", String(n));
+    await this.ensureAlarm();
+    return { missedSlotGraceSeconds: n };
+  }
+
+  private missedSlotGraceSeconds(): number {
+    const raw = this.getMeta("missed_slot_grace_seconds");
+    if (raw !== null && raw !== "") {
+      return clampMissedSlotGraceSeconds(Number(raw));
+    }
+    const remembered = this.getMeta("config");
+    if (remembered) {
+      try {
+        const parsed = JSON.parse(remembered) as Partial<QueueConfig>;
+        if (parsed.missedSlotGraceSeconds != null) {
+          return clampMissedSlotGraceSeconds(parsed.missedSlotGraceSeconds);
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    return DEFAULT_MISSED_SLOT_GRACE_SECONDS;
+  }
+
+  /**
+   * Earliest instant a waiting visitor should be asked to check in.
+   * Before opensAt, defer to the opening time so status traffic waits for admission.
+   */
+  private checkInEarliestMs(now: number): number {
+    const opensAt = this.getOpensAt();
+    if (opensAt !== null && opensAt > now) {
+      return opensAt;
+    }
+    return now;
+  }
+
+  /** Period while the room is still closed: full depth budget (no front-band 5s rush at open). */
+  private checkInPeriodBeforeOpen(waiting: number): number {
+    return checkInPeriodSeconds(waiting);
+  }
+
   private assignCheckIn(
     visitorKey: string,
     waiting: number,
@@ -1075,19 +1172,58 @@ export class QueueRoom extends DurableObject<Env> {
       minLeadMs?: number;
     },
   ): number {
-    const periodSec = effectiveCheckInPeriodSeconds({
-      waiting,
-      position: opts.position,
-      admissionMode: this.admissionMode(config),
-      estimatedWaitSeconds: opts.estimatedWaitSeconds,
-      admitPerSecond: this.effectiveAdmitPerSecond(config, now),
-    });
+    const earliest = this.checkInEarliestMs(now);
+    const beforeOpen = earliest > now;
+    const periodSec = beforeOpen
+      ? this.checkInPeriodBeforeOpen(waiting)
+      : effectiveCheckInPeriodSeconds({
+          waiting,
+          position: opts.position,
+          admissionMode: this.admissionMode(config),
+          estimatedWaitSeconds: opts.estimatedWaitSeconds,
+          admitPerSecond: this.effectiveAdmitPerSecond(config, now),
+        });
     return nextCheckAtMs({
-      now,
+      now: earliest,
       periodSec,
       visitorKey,
-      minLeadMs: opts.minLeadMs ?? 0,
+      // Lead only applies after open; before open the floor is opensAt itself.
+      minLeadMs: beforeOpen ? 0 : (opts.minLeadMs ?? 0),
     });
+  }
+
+  /**
+   * If a waiter still has a next_check_at before opensAt (legacy / schedule moved),
+   * push them onto a post-open timeslot without treating it as a due renew.
+   * @returns true when the row was rewritten
+   */
+  private repairCheckInBeforeOpen(
+    visitor: VisitorRow,
+    config: QueueConfig,
+    now: number,
+  ): boolean {
+    const opensAt = this.getOpensAt();
+    if (opensAt === null || now >= opensAt) {
+      return false;
+    }
+    if (visitor.next_check_at != null && visitor.next_check_at >= opensAt) {
+      return false;
+    }
+
+    const waiting = this.countByStatus("waiting");
+    const mode = this.admissionMode(config);
+    const position =
+      mode === "lottery" ? null : waitingPosition(this.waitingAhead(visitor.sequence));
+    const nextCheckAt = this.assignCheckIn(visitor.id, waiting, config, now, {
+      position,
+      estimatedWaitSeconds: 0,
+    });
+    this.ctx.storage.sql.exec(
+      `UPDATE visitors SET next_check_at = ? WHERE id = ? AND status = 'waiting'`,
+      nextCheckAt,
+      visitor.id,
+    );
+    return true;
   }
 
   private renewCheckIn(visitor: VisitorRow, config: QueueConfig, now: number): void {
@@ -1105,17 +1241,9 @@ export class QueueRoom extends DurableObject<Env> {
         position / Math.max(this.effectiveAdmitPerSecond(config, now), 0.0001),
       );
     }
-    const periodSec = effectiveCheckInPeriodSeconds({
-      waiting,
+    const nextCheckAt = this.assignCheckIn(visitor.id, waiting, config, now, {
       position,
-      admissionMode: mode,
       estimatedWaitSeconds,
-      admitPerSecond: this.effectiveAdmitPerSecond(config, now),
-    });
-    const nextCheckAt = nextCheckAtMs({
-      now,
-      periodSec,
-      visitorKey: visitor.id,
       minLeadMs: 1_000,
     });
     this.ctx.storage.sql.exec(

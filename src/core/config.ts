@@ -12,6 +12,25 @@ export class ConfigError extends Error {
 
 const POSITIVE_INT = Number.isInteger;
 
+/** Default grace after `nextCheckAt` before a silent waiter is expired (seconds). */
+export const DEFAULT_MISSED_SLOT_GRACE_SECONDS = 120;
+
+/** Minimum admin / env missed-slot grace (seconds). */
+export const MIN_MISSED_SLOT_GRACE_SECONDS = 30;
+
+/** Maximum admin / env missed-slot grace (seconds). */
+export const MAX_MISSED_SLOT_GRACE_SECONDS = 900;
+
+/** Clamp missed-slot grace to the supported range (default when invalid). */
+export function clampMissedSlotGraceSeconds(seconds: number): number {
+  const n = Math.floor(seconds);
+  if (!Number.isFinite(n)) return DEFAULT_MISSED_SLOT_GRACE_SECONDS;
+  return Math.min(
+    MAX_MISSED_SLOT_GRACE_SECONDS,
+    Math.max(MIN_MISSED_SLOT_GRACE_SECONDS, n),
+  );
+}
+
 export type QueueConfigEnv = {
   MAX_CONCURRENT_USERS?: string;
   ADMIT_PER_SECOND?: string;
@@ -19,6 +38,7 @@ export type QueueConfigEnv = {
   HEARTBEAT_TIMEOUT_SECONDS?: string;
   QUEUE_TIMEOUT_SECONDS?: string;
   ADMISSION_MODE?: string;
+  MISSED_SLOT_GRACE_SECONDS?: string;
 };
 
 /**
@@ -50,6 +70,10 @@ export function parseQueueConfig(env: QueueConfigEnv): QueueConfig {
   const admissionMode = parseAdmissionMode(
     env.ADMISSION_MODE?.trim() ? env.ADMISSION_MODE : DEFAULT_QUEUE_CONFIG.admissionMode,
   );
+  const missedSlotGraceRaw = envNumberOrDefault(
+    env.MISSED_SLOT_GRACE_SECONDS,
+    DEFAULT_QUEUE_CONFIG.missedSlotGraceSeconds,
+  );
 
   const issues: string[] = [];
 
@@ -75,6 +99,15 @@ export function parseQueueConfig(env: QueueConfigEnv): QueueConfig {
   ) {
     issues.push("HEARTBEAT_TIMEOUT_SECONDS must be less than QUEUE_TIMEOUT_SECONDS");
   }
+  if (
+    !POSITIVE_INT(missedSlotGraceRaw) ||
+    missedSlotGraceRaw < MIN_MISSED_SLOT_GRACE_SECONDS ||
+    missedSlotGraceRaw > MAX_MISSED_SLOT_GRACE_SECONDS
+  ) {
+    issues.push(
+      `MISSED_SLOT_GRACE_SECONDS must be an integer from ${MIN_MISSED_SLOT_GRACE_SECONDS} to ${MAX_MISSED_SLOT_GRACE_SECONDS}`,
+    );
+  }
   if (!admissionMode) {
     issues.push('ADMISSION_MODE must be "queue" or "lottery"');
   }
@@ -92,6 +125,7 @@ export function parseQueueConfig(env: QueueConfigEnv): QueueConfig {
     admissionMode: admissionMode!,
     requireClickToEnter: false,
     admitHoldSeconds: 120,
+    missedSlotGraceSeconds: clampMissedSlotGraceSeconds(missedSlotGraceRaw),
   };
 }
 
@@ -119,4 +153,5 @@ export const DEFAULT_QUEUE_CONFIG: QueueConfig = {
   admissionMode: "queue",
   requireClickToEnter: false,
   admitHoldSeconds: 120,
+  missedSlotGraceSeconds: DEFAULT_MISSED_SLOT_GRACE_SECONDS,
 };

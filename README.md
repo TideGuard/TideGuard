@@ -115,9 +115,10 @@ Queue capacity, admit rate, and timeouts default in code (`DEFAULT_QUEUE_CONFIG`
 | `MAX_CONCURRENT_USERS`      | `20`         | Capacity past the waiting room |
 | `ADMIT_PER_SECOND`          | `2`          | Steady admission rate          |
 | `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime       |
-| `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors   |
-| `QUEUE_TIMEOUT_SECONDS`     | `1800`       | Max time in queue              |
-| `ENVIRONMENT`               | `production` | Reported by `/health`          |
+| `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors (legacy / null timeslot rows) |
+| `QUEUE_TIMEOUT_SECONDS`     | `86400`      | Max time in queue (24h)                                    |
+| `MISSED_SLOT_GRACE_SECONDS` | `120`        | Seconds after due timeslot before silent waiters expire (30–900; prefer `/admin` Danger zone) |
+| `ENVIRONMENT`               | `production` | Reported by `/health`                                      |
 
 Optional advanced Worker vars (set in the dashboard if needed; not in the Deploy template):
 
