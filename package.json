@@ -55,7 +55,7 @@
     "@vitest/snapshot": "^4.1.10",
     "oxlint": "^1.77.0",
     "oxlint-tsgolint": "^7.0.2001",
-    "postcss": "^8.5.25",
+    "postcss": "^8.5.26",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
     "prettier": "^3.9.6",
