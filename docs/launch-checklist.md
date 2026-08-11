@@ -14,17 +14,17 @@ Use this before pointing production traffic at TideGuard.
 
 ## Capacity
 
-| Setting                 | Where                       | Guidance                                                                                          |
-| ----------------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |
-| `MAX_CONCURRENT_USERS`  | Code default / optional env | Origin concurrent capacity you can actually serve                                                 |
-| `ADMIT_PER_SECOND`      | `/admin` traffic (or env)   | Steady admit rate once the room is full                                                           |
-| `TOKEN_TTL_SECONDS`     | Code default / optional env | How long an admission cookie remains valid                                                        |
+| Setting                 | Where                       | Guidance                                                                                                     |
+| ----------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `MAX_CONCURRENT_USERS`  | Code default / optional env | Origin concurrent capacity you can actually serve                                                            |
+| `ADMIT_PER_SECOND`      | `/admin` traffic (or env)   | Steady admit rate once the room is full                                                                      |
+| `TOKEN_TTL_SECONDS`     | Code default / optional env | How long an admission cookie remains valid                                                                   |
 | Timeslot check-ins      | Waiting UI (default)        | `nextCheckAt`; period = max(5s, ceil(waiting/750)); status ≤ ~750/s; deferred until `opensAt` when scheduled |
-| Fixed poll override     | Env (optional)              | `WAITING_ROOM_*_INTERVAL_MS` — not recommended; budgets DO requests                               |
-| Heartbeat timeout       | Worker vars (`180`)         | Drop silent waiters; timeslot period stays under half this window                                 |
-| Missed-slot grace       | Danger zone / env (`120`)   | Seconds after due `nextCheckAt` before silent waiters expire (30–900); lower = more false drops   |
-| Max waiting visitors    | `/admin` Danger zone        | Default **1M** safety cap (not a seat fee); `/join` → `503 queue_full` when full; raisable to 50M |
-| `QUEUE_TIMEOUT_SECONDS` | Code default (`86400`)      | Max stay in pool (24h); too-short values expire deep timeslots                                    |
+| Fixed poll override     | Env (optional)              | `WAITING_ROOM_*_INTERVAL_MS` — not recommended; budgets DO requests                                          |
+| Heartbeat timeout       | Worker vars (`180`)         | Drop silent waiters; timeslot period stays under half this window                                            |
+| Missed-slot grace       | Danger zone / env (`120`)   | Seconds after due `nextCheckAt` before silent waiters expire (30–900); lower = more false drops              |
+| Max waiting visitors    | `/admin` Danger zone        | Default **1M** safety cap (not a seat fee); `/join` → `503 queue_full` when full; raisable to 50M            |
+| `QUEUE_TIMEOUT_SECONDS` | Code default (`86400`)      | Max stay in pool (24h); too-short values expire deep timeslots                                               |
 
 Rough DO request volume while waiting (timeslot status-only):
 

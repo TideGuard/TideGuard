@@ -110,15 +110,15 @@ npm run rotate:token-secret  # generate TOKEN_SECRET + rotation checklist
 
 Queue capacity, admit rate, and timeouts default in code (`DEFAULT_QUEUE_CONFIG`). Optional wrangler `vars` overrides (not prompted on Deploy-to-Cloudflare). Queue name, admission mode, origin proxy, Cloudflare API token, and Turnstile are configured in `/admin` after deploy.
 
-| Variable                    | Default      | Meaning                        |
-| --------------------------- | ------------ | ------------------------------ |
-| `MAX_CONCURRENT_USERS`      | `20`         | Capacity past the waiting room |
-| `ADMIT_PER_SECOND`          | `2`          | Steady admission rate          |
-| `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime       |
-| `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors (legacy / null timeslot rows) |
-| `QUEUE_TIMEOUT_SECONDS`     | `86400`      | Max time in queue (24h)                                    |
+| Variable                    | Default      | Meaning                                                                                       |
+| --------------------------- | ------------ | --------------------------------------------------------------------------------------------- |
+| `MAX_CONCURRENT_USERS`      | `20`         | Capacity past the waiting room                                                                |
+| `ADMIT_PER_SECOND`          | `2`          | Steady admission rate                                                                         |
+| `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime                                                                      |
+| `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors (legacy / null timeslot rows)                                    |
+| `QUEUE_TIMEOUT_SECONDS`     | `86400`      | Max time in queue (24h)                                                                       |
 | `MISSED_SLOT_GRACE_SECONDS` | `120`        | Seconds after due timeslot before silent waiters expire (30–900; prefer `/admin` Danger zone) |
-| `ENVIRONMENT`               | `production` | Reported by `/health`                                      |
+| `ENVIRONMENT`               | `production` | Reported by `/health`                                                                         |
 
 Optional advanced Worker vars (set in the dashboard if needed; not in the Deploy template):
 

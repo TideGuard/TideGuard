@@ -1197,11 +1197,7 @@ export class QueueRoom extends DurableObject<Env> {
    * push them onto a post-open timeslot without treating it as a due renew.
    * @returns true when the row was rewritten
    */
-  private repairCheckInBeforeOpen(
-    visitor: VisitorRow,
-    config: QueueConfig,
-    now: number,
-  ): boolean {
+  private repairCheckInBeforeOpen(visitor: VisitorRow, config: QueueConfig, now: number): boolean {
     const opensAt = this.getOpensAt();
     if (opensAt === null || now >= opensAt) {
       return false;

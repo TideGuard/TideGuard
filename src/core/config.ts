@@ -25,10 +25,7 @@ export const MAX_MISSED_SLOT_GRACE_SECONDS = 900;
 export function clampMissedSlotGraceSeconds(seconds: number): number {
   const n = Math.floor(seconds);
   if (!Number.isFinite(n)) return DEFAULT_MISSED_SLOT_GRACE_SECONDS;
-  return Math.min(
-    MAX_MISSED_SLOT_GRACE_SECONDS,
-    Math.max(MIN_MISSED_SLOT_GRACE_SECONDS, n),
-  );
+  return Math.min(MAX_MISSED_SLOT_GRACE_SECONDS, Math.max(MIN_MISSED_SLOT_GRACE_SECONDS, n));
 }
 
 export type QueueConfigEnv = {

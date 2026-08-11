@@ -1,8 +1,5 @@
 import type { AdmissionMode, QueueConfig } from "../core/types";
-import {
-  DEFAULT_MISSED_SLOT_GRACE_SECONDS,
-  clampMissedSlotGraceSeconds,
-} from "../core/config";
+import { DEFAULT_MISSED_SLOT_GRACE_SECONDS, clampMissedSlotGraceSeconds } from "../core/config";
 
 /** Default Durable Object alarm period for admit + expiry sweeps. */
 export const QUEUE_ALARM_INTERVAL_MS = 1_000;
