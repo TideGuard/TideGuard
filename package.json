@@ -73,7 +73,7 @@
     "@mantine/core": "^9.5.1",
     "@mantine/hooks": "^9.5.1",
     "@mantine/notifications": "^9.5.1",
-    "@scure/bip39": "^2.2.0",
+    "@scure/bip39": "^2.3.0",
     "@tabler/icons-react": "^3.46.0",
     "chart.js": "^4.5.1",
     "react": "^19.2.8",
