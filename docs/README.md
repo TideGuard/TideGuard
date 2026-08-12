@@ -15,7 +15,7 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 | [Architecture](architecture.md)                       | Engineers who need the Workers / Durable Object / KV story                                                 |
 | [Hosted SaaS](hosted-saas.md)                         | Planning: hosted tier, WorkOS/Paddle/Convex patterns, Starter vs Dedicated                                 |
 | [API](api.md)                                         | Anyone integrating join, status, tokens, or operator routes                                                |
-| [Admin](admin.md)                                     | Operators using setup (Cloudflare + Turnstile), team invites, audit log, branding (incl. Google Analytics) |
+| [Admin](admin.md)                                     | Set up `/admin`, invite operators, branding, traffic                                                       |
 | [Analytics](analytics.md)                             | Live metrics + 24h traffic chart / CSV export; geo-block hits (operator traffic, not GA)                   |
 | [IP allowlist](ip-allowlist.md)                       | Staff bypass, Pass queue, and Cloudflare zone helpers from admin                                           |
 | [Country block](geo-block.md)                         | Temporary event-window geo gate via `CF-IPCountry`                                                         |

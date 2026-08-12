@@ -15,7 +15,7 @@
 **An open-source waiting room for Cloudflare Workers.**  
 Hold the flood at the edge. Admit people at a rate your origin can survive.
 
-When a launch, drop, or ticket sale spikes traffic, TideGuard puts visitors in a calm virtual line (or a lottery pool), then lets them through with signed access tokens. Built on Workers, Durable Objects, and KV. Cheap to run, easy to explain, ready to deploy.
+When a launch, drop, or ticket sale spikes traffic, TideGuard puts visitors in a calm virtual line (or a lottery pool), then lets them through with signed access tokens. It runs on Cloudflare Workers, Durable Objects, and KV — cheap to run, ready to deploy.
 
 ```text
 Spike hits → waiting room → controlled admit → signed token → protected page
@@ -23,37 +23,40 @@ Spike hits → waiting room → controlled admit → signed token → protected 
 
 Commercial waiting rooms work. They are also expensive, opaque, and hard to study. TideGuard is the opposite shape: open source, edge-native, and designed so you can read the queue logic.
 
-## Basic features
-
-| Feature                        | Why it matters                                                                                      |
-| ------------------------------ | --------------------------------------------------------------------------------------------------- |
-| **Durable Object queue**       | Strong consistency for join / leave / admit. KV is not a queue.                                     |
-| **Queue Mode or Lottery Mode** | Fair FIFO line, or equal-odds random draw among waiters.                                            |
-| **HMAC admission tokens**      | Time-limited access without a session database.                                                     |
-| **Waiting room (`/wait`)**     | Branded hold page with heartbeats, optional depth, optional Google Analytics, redirect after admit. |
-| **Admin control room**         | React (Mantine) SPA: branding (incl. GA Measurement ID), live metrics, adaptive max outflow.        |
-| **One-click deploy**           | `wrangler.jsonc` is Deploy-to-Cloudflare friendly out of the box.                                   |
-| **Tested Worker logic**        | ≈76%+ line coverage (`npm run test:coverage`); CI enforces Istanbul thresholds (75% lines/stmts).   |
-
 Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/cost`.
 
-## Extended features
+## Waiting room
 
-| Feature                     | Why it matters                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Origin proxy**            | Sit in front of your site; unauthenticated traffic hits `/wait`, admitted traffic is proxied.       |
-| **Traffic controls**        | Opening schedule, silent pause, origin health throttle.                                             |
-| **IP allowlist + Pass**     | Staff skip the line; mint a temporary cookie to smoke-test.                                         |
-| **Temporary country block** | Event-window geo gate via `CF-IPCountry`.                                                           |
-| **Cloudflare from admin**   | Verify API token, fix proxied DNS, toggle IP Geolocation, set Full (strict), manage domains.        |
-| **Turnstile on admin auth** | Setup provisions a widget; login and invites require siteverify (not rate limits alone).            |
-| **Live traffic**            | Live metrics + 24h inflow/outflow chart + CSV export; geo-block hits.                               |
-| **Google Analytics**        | Optional GA4 Measurement ID in Branding; official gtag on `/wait` (consent is your responsibility). |
-| **Operator webhooks**       | HTTPS callbacks for pause, health config changes, and waiting-depth thresholds.                     |
-| **Cost calculator**         | Ballpark Cloudflare spend before the launch.                                                        |
-| **Adaptive max outflow**    | Live admit-rate control + inflow/outflow chart (no redeploy).                                       |
-| **Team invites**            | 72-hour invite links for additional admins (no email).                                              |
-| **Activity audit log**      | Who turned what on or off in the control room.                                                      |
+| Feature                  | What you get                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| **Virtual line**         | Branded `/wait` page (full page or embed). Place and ETA when you want them shown; admit at your rate. |
+| **Queue or lottery**     | Fair first-come line, or equal-odds draw among people waiting.                                        |
+| **Admission tickets**    | Short-lived signed tokens so the protected page or origin knows who was let through.                  |
+| **Demo before go-live**  | Smoke-test `/demo` until you enable origin protection.                                                |
+
+## Running the event
+
+| Feature               | What you get                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Control room**      | Pause, change admit rate, force-admit, watch live metrics — from `/admin`, without redeploying.       |
+| **Schedule and health** | Open at a set time, pause the room, throttle if origin health drops.                                |
+| **Team**              | Invite co-operators so more than one person can run the room.                                         |
+| **Activity log**      | Who changed pause, rate, proxy, and other controls.                                                   |
+| **Staff access**      | IP allowlist and a temporary Pass so your team can skip the line and smoke-test.                      |
+| **Country gate**      | Temporarily block countries for the event window.                                                     |
+| **Traffic history**   | 24h inflow/outflow chart and CSV export.                                                              |
+| **Branding**          | Colors, copy, optional place-in-line, optional Google Analytics on `/wait`.                           |
+| **Webhooks**          | HTTPS callbacks when the room pauses, health config changes, or waiting depth crosses a threshold.    |
+| **Cost estimate**     | Ballpark Cloudflare spend on `/cost` before you launch.                                               |
+
+## Origin and Cloudflare
+
+| Feature                     | What you get                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Origin proxy**            | Unauthenticated traffic hits the waiting room; admitted traffic is forwarded to your site.            |
+| **Zone from admin**         | After a one-time API token: DNS/proxy checks, SSL, custom domains — without living in the dashboard.  |
+| **Protected admin login**   | Turnstile on sign-in, provisioned during setup.                                                       |
+| **One-click deploy**        | Deploy-to-Cloudflare; `wrangler.jsonc` is ready.                                                      |
 
 Deep guides: [custom domain](https://tideguard.dev/docs/custom-domain/), [protecting origin](https://tideguard.dev/docs/protecting-origin/) (including Authenticated Origin Pulls), [admin](https://tideguard.dev/docs/admin/), [upgrading](https://tideguard.dev/docs/upgrading/).
 
@@ -63,21 +66,21 @@ Operator guides are authored in this repo under `docs/` and published at [tidegu
 
 | Guide                                                                                                             | Start here if you want to…                                                      |
 | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [Getting started](docs/getting-started.md) · [web](https://tideguard.dev/docs/getting-started/)                   | Clone, run locally, deploy, first `/admin` setup                                |
-| [Upgrading](docs/upgrading.md) · [web](https://tideguard.dev/docs/upgrading/)                                     | Update an existing deploy without losing KV / secrets                           |
+| [Getting started](docs/getting-started.md) · [web](https://tideguard.dev/docs/getting-started/)                   | Deploy or run locally, then claim `/admin`                                      |
+| [Upgrading](docs/upgrading.md) · [web](https://tideguard.dev/docs/upgrading/)                                     | Update an existing deploy without losing config or secrets                      |
 | [Launch checklist](docs/launch-checklist.md) · [web](https://tideguard.dev/docs/launch-checklist/)                | Pre-production go-live review                                                   |
-| [Custom domain](docs/custom-domain.md) · [web](https://tideguard.dev/docs/custom-domain/)                         | Full NS setup or partial CNAME (Business) to put TideGuard on a hostname        |
-| [Protecting a domain](docs/protecting-origin.md) · [web](https://tideguard.dev/docs/protecting-origin/)           | Origin proxy, AOP, Cloudflare in front of origin                                |
-| [Verifying admission](docs/verifying-admission.md) · [web](https://tideguard.dev/docs/verifying-admission/)       | Redirect URL, click-to-enter, how origins trust tokens                          |
-| [Architecture](docs/architecture.md) · [web](https://tideguard.dev/docs/architecture/)                            | Understand Workers / DO / KV choices and cost rules                             |
-| [API](docs/api.md) · [web](https://tideguard.dev/docs/api/)                                                       | Integrate `/join`, `/status`, tokens, operator routes ([OpenAPI](openapi.yaml)) |
-| [Admin](docs/admin.md) · [web](https://tideguard.dev/docs/admin/)                                                 | Wizard, team invites, audit log, branding (incl. Google Analytics), traffic     |
-| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                                     | Live metrics + 24h traffic chart / CSV export                                   |
-| [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/)                            | Staff bypass + Pass queue + Cloudflare access helper                            |
-| [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/)                                 | Temporary geo gate via `CF-IPCountry`                                           |
-| [Operator webhooks](docs/webhooks.md) · [web](https://tideguard.dev/docs/webhooks/)                               | Pause / health / depth HTTPS callbacks                                          |
+| [Custom domain](docs/custom-domain.md) · [web](https://tideguard.dev/docs/custom-domain/)                         | Put TideGuard on your hostname                                                  |
+| [Protecting a domain](docs/protecting-origin.md) · [web](https://tideguard.dev/docs/protecting-origin/)           | Sit in front of your origin (proxy, Authenticated Origin Pulls)                 |
+| [Verifying admission](docs/verifying-admission.md) · [web](https://tideguard.dev/docs/verifying-admission/)       | How your origin trusts admitted visitors                                        |
+| [Architecture](docs/architecture.md) · [web](https://tideguard.dev/docs/architecture/)                            | How Workers, Durable Objects, and KV fit together                               |
+| [API](docs/api.md) · [web](https://tideguard.dev/docs/api/)                                                       | Integrate join, status, tokens, operator routes ([OpenAPI](openapi.yaml))       |
+| [Admin](docs/admin.md) · [web](https://tideguard.dev/docs/admin/)                                                 | Set up `/admin`, invite operators, branding, traffic                            |
+| [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                                     | Watch live traffic and export 24h history                                       |
+| [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/)                            | Let staff skip the line                                                         |
+| [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/)                                 | Temporarily block countries for the event                                       |
+| [Operator webhooks](docs/webhooks.md) · [web](https://tideguard.dev/docs/webhooks/)                               | Notify your tools when the room pauses or fills                                 |
 | [TOKEN_SECRET rotation](docs/token-secret-rotation.md) · [web](https://tideguard.dev/docs/token-secret-rotation/) | Rotate the master secret safely                                                 |
-| [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/)                            | Prove FIFO / lottery behavior at 1k–100k simulated users                        |
+| [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/)                            | Prove queue behavior at scale                                                   |
 | [Security](SECURITY.md)                                                                                           | Secrets, tokens, and what not to put in git                                     |
 
 ## Quick start (local)
@@ -99,25 +102,32 @@ npm run setup   # types + .dev.vars TOKEN_SECRET + handoff (optional: starts dev
 | http://localhost:8787/cost   | Cost calculator                                      |
 | http://localhost:8787/health | Liveness                                             |
 
+Operator:
+
+```bash
+npm run rotate:token-secret  # generate TOKEN_SECRET + rotation checklist
+```
+
+Contributor:
+
 ```bash
 npm run ci              # format, lint, typecheck, tests
-npm run test:coverage   # Istanbul coverage with CI thresholds (~75% lines on src/)
+npm run test:coverage   # coverage with CI thresholds (~75% lines on src/)
 npm run test:load       # in-memory scale test (see docs/load-testing.md)
-npm run rotate:token-secret  # generate TOKEN_SECRET + rotation checklist
 ```
 
 ## Configuration
 
-Queue capacity, admit rate, and timeouts default in code (`DEFAULT_QUEUE_CONFIG`). Optional wrangler `vars` overrides (not prompted on Deploy-to-Cloudflare). Queue name, admission mode, origin proxy, Cloudflare API token, and Turnstile are configured in `/admin` after deploy.
+Most live settings — queue name, admission mode, origin proxy, Cloudflare, Turnstile — are configured in `/admin` after deploy. The tables below are code defaults and optional Worker `vars` overrides (not prompted on Deploy-to-Cloudflare).
 
 | Variable                    | Default      | Meaning                                                                                       |
 | --------------------------- | ------------ | --------------------------------------------------------------------------------------------- |
 | `MAX_CONCURRENT_USERS`      | `20`         | Capacity past the waiting room                                                                |
 | `ADMIT_PER_SECOND`          | `2`          | Steady admission rate                                                                         |
 | `TOKEN_TTL_SECONDS`         | `600`        | Admission token lifetime                                                                      |
-| `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors (legacy / null timeslot rows)                                    |
+| `HEARTBEAT_TIMEOUT_SECONDS` | `180`        | Drop silent waiting visitors                                                                  |
 | `QUEUE_TIMEOUT_SECONDS`     | `86400`      | Max time in queue (24h)                                                                       |
-| `MISSED_SLOT_GRACE_SECONDS` | `120`        | Seconds after due timeslot before silent waiters expire (30–900; prefer `/admin` Danger zone) |
+| `MISSED_SLOT_GRACE_SECONDS` | `120`        | Seconds after a missed check-in before a silent waiter expires (30–900; prefer `/admin`)      |
 | `ENVIRONMENT`               | `production` | Reported by `/health`                                                                         |
 
 Optional advanced Worker vars (set in the dashboard if needed; not in the Deploy template):
@@ -139,11 +149,13 @@ Advanced (not recommended — disables adaptive waiting-room polling):
 
 | Secret         | Purpose                                                         |
 | -------------- | --------------------------------------------------------------- |
-| `TOKEN_SECRET` | HMAC key for visitor tokens and admin sessions; first-claim key |
+| `TOKEN_SECRET` | Signs visitor tickets and admin sessions; first-claim key       |
 
 Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)
 
 ## Project layout
+
+Source map for people who clone the repo — not the product.
 
 ```text
 src/
@@ -162,28 +174,9 @@ docs/               Guides (start with docs/README.md)
 test/               Vitest + Workers pool tests
 ```
 
-## Roadmap
+## Releases
 
-- [x] Durable Object waiting room (Queue + Lottery)
-- [x] REST API + HMAC admission tokens
-- [x] Waiting room, demo, embed mode, cost calculator
-- [x] Admin React control room (Mantine + Chart.js) with adaptive max outflow
-- [x] Guided setup: Cloudflare verify + Turnstile for admin login
-- [x] In-admin Cloudflare controls (proxy/geo, SSL Full strict, custom domains)
-- [x] Docs hub (getting started, architecture, API, admin, load testing)
-- [x] Configurable origin proxy (gate + forward to upstream)
-- [x] Opening schedule, silent pause, origin health throttle
-- [x] Multi-admin invites + activity audit log
-- [x] OpenAPI spec
-- [x] Richer operator controls in UI (pause / force-admit / sticky event toolbar)
-- [x] Demo mode (smoke-test `/demo` without gating origin; Go live)
-- [x] BIP39 English admin recovery phrase (Turnstile on forgot-password)
-- [x] Rolling-throughput ETA (blend setpoint with recent admits)
-- [x] 24h traffic retention + CSV export
-- [x] TOKEN_SECRET rotation guide + `npm run rotate:token-secret`
-- [x] Cloudflare Access guidance for `/admin`
-- [x] Operator webhooks (pause / health / depth)
-- [x] Waiting-room embed height postMessage + a11y / i18n hooks
+Shipped work lives in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/TideGuard/TideGuard/releases).
 
 ## Contributing
 

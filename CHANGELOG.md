@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **README** — operator pitch regrouped by job (waiting room, control room, origin); internals stay in docs
 - Waiting UI / embed / API: schedule on `nextCheckAt`; optional **#X of Y** via Branding “Show place in line”
 - **Pre-open check-ins** — when `opensAt` is in the future, `nextCheckAt` is assigned at/after opening (full-depth timeslot spread); status does not renew liveness until then
 - **Room phase + next update** — public join/status include `admissionOpen` and (while scheduled closed) `opensAt`; waiting UI shows “Queue is open — keep this page open” / opening countdown plus **Next update** from `nextCheckAt`
