@@ -1,6 +1,6 @@
 {
   "name": "tideguard",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Lightweight open-source waiting room for Cloudflare Workers",
   "homepage": "https://tideguard.dev",
   "repository": {

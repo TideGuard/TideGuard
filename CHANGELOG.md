@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-15
+
+### Added
+
+- Tests for `closesAt` passthrough, admin schedule/revoke HTTP, waiting-room rules end-to-end, multi-queue branding clone, new webhook events, and admin depth-warning fields
+
 ## [0.5.0] - 2026-08-15
 
 ### Added

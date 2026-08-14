@@ -1,6 +1,6 @@
 {
   "name": "@tideguard/verify",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Verify and sign TideGuard admission tokens",
   "type": "module",
   "license": "MIT",

@@ -113,6 +113,36 @@ describe("opening schedule and silent pause", () => {
     });
   });
 
+  it("reports closed + passthrough without admitting new waiters", async () => {
+    const stub = room("pass-schedule");
+    const cfg = config({ maxConcurrentUsers: 10 });
+    const closesAt = 20_000_000;
+    await stub.setSchedule({
+      opensAt: null,
+      closesAt,
+      closeAction: "passthrough",
+    });
+    const schedule = await stub.getSchedule();
+    expect(schedule).toMatchObject({
+      roomPhase: "closed",
+      closeAction: "passthrough",
+      closesAt,
+    });
+
+    const closed = await stub.join({
+      queue: "pass-schedule",
+      config: cfg,
+      visitorId: "late",
+      now: closesAt,
+    });
+    expect(closed).toMatchObject({
+      status: "waiting",
+      admissionOpen: false,
+      roomPhase: "closed",
+      closeAction: "passthrough",
+    });
+  });
+
   it("defers nextCheckAt until opensAt for early joiners", async () => {
     const stub = room("opens-checkin");
     const cfg = config({ maxConcurrentUsers: 10 });
