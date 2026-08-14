@@ -36,7 +36,7 @@ export interface QueueRoomVisitorView {
    */
   nextCheckAt: number | null;
   /**
-   * True when the opening schedule allows admission (`opensAt` null or in the past).
+   * True when the schedule currently allows admission.
    * Does not reflect silent pause or origin-health throttle.
    */
   admissionOpen: boolean;
@@ -45,6 +45,12 @@ export interface QueueRoomVisitorView {
    * or when no schedule is set.
    */
   opensAt: number | null;
+  /** Closing time (unix ms), public before and after the room closes. */
+  closesAt: number | null;
+  /** What protected routes do after the room closes. */
+  closeAction: "reject" | "passthrough";
+  /** Current schedule phase, independent of pause and origin health. */
+  roomPhase: "scheduled" | "open" | "closed";
 }
 
 export interface QueueJoinRequest {
@@ -109,7 +115,12 @@ export type QueueSetModeResponse = {
 export type QueueEnterResponse =
   { ok: true; visitor: QueueRoomVisitorView } | { ok: false; code: "not_found" | "not_admitted" };
 
-export type QueueScheduleResponse = { opensAt: number | null };
+export type QueueScheduleResponse = {
+  opensAt: number | null;
+  closesAt: number | null;
+  closeAction: "reject" | "passthrough";
+  roomPhase: "scheduled" | "open" | "closed";
+};
 
 export type QueueHealthConfigResponse = {
   config: OriginHealthConfig;
@@ -149,6 +160,9 @@ export function buildMetrics(input: {
   paused: boolean;
   admissionMode: AdmissionMode;
   opensAt: number | null;
+  closesAt: number | null;
+  closeAction: "reject" | "passthrough";
+  roomPhase: "scheduled" | "open" | "closed";
   effectiveAdmitPerSecond: number;
   admitPerSecondOverride: number | null;
   admitPerSecondDefault: number;
@@ -177,6 +191,9 @@ export function buildMetrics(input: {
     paused: input.paused,
     admissionMode: input.admissionMode,
     opensAt: input.opensAt,
+    closesAt: input.closesAt,
+    closeAction: input.closeAction,
+    roomPhase: input.roomPhase,
     effectiveAdmitPerSecond: input.effectiveAdmitPerSecond,
     totalInflow: input.totalInflow,
     inflowCurrent: input.inflowCurrent,

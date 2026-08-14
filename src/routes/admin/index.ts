@@ -28,8 +28,10 @@ export {
 
 export {
   handleAdminSaveBranding,
+  handleAdminCloneBranding,
   handleAdminSaveOrigin,
   handleAdminSaveBypass,
+  handleAdminSaveRoomRules,
   handleAdminSaveGeoBlock,
   handleAdminSaveWebhooks,
 } from "./settings";
@@ -55,6 +57,7 @@ export {
 
 export {
   handleAdminPass,
+  handleAdminRevokeAdmissions,
   handleAdminSetMode,
   handleAdminPause,
   handleAdminRate,

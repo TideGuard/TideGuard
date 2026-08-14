@@ -30,6 +30,7 @@ import { parseQueueName, readJsonBody } from "../validation";
 import { clientKey, requireSetupBearer, withCookie } from "./helpers";
 import { dispatchWebhook } from "../../admin/webhook-dispatch";
 import { clearWebhookSettings } from "../../admin/webhook-store";
+import { clearRoomRules } from "../../admin/room-rules-store";
 
 /**
  * Issue an admission cookie for this admin browser and skip the waiting room.
@@ -55,12 +56,14 @@ export async function handleAdminPass(request: Request, env: Env): Promise<Respo
 
   const config = configFromEnv(env);
   const secret = requireTokenSecret(env);
+  const room = getQueueRoom(env, queue);
   const visitorId = `admin_pass_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const accessToken = await signAccessToken(
     buildAdmissionClaims({
       visitorId,
       queue,
       tokenTTLSeconds: config.tokenTTLSeconds,
+      epoch: await room.getTokenEpoch(),
     }),
     secret,
   );
@@ -77,6 +80,25 @@ export async function handleAdminPass(request: Request, env: Env): Promise<Respo
     jsonOk({ ok: true, redirectTo, visitorId, queue }),
     buildAccessCookie(accessToken, request, config.tokenTTLSeconds),
   );
+}
+
+export async function handleAdminRevokeAdmissions(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
+  }
+  const body = await readJsonBody(request);
+  const queue = parseQueueName(body.queue, admin.defaultQueue);
+  const tokenEpoch = await getQueueRoom(env, queue).bumpTokenEpoch();
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "admissions.revoke",
+    summary: `Revoked all admissions for queue “${queue}”`,
+    meta: { queue, tokenEpoch },
+  });
+  return jsonOk({ ok: true, queue, tokenEpoch });
 }
 
 export async function handleAdminSetMode(request: Request, env: Env): Promise<Response> {
@@ -156,6 +178,10 @@ export async function handleAdminRate(request: Request, env: Env): Promise<Respo
     action: "rate.set",
     summary: `Set max outflow to ${admitPerSecond}/s`,
     meta: { queue, admitPerSecond },
+  });
+  void dispatchWebhook(env, "admit_rate_changed", queue, {
+    admitPerSecond: result.admitPerSecond,
+    admitPerSecondOverride: result.admitPerSecondOverride,
   });
   return jsonOk(result);
 }
@@ -247,31 +273,69 @@ export async function handleAdminSchedule(request: Request, env: Env): Promise<R
 
   const body = await readJsonBody(request);
   const queue = parseQueueName(body.queue, admin.defaultQueue);
-  let opensAt: number | null = null;
-  if (body.opensAt !== null && body.opensAt !== undefined && body.opensAt !== "") {
-    if (typeof body.opensAt === "number" && Number.isFinite(body.opensAt)) {
-      opensAt = body.opensAt;
-    } else if (typeof body.opensAt === "string") {
-      const parsed = Date.parse(body.opensAt);
-      if (!Number.isFinite(parsed)) {
-        throw new ApiError("bad_request", "opensAt must be an ISO datetime or unix ms", 400);
-      }
-      opensAt = parsed;
-    } else {
-      throw new ApiError("bad_request", "opensAt must be an ISO datetime, unix ms, or null", 400);
-    }
+  const opensAt = parseScheduleTime(body.opensAt, "opensAt");
+  const closesAt = parseScheduleTime(body.closesAt, "closesAt");
+  const closeAction =
+    body.closeAction === undefined
+      ? undefined
+      : body.closeAction === "reject" || body.closeAction === "passthrough"
+        ? body.closeAction
+        : null;
+  if (closeAction === null) {
+    throw new ApiError("bad_request", 'closeAction must be "reject" or "passthrough"', 400);
+  }
+  if (
+    opensAt !== undefined &&
+    opensAt !== null &&
+    closesAt !== undefined &&
+    closesAt !== null &&
+    closesAt <= opensAt
+  ) {
+    throw new ApiError("bad_request", "closesAt must be after opensAt", 400);
   }
 
   const room = getQueueRoom(env, queue);
-  const result = await room.setOpensAt(opensAt);
+  const previous = await room.getSchedule();
+  const result = await room.setSchedule({
+    ...(opensAt !== undefined ? { opensAt } : {}),
+    ...(closesAt !== undefined ? { closesAt } : {}),
+    ...(closeAction !== undefined ? { closeAction } : {}),
+  });
   await appendAuditEvent(env, {
     actorId: actor.id,
     actorUsername: actor.username,
-    action: opensAt === null ? "schedule.clear" : "schedule.set",
-    summary: opensAt === null ? "Opened the room now" : "Set opening time",
-    meta: { queue, opensAt },
+    action: "schedule.set",
+    summary: "Updated room schedule",
+    meta: {
+      queue,
+      opensAt: result.opensAt,
+      closesAt: result.closesAt,
+      closeAction: result.closeAction,
+    },
   });
+  const now = Date.now();
+  if (
+    previous.opensAt !== null &&
+    previous.opensAt > now &&
+    (result.opensAt === null || result.opensAt <= now)
+  ) {
+    void dispatchWebhook(env, "opened", queue, { opensAt: result.opensAt });
+  }
   return jsonOk(result);
+}
+
+function parseScheduleTime(
+  value: unknown,
+  field: "opensAt" | "closesAt",
+): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  throw new ApiError("bad_request", `${field} must be an ISO datetime, unix ms, or null`, 400);
 }
 
 export async function handleAdminHealth(request: Request, env: Env): Promise<Response> {
@@ -485,6 +549,7 @@ export async function handleAdminReset(request: Request, env: Env): Promise<Resp
   await clearTurnstileSettings(env);
   await clearSetupPending(env);
   await clearWebhookSettings(env);
+  await clearRoomRules(env);
   await env.CONFIG_KV.delete(UPDATE_CHECK_CACHE_KEY);
   return jsonOk({ ok: true, setupComplete: false });
 }

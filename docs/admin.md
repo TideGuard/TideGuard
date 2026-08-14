@@ -68,6 +68,7 @@ Toggles that change visitor-visible or security-sensitive behavior (pause, mode,
 React SPA (Mantine + Chart.js) served from Workers Static Assets under `/admin/`. Dark teal theme (Source Sans). Layout:
 
 - **Sticky event toolbar** — waiting/admitted chips, pause, admit rate (+ clear override), force-admit, Pass queue
+- **Queue selector** — switch remembered named queues, or create one by cloning the current queue's branding
 - **Tabs** — Live (metrics + 24h traffic chart / CSV), Admission (schedule + health), Branding (preview + embed snippet), Access (origin + Cloudflare Access guidance), Cloudflare (+ Turnstile), Team, System (activity, updates, webhooks, TOKEN_SECRET rotation, max waiting / missed-slot grace / Danger zone, factory reset)
 
 Build with `npm run build:admin` (also runs before `npm run dev` / `npm run deploy`).
@@ -89,7 +90,7 @@ Operators can change admit rate without redeploying:
 
 The chart shows joins per interval (inflow) vs the setpoint (max outflow). Series come from the Durable Object (`GET /api/admin/traffic`, ~15s buckets, ~**24h** retention). Export with `?format=csv`. Range presets in the UI: 2h / 12h / 24h.
 
-**Queues vs paths:** path prefixes choose which URLs require admission; they do not create separate queues. One Worker has one default queue from setup. Multiple named queues need separate `/join?queue=` clients or separate Workers.
+**Queues vs paths:** path prefixes choose which URLs require admission; they do not create separate queues. The toolbar selects remembered queue names and updates `?queue=` for state loads. **Create** validates a new queue name and copies the current queue's branding; integrations must still send that queue name to `/join` and `/status`.
 
 Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks: [Country block](geo-block.md). Traffic charts: [analytics.md](analytics.md). Origin lock-down including Authenticated Origin Pulls: [protecting-origin.md](protecting-origin.md). Operator callbacks: [webhooks.md](webhooks.md). Secret rotation: [token-secret-rotation.md](token-secret-rotation.md). Cloudflare Access in front of `/admin`: see **Access** tab + [SECURITY.md](../SECURITY.md).
 
@@ -115,6 +116,8 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `PUT`                | `/api/admin/rate`                           | Session (set max outflow override)                                 |
 | `DELETE`             | `/api/admin/rate`                           | Session (clear override → env/code default)                        |
 | `PUT`                | `/api/admin/webhooks`                       | Session (operator outbound webhooks)                               |
+| `PUT`                | `/api/admin/room-rules`                     | Session (crawler/cookie/header bypass and full/JSON behavior)      |
+| `POST`               | `/api/admin/queues/clone-branding`          | Session (copy branding and remember destination queue)             |
 | `PUT`                | `/api/admin/cloudflare/ip-geolocation`      | Session                                                            |
 | `PUT`                | `/api/admin/cloudflare/ssl`                 | Session (set Full strict)                                          |
 | `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`             | Session (list / attach / detach)                                   |

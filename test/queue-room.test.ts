@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_QUEUE_CONFIG } from "../src/core/config";
 
 function room(name: string) {
@@ -10,6 +10,34 @@ function room(name: string) {
 function config(overrides: Partial<typeof DEFAULT_QUEUE_CONFIG> = {}) {
   return { ...DEFAULT_QUEUE_CONFIG, ...overrides };
 }
+
+describe("QueueRoom webhook outbox", () => {
+  it("retries a failed prepared delivery", async () => {
+    const stub = room("webhook-retry");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("no", { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stub.enqueueWebhook({
+      url: "https://hooks.example.com/tideguard",
+      headers: { "content-type": "application/json", "x-test-signature": "signed" },
+      body: '{"event":"queue_full"}',
+      event: "queue_full",
+      queue: "webhook-retry",
+    });
+    await stub.processWebhookOutbox(Date.now() + 10_000);
+    await stub.processWebhookOutbox(Date.now() + 30_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      body: '{"event":"queue_full"}',
+      headers: { "x-test-signature": "signed" },
+    });
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("QueueRoom FIFO behavior", () => {
   it("admits immediately when capacity is available", async () => {

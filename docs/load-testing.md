@@ -66,3 +66,19 @@ The in-memory suite prints a JSON summary:
 ```
 
 Use that to compare machines and algorithms, not as a Cloudflare billing estimate. Billing is dominated by Worker/DO requests from real browsers, which is why the waiting room polls slowly and never writes KV on the hot path.
+
+## Staging against Cloudflare
+
+Deploy a non-production Worker with Wrangler, use a dedicated queue name, and keep its limits below production:
+
+```bash
+npx wrangler deploy
+export BASE_URL=https://your-staging-worker.example.workers.dev
+export QUEUE=load-$(date +%s)
+```
+
+Exercise `/join`, retain each response cookie and visitor ID, then call `/status?queue=$QUEUE&id=...` at the returned `nextCheckAt`. k6 is convenient for cookie jars and staged arrival rates; Vegeta is useful for a simpler fixed-rate `/join` run. Ramp gradually, watch Durable Object errors/duration, and stop before the queue's configured waiting cap.
+
+Use one queue per test run so old visitors do not affect depth. Do not aim an unauthenticated load generator at production, and do not send fixed-rate `/status` traffic that ignores `nextCheckAt`: that measures an abusive client rather than TideGuard's adaptive protocol.
+
+The in-memory benchmark proves algorithmic behavior only. It does **not** reproduce Cloudflare Durable Object scheduling, SQLite I/O, network latency, request limits, or billing. A staging Worker is required for those observations.

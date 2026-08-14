@@ -29,8 +29,12 @@ export interface WaitingRoomRenderOptions {
   heartbeatTimeoutSeconds?: number;
   /** Unix ms when admissions begin; null/undefined = already open. */
   opensAt?: number | null;
-  /** BCP-47 language tag stub; only `en` is shipped today. */
+  /** BCP-47 language tag or Accept-Language header. */
   locale?: string | null;
+  /** Provisioned Turnstile sitekey used for new visitor joins. */
+  turnstileSitekey?: string | null;
+  /** A valid ticket cookie lets this browser resume without another challenge. */
+  skipJoinTurnstile?: boolean;
 }
 
 /**
@@ -56,6 +60,11 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   const showWaitingCount = branding.showWaitingCount;
   const opensAt = options.opensAt ?? null;
   const playTurnSound = branding.playTurnSound && branding.requireClickToEnter;
+  const enableWebNotifications = branding.enableWebNotifications;
+  const turnstileSitekey =
+    branding.joinTurnstileEnabled && !options.skipJoinTurnstile
+      ? (options.turnstileSitekey ?? null)
+      : null;
   const analytics = waitingRoomAnalyticsSnippet(branding.googleAnalyticsId);
 
   const styles = waitingRoomStyles({
@@ -78,12 +87,16 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
     showWaitingCount,
     requireClickToEnter: branding.requireClickToEnter,
     playTurnSound,
+    enableWebNotifications,
+    turnstileSitekey,
     opensAt,
     initialVisitorId,
     copy: {
       opensIn: copy.opensIn,
       queueOpenKeepPage: copy.queueOpenKeepPage,
       nextUpdateHint: copy.nextUpdateHint,
+      notificationSoon: copy.notificationSoon,
+      notificationReady: copy.notificationReady,
     },
   });
 
@@ -96,7 +109,11 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
-    <style>${styles}</style>${analytics}
+    <style>${styles}</style>${analytics}${
+      turnstileSitekey
+        ? '\n    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>'
+        : ""
+    }
   </head>
   <body>
     <main>
@@ -135,14 +152,15 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
       </div>
       <p class="status" id="open-status" data-tone="ok" role="status" aria-live="polite"></p>
       <p class="status" id="status" data-tone="ok" role="status" aria-live="polite">Connecting to queue…</p>
+      ${turnstileSitekey ? '<div id="join-turnstile"></div>' : ""}
       <p class="hint" id="checkin-hint" hidden></p>
       <div class="enter-panel" id="enter-panel" hidden>
         <p class="hold" id="hold-text">${escapeHtml(copy.statusHold)}</p>
         <button type="button" id="enter-btn">${escapeHtml(branding.enterButtonLabel)}</button>
       </div>
-      <label class="sound-opt" id="sound-opt" ${playTurnSound ? "" : "hidden"}>
+      <label class="sound-opt" id="sound-opt" ${playTurnSound || enableWebNotifications ? "" : "hidden"}>
         <input type="checkbox" id="sound-toggle" />
-        ${escapeHtml(copy.soundLabel)}
+        ${escapeHtml(enableWebNotifications ? copy.notificationLabel : copy.soundLabel)}
       </label>
     </main>
     ${

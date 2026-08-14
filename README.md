@@ -170,13 +170,14 @@ src/
   html/             Waiting room, cost calculator, geo block
   demo/             Protected demo page
 admin/              React admin SPA (Vite + Mantine → dist/admin)
+packages/verify/    npm extract for server-side admission-token verification
 docs/               Guides (start with docs/README.md)
 test/               Vitest + Workers pool tests
 ```
 
 ## Releases
 
-Shipped work lives in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/TideGuard/TideGuard/releases).
+Shipped work lives in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/TideGuard/TideGuard/releases). Planned work lives in [ROADMAP.md](ROADMAP.md) — do not treat the changelog as a roadmap.
 
 ## Contributing
 

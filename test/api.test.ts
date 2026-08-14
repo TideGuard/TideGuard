@@ -2,6 +2,10 @@ import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { verifyAccessToken } from "../src/auth";
 import { DEFAULT_QUEUE_CONFIG } from "../src/core/config";
+import { DEFAULT_BRANDING } from "../src/core/branding";
+import { writeBranding } from "../src/admin/store";
+import { clearTurnstileSettings, writeTurnstileSettings } from "../src/admin/turnstile-store";
+import { TURNSTILE_TEST_PASS_SECRET } from "../src/admin/cloudflare-api";
 
 const SECRET = "test-token-secret-do-not-use-in-production";
 
@@ -59,6 +63,68 @@ describe("queue REST API", () => {
       expectedQueue: "api-join",
     });
     expect(claims.sub).toBe("u1");
+  });
+
+  it("requires Turnstile for new joins and lets a valid ticket resume", async () => {
+    const queue = "api-join-turnstile";
+    await writeBranding(env, queue, { ...DEFAULT_BRANDING, joinTurnstileEnabled: true });
+    await writeTurnstileSettings(env, {
+      sitekey: "1x00000000000000000000AA",
+      secret: TURNSTILE_TEST_PASS_SECRET,
+      accountId: "test",
+      domains: ["example.com"],
+    });
+
+    const denied = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queue, visitorId: "challenged" }),
+      }),
+    );
+    expect(denied.status).toBe(401);
+
+    const joined = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          queue,
+          visitorId: "verified",
+          turnstileToken: "test-pass",
+        }),
+      }),
+    );
+    expect(joined.status).toBe(200);
+
+    const resumed = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: cookiesFrom(joined),
+        },
+        body: JSON.stringify({ queue }),
+      }),
+    );
+    expect(resumed.status).toBe(200);
+    expect(await json<{ visitorId: string }>(resumed)).toMatchObject({ visitorId: "verified" });
+    await clearTurnstileSettings(env);
+  });
+
+  it("fails closed when visitor Turnstile is enabled but not configured", async () => {
+    const queue = "api-join-turnstile-missing";
+    await clearTurnstileSettings(env);
+    await writeBranding(env, queue, { ...DEFAULT_BRANDING, joinTurnstileEnabled: true });
+
+    const response = await exports.default.fetch(
+      new Request("https://example.com/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queue }),
+      }),
+    );
+    expect(response.status).toBe(503);
   });
 
   it("returns status with an access token only when the visitor ticket is present", async () => {

@@ -9,12 +9,16 @@ export interface WaitingRoomClientConfig {
   showWaitingCount: boolean;
   requireClickToEnter: boolean;
   playTurnSound: boolean;
+  enableWebNotifications: boolean;
+  turnstileSitekey: string | null;
   opensAt: number | null;
   initialVisitorId: string;
   copy: {
     opensIn: string;
     queueOpenKeepPage: string;
     nextUpdateHint: string;
+    notificationSoon: string;
+    notificationReady: string;
   };
 }
 
@@ -34,6 +38,8 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         const showWaitingCount = ${JSON.stringify(config.showWaitingCount)};
         const requireClickToEnter = ${JSON.stringify(config.requireClickToEnter)};
         const playTurnSound = ${JSON.stringify(config.playTurnSound)};
+        const enableWebNotifications = ${JSON.stringify(config.enableWebNotifications)};
+        const turnstileSitekey = ${JSON.stringify(config.turnstileSitekey)};
         let scheduledOpensAt = ${JSON.stringify(config.opensAt)};
         let admissionOpen = !scheduledOpensAt || scheduledOpensAt <= Date.now();
         const copy = ${JSON.stringify(config.copy)};
@@ -51,6 +57,12 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         let lastPollHintMs = pollMs;
         let nextCheckAtMs = null;
         let checkInPaintTimer = null;
+        let notificationTimer = null;
+        let notifiedCheckAtMs = null;
+        let readyNotificationSent = false;
+        let turnstileWidgetId = null;
+        let turnstileResolve = null;
+        let turnstileReject = null;
         let stopped = false;
 
         const el = {
@@ -75,7 +87,7 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           soundToggle: document.getElementById("sound-toggle"),
         };
 
-        if (playTurnSound && el.soundToggle) {
+        if ((playTurnSound || enableWebNotifications) && el.soundToggle) {
           el.soundToggle.checked = localStorage.getItem(soundPrefKey) !== "0";
         }
 
@@ -111,6 +123,88 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           } catch (_) {}
         }
 
+        function preferenceEnabled() {
+          return !el.soundToggle || el.soundToggle.checked;
+        }
+
+        function requestNotificationPermission() {
+          if (
+            !enableWebNotifications ||
+            !preferenceEnabled() ||
+            !("Notification" in window) ||
+            Notification.permission !== "default"
+          ) return;
+          Notification.requestPermission().catch(() => {});
+        }
+
+        function sendNotification(body) {
+          if (
+            !enableWebNotifications ||
+            !preferenceEnabled() ||
+            !("Notification" in window) ||
+            Notification.permission !== "granted"
+          ) return;
+          try {
+            new Notification("TideGuard", { body, tag: "tideguard-" + queue });
+          } catch (_) {}
+        }
+
+        function scheduleCheckInNotification() {
+          if (notificationTimer) {
+            clearTimeout(notificationTimer);
+            notificationTimer = null;
+          }
+          if (!enableWebNotifications || !nextCheckAtMs || notifiedCheckAtMs === nextCheckAtMs) {
+            return;
+          }
+          const fire = () => {
+            notifiedCheckAtMs = nextCheckAtMs;
+            sendNotification(copy.notificationSoon);
+          };
+          const delay = nextCheckAtMs - Date.now() - 60_000;
+          if (delay <= 0) {
+            fire();
+          } else {
+            notificationTimer = setTimeout(fire, delay);
+          }
+        }
+
+        async function getTurnstileToken() {
+          if (!turnstileSitekey) return "";
+          for (let i = 0; i < 100 && !window.turnstile; i += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          if (!window.turnstile) throw new Error("Visitor verification could not load");
+          return await new Promise((resolve, reject) => {
+            turnstileResolve = resolve;
+            turnstileReject = reject;
+            const options = {
+              sitekey: turnstileSitekey,
+              callback: (token) => {
+                const done = turnstileResolve;
+                turnstileResolve = null;
+                turnstileReject = null;
+                if (done) done(token);
+              },
+              "error-callback": () => {
+                const fail = turnstileReject;
+                turnstileResolve = null;
+                turnstileReject = null;
+                if (fail) fail(new Error("Visitor verification failed"));
+              },
+              "expired-callback": () => {
+                turnstileResolve = null;
+                turnstileReject = null;
+              },
+            };
+            if (turnstileWidgetId === null) {
+              turnstileWidgetId = window.turnstile.render("#join-turnstile", options);
+            } else {
+              window.turnstile.reset(turnstileWidgetId);
+            }
+          });
+        }
+
         function paintRoomPhase() {
           if (!el.openStatus) return;
           const opensAt = scheduledOpensAt;
@@ -140,6 +234,11 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         }
 
         function noteRoomPhase(data) {
+          if (data.roomPhase === "closed" && data.closeAction === "passthrough") {
+            stopPolling();
+            window.location.assign(returnTo);
+            return;
+          }
           if (typeof data.admissionOpen === "boolean") {
             admissionOpen = data.admissionOpen;
           }
@@ -150,6 +249,9 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
             scheduledOpensAt = null;
           }
           paintRoomPhase();
+          if (data.roomPhase === "closed" && el.openStatus) {
+            el.openStatus.textContent = "This queue is closed";
+          }
           if (!admissionOpen && scheduledOpensAt && scheduledOpensAt > Date.now()) {
             if (!openTimer) {
               openTimer = setInterval(paintRoomPhase, 1000);
@@ -307,12 +409,14 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           if (Number.isFinite(absolute) && absolute > 0) {
             nextCheckAtMs = absolute;
             lastPollHintMs = Math.max(2000, absolute - Date.now());
+            scheduleCheckInNotification();
             return;
           }
           const hint = Number(data.nextPollAfterMs);
           if (Number.isFinite(hint) && hint >= 2000) {
             lastPollHintMs = hint;
             nextCheckAtMs = Date.now() + hint;
+            scheduleCheckInNotification();
           }
         }
 
@@ -321,7 +425,13 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           el.enterPanel.hidden = false;
           el.progress.style.setProperty("--progress", "100%");
           setStatus("You’re next — confirm to enter", "ok");
-          if (firstShow) playTurnSoundOnce();
+          if (firstShow) {
+            playTurnSoundOnce();
+            if (!readyNotificationSent) {
+              readyNotificationSent = true;
+              sendNotification(copy.notificationReady);
+            }
+          }
           let remaining = Number.isFinite(data.holdSecondsRemaining)
             ? data.holdSecondsRemaining
             : 0;
@@ -346,6 +456,7 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         async function forfeitHold() {
           el.enterPanel.hidden = true;
           turnSoundPlayed = false;
+          readyNotificationSent = false;
           setStatus("Hold expired. Rejoining the line…", "err");
           try {
             await fetch("/leave", {
@@ -397,6 +508,7 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         async function join() {
           const body = { queue };
           if (visitorId) body.visitorId = visitorId;
+          if (turnstileSitekey) body.turnstileToken = await getTurnstileToken();
           const res = await fetch("/join", {
             method: "POST",
             credentials: "same-origin",
@@ -435,6 +547,7 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
             if (res.status === 404) {
               el.enterPanel.hidden = true;
               turnSoundPlayed = false;
+              readyNotificationSent = false;
               if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
               localStorage.removeItem(storageKey);
               visitorId = "";
@@ -536,12 +649,13 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
 
         el.enterBtn.addEventListener("click", () => { confirmEnter(); });
 
-        if (playTurnSound && el.soundToggle) {
+        if ((playTurnSound || enableWebNotifications) && el.soundToggle) {
           el.soundToggle.addEventListener("change", () => {
             localStorage.setItem(soundPrefKey, el.soundToggle.checked ? "1" : "0");
             if (el.soundToggle.checked) unlockTurnSound();
+            if (el.soundToggle.checked) requestNotificationPermission();
           });
-          if (el.soundToggle.checked) {
+          if (el.soundToggle.checked && playTurnSound) {
             const unlock = () => {
               unlockTurnSound();
               window.removeEventListener("pointerdown", unlock);
@@ -550,6 +664,16 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
             window.addEventListener("pointerdown", unlock, { once: true });
             window.addEventListener("keydown", unlock, { once: true });
           }
+        }
+
+        if (enableWebNotifications) {
+          const enableNotifications = () => {
+            requestNotificationPermission();
+            window.removeEventListener("pointerdown", enableNotifications);
+            window.removeEventListener("keydown", enableNotifications);
+          };
+          window.addEventListener("pointerdown", enableNotifications, { once: true });
+          window.addEventListener("keydown", enableNotifications, { once: true });
         }
 
         (async () => {
@@ -570,6 +694,7 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           stopPolling();
           if (holdTimer) clearInterval(holdTimer);
           if (openTimer) clearInterval(openTimer);
+          if (notificationTimer) clearTimeout(notificationTimer);
         });
       })();
     </script>`;

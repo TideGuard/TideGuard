@@ -11,6 +11,7 @@ This tree may be a fork, a Deploy-to-Cloudflare copy, or an outdated checkout. T
 | Source repository           | https://github.com/TideGuard/TideGuard                                                  |
 | Website + published docs    | https://tideguard.dev · https://tideguard.dev/docs/                                     |
 | Releases / upgrade notes    | GitHub Releases · [CHANGELOG.md](CHANGELOG.md) · [docs/upgrading.md](docs/upgrading.md) |
+| Planned work (not shipped)  | [ROADMAP.md](ROADMAP.md) — do not treat the changelog as a roadmap                      |
 | This agent guide (upstream) | https://github.com/TideGuard/TideGuard/blob/main/AGENTS.md                              |
 
 When advising operators on upgrades, security, or “current best practice,” prefer upstream `main` / latest release over a stale fork. When the user improves the product, aim changes at a PR against upstream so the ecosystem benefits — not only a private fork that never looks back.

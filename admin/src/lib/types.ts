@@ -15,10 +15,15 @@ export interface QueueMetrics {
   paused: boolean;
   admissionMode: "queue" | "lottery";
   opensAt: number | null;
+  closesAt: number | null;
+  closeAction: "reject" | "passthrough";
+  roomPhase: "scheduled" | "open" | "closed";
   effectiveAdmitPerSecond: number;
   totalInflow: number;
   inflowCurrent: number;
   outflowCurrent: number;
+  checkInPeriodSeconds?: number;
+  checkInPeriodWarning?: boolean;
   health: {
     enabled: boolean;
     level: "ok" | "slow" | "pause";
@@ -94,6 +99,8 @@ export interface WaitingRoomBranding {
   admitHoldSeconds: number;
   enterButtonLabel: string;
   playTurnSound: boolean;
+  joinTurnstileEnabled: boolean;
+  enableWebNotifications: boolean;
   googleAnalyticsId: string;
 }
 
@@ -151,6 +158,15 @@ export interface WebhookSettingsPublic {
   hasSecret: boolean;
 }
 
+export interface RoomRules {
+  seoCrawlerBypass: boolean;
+  cookieBypassName: string;
+  headerBypassName: string;
+  headerBypassValue: string;
+  jsonMode: boolean;
+  rejectWhenFull: boolean;
+}
+
 export interface HealthConfig {
   enabled?: boolean;
   url?: string;
@@ -171,6 +187,7 @@ export interface TeamInvite {
 
 export interface AdminState {
   queue: string;
+  knownQueues: string[];
   branding: WaitingRoomBranding;
   metrics: QueueMetrics;
   admissionMode: "queue" | "lottery";
@@ -179,8 +196,12 @@ export interface AdminState {
   geoBlock: GeoBlockSettings;
   turnstile: TurnstileSettings;
   webhooks: WebhookSettingsPublic;
+  roomRules: RoomRules;
   traffic: {
     opensAt: number | null;
+    closesAt: number | null;
+    closeAction: "reject" | "passthrough";
+    roomPhase: "scheduled" | "open" | "closed";
     paused: boolean;
     health: QueueMetrics["health"];
     effectiveAdmitPerSecond: number;

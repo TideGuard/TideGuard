@@ -5,10 +5,20 @@ import { api } from "../lib/api";
 import type { QueueMetrics } from "../lib/types";
 import { notifyError, notifyOk } from "../views/dashboard/notify";
 
-function formatOpensAt(opensAt: number | null): string {
-  if (!opensAt) return "Open now";
-  if (opensAt > Date.now()) {
-    return `Opens ${new Date(opensAt).toLocaleString([], {
+function formatSchedule(metrics: QueueMetrics): string {
+  if (metrics.roomPhase === "closed") {
+    return metrics.closeAction === "passthrough" ? "Closed · passthrough" : "Closed";
+  }
+  if (metrics.roomPhase === "scheduled" && metrics.opensAt) {
+    return `Opens ${new Date(metrics.opensAt).toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  }
+  if (metrics.closesAt) {
+    return `Closes ${new Date(metrics.closesAt).toLocaleString([], {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -153,7 +163,7 @@ export function EventToolbar({
               ? "Health pause"
               : metrics.paused
                 ? "Paused"
-                : formatOpensAt(metrics.opensAt)
+                : formatSchedule(metrics)
           }
           tone={paused ? "danger" : undefined}
         />

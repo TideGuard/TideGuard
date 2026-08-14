@@ -16,6 +16,8 @@ export interface AccessTokenClaims {
   exp: number;
   /** Issued-at time (unix seconds). */
   iat: number;
+  /** Per-room revocation generation. Missing claims are legacy epoch 0. */
+  epoch?: number;
 }
 
 export class TokenError extends Error {
@@ -37,7 +39,7 @@ export async function signAccessToken(claims: AccessTokenClaims, secret: string)
 export async function verifyAccessToken(
   token: string,
   secret: string,
-  options: { nowSeconds?: number; expectedQueue?: string } = {},
+  options: { nowSeconds?: number; expectedQueue?: string; expectedEpoch?: number } = {},
 ): Promise<AccessTokenClaims> {
   const parts = token.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
@@ -69,6 +71,9 @@ export async function verifyAccessToken(
   if (options.expectedQueue && claims.queue !== options.expectedQueue) {
     throw new TokenError("invalid_token", "Access token queue mismatch");
   }
+  if (options.expectedEpoch !== undefined && (claims.epoch ?? 0) !== options.expectedEpoch) {
+    throw new TokenError("invalid_token", "Access token has been revoked");
+  }
 
   return claims;
 }
@@ -77,6 +82,7 @@ export function buildAdmissionClaims(input: {
   visitorId: string;
   queue: string;
   tokenTTLSeconds: number;
+  epoch?: number;
   nowMs?: number;
 }): AccessTokenClaims {
   const nowSeconds = Math.floor((input.nowMs ?? Date.now()) / 1000);
@@ -85,6 +91,7 @@ export function buildAdmissionClaims(input: {
     queue: input.queue,
     iat: nowSeconds,
     exp: nowSeconds + input.tokenTTLSeconds,
+    epoch: input.epoch ?? 0,
   };
 }
 
@@ -99,6 +106,8 @@ function isClaimsShape(value: unknown): value is AccessTokenClaims {
     typeof claims.queue === "string" &&
     claims.queue.length > 0 &&
     typeof claims.exp === "number" &&
-    typeof claims.iat === "number"
+    typeof claims.iat === "number" &&
+    (claims.epoch === undefined ||
+      (typeof claims.epoch === "number" && Number.isInteger(claims.epoch) && claims.epoch >= 0))
   );
 }

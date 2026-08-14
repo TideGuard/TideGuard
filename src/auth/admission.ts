@@ -11,6 +11,7 @@ export async function requireAdmission(
   request: Request,
   env: Env,
   expectedQueue?: string,
+  expectedEpoch?: number,
 ): Promise<{ visitorId: string; queue: string; token: string }> {
   const url = new URL(request.url);
   const token = extractAccessToken(request, url);
@@ -22,7 +23,12 @@ export async function requireAdmission(
     const claims = await verifyAccessToken(
       token,
       requireTokenSecret(env),
-      expectedQueue ? { expectedQueue } : undefined,
+      expectedQueue || expectedEpoch !== undefined
+        ? {
+            ...(expectedQueue ? { expectedQueue } : {}),
+            ...(expectedEpoch !== undefined ? { expectedEpoch } : {}),
+          }
+        : undefined,
     );
     return { visitorId: claims.sub, queue: claims.queue, token };
   } catch (error) {

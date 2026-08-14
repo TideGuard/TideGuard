@@ -82,6 +82,10 @@ export interface QueueMetrics {
   admissionMode: AdmissionMode;
   /** Unix ms; null when the room is open immediately. */
   opensAt: number | null;
+  /** Unix ms; null when the room has no scheduled close. */
+  closesAt: number | null;
+  closeAction: "reject" | "passthrough";
+  roomPhase: "scheduled" | "open" | "closed";
   /** Effective admit rate after health multiplier. */
   effectiveAdmitPerSecond: number;
   /** Cumulative joins since room creation (approx; for inflow cards). */
@@ -133,6 +137,9 @@ export interface JoinResult {
   admissionOpen?: boolean;
   /** Future opening time while still scheduled closed; omitted/null once open. */
   opensAt?: number | null;
+  closesAt?: number | null;
+  closeAction?: "reject" | "passthrough";
+  roomPhase?: "scheduled" | "open" | "closed";
   accessToken?: string;
 }
 
@@ -154,6 +161,9 @@ export interface StatusResult {
   nextCheckAt?: number | null;
   admissionOpen?: boolean;
   opensAt?: number | null;
+  closesAt?: number | null;
+  closeAction?: "reject" | "passthrough";
+  roomPhase?: "scheduled" | "open" | "closed";
   accessToken?: string;
 }
 

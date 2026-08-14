@@ -16,6 +16,10 @@ import { ApiError, jsonOk } from "../core/errors";
 import type { JoinResult, StatusResult } from "../core/types";
 import { configFromEnv, getQueueRoom } from "../queue/client";
 import { evaluateGeoBlock } from "../admin/geo-block";
+import { dispatchWebhook } from "../admin/webhook-dispatch";
+import { verifyTurnstileToken } from "../admin/cloudflare-api";
+import { readBranding } from "../admin/store";
+import { readTurnstileSecret, readTurnstileSettings } from "../admin/turnstile-store";
 import {
   parseOptionalCount,
   parseOptionalVisitorId,
@@ -46,6 +50,9 @@ type VisitorView = {
   nextCheckAt?: number | null;
   admissionOpen?: boolean;
   opensAt?: number | null;
+  closesAt?: number | null;
+  closeAction?: "reject" | "passthrough";
+  roomPhase?: "scheduled" | "open" | "closed";
 };
 
 function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean }) {
@@ -59,6 +66,11 @@ function visitorPayload(visitor: VisitorView, options?: { includeDepth?: boolean
     entered: visitor.entered,
     admissionOpen: visitor.admissionOpen ?? true,
     ...(visitor.opensAt != null ? { opensAt: visitor.opensAt } : {}),
+    ...(visitor.closesAt != null ? { closesAt: visitor.closesAt } : {}),
+    ...(visitor.roomPhase ? { roomPhase: visitor.roomPhase } : {}),
+    ...(visitor.roomPhase === "closed" && visitor.closeAction
+      ? { closeAction: visitor.closeAction }
+      : {}),
     ...(visitor.holdSecondsRemaining !== null
       ? { holdSecondsRemaining: visitor.holdSecondsRemaining }
       : {}),
@@ -95,6 +107,7 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
   }
 
   let visitorId = parseOptionalVisitorId(body.visitorId);
+  let resumedWithTicket = false;
 
   // Same-browser multi-tab: resume the ticket-bound visitor and ignore conflicting ids.
   const existingTicket = readTicketCookie(request);
@@ -102,8 +115,36 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
     try {
       const claims = await verifyVisitorTicket(existingTicket, secret, { expectedQueue: queue });
       visitorId = claims.sub;
+      resumedWithTicket = true;
     } catch {
       // Invalid/expired ticket — fall through to body / new id.
+    }
+  }
+
+  if (!resumedWithTicket) {
+    const branding = await readBranding(env, queue);
+    if (branding.joinTurnstileEnabled) {
+      const settings = await readTurnstileSettings(env);
+      const turnstileSecret = settings ? await readTurnstileSecret(env) : null;
+      if (!settings || !turnstileSecret) {
+        throw new ApiError(
+          "invalid_config",
+          "Visitor verification is temporarily unavailable",
+          503,
+        );
+      }
+      const turnstileToken = typeof body.turnstileToken === "string" ? body.turnstileToken : "";
+      const verification = await verifyTurnstileToken({
+        secret: turnstileSecret,
+        token: turnstileToken,
+        remoteip: request.headers.get("cf-connecting-ip"),
+        expectedHostnames: settings.domains,
+      });
+      if (!verification.success) {
+        throw new ApiError("unauthorized", "Visitor verification failed", 401, {
+          reason: verification.errorCodes[0] ?? "invalid-input-response",
+        });
+      }
     }
   }
 
@@ -118,6 +159,9 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     if (message === "queue_full" || message.includes("queue_full")) {
+      void dispatchWebhook(env, "queue_full", queue, {
+        maxWaitingVisitors: null,
+      });
       throw new ApiError(
         "queue_full",
         "The waiting room is at capacity. Please try again later.",
@@ -136,11 +180,13 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
 
   let accessToken: string | undefined;
   if (canIssueAccessToken(joined)) {
+    const epoch = await room.getTokenEpoch();
     accessToken = await signAccessToken(
       buildAdmissionClaims({
         visitorId: joined.id,
         queue,
         tokenTTLSeconds: config.tokenTTLSeconds,
+        epoch,
       }),
       secret,
     );
@@ -173,11 +219,13 @@ export async function handleStatus(request: Request, env: Env): Promise<Response
   const cookies: string[] = [];
   let accessToken: string | undefined;
   if (canIssueAccessToken(status.visitor)) {
+    const epoch = await room.getTokenEpoch();
     accessToken = await signAccessToken(
       buildAdmissionClaims({
         visitorId: status.visitor.id,
         queue,
         tokenTTLSeconds: config.tokenTTLSeconds,
+        epoch,
         ...(status.visitor.admittedAt ? { nowMs: status.visitor.admittedAt } : {}),
       }),
       secret,
@@ -216,6 +264,7 @@ export async function handleEnter(request: Request, env: Env): Promise<Response>
       visitorId: entered.visitor.id,
       queue,
       tokenTTLSeconds: config.tokenTTLSeconds,
+      epoch: await room.getTokenEpoch(),
       ...(entered.visitor.admittedAt ? { nowMs: entered.visitor.admittedAt } : {}),
     }),
     secret,

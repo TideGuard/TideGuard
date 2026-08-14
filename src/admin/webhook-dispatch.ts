@@ -1,5 +1,5 @@
 /**
- * Fire operator webhooks (best-effort, never throws to callers).
+ * Fire operator webhooks immediately, with Durable Object retry on failure.
  */
 
 import {
@@ -10,6 +10,7 @@ import {
   type WebhookSettings,
 } from "./webhook-store";
 import { hmacSign } from "../auth/crypto";
+import { getQueueRoom } from "../queue/client";
 
 export interface WebhookPayload {
   event: WebhookEvent;
@@ -42,7 +43,7 @@ export async function dispatchWebhook(
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
       "content-type": "application/json",
-      "user-agent": "TideGuard-Webhook/0.3",
+      "user-agent": "TideGuard-Webhook/0.5",
     };
     if (settings.sealedSecret) {
       const secret = await openWebhookSecret(env, settings.sealedSecret);
@@ -50,20 +51,35 @@ export async function dispatchWebhook(
         headers["x-tideguard-signature"] = await signBody(secret, body);
       }
     }
+    let delivered = false;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5_000);
     try {
-      await fetch(settings.url, {
+      const response = await fetch(settings.url, {
         method: "POST",
         headers,
         body,
         signal: controller.signal,
       });
+      delivered = response.ok;
+    } catch {
+      delivered = false;
     } finally {
       clearTimeout(timer);
     }
+
+    if (!delivered) {
+      const room = getQueueRoom(env, queue);
+      await room.enqueueWebhook({
+        url: settings.url,
+        headers,
+        body,
+        event,
+        queue,
+      });
+    }
   } catch {
-    /* best-effort */
+    /* Delivery must never fail the operator or visitor request. */
   }
 }
 
@@ -100,5 +116,38 @@ export async function maybeDispatchDepthWebhook(
     });
   } catch {
     /* best-effort */
+  }
+}
+
+/** Fire once when a queue transitions into origin-health auto-pause. */
+export async function maybeDispatchOriginUnhealthyWebhook(
+  env: Env,
+  queue: string,
+  autoPaused: boolean,
+  detail: Record<string, string | number | boolean | null>,
+): Promise<void> {
+  try {
+    const settings = await readWebhookSettings(env);
+    const active = new Set(settings.originUnhealthyQueues ?? []);
+    if (!autoPaused) {
+      if (active.delete(queue)) {
+        await writeWebhookSettings(env, {
+          ...settings,
+          originUnhealthyQueues: [...active],
+        });
+      }
+      return;
+    }
+    if (active.has(queue)) {
+      return;
+    }
+    active.add(queue);
+    await writeWebhookSettings(env, {
+      ...settings,
+      originUnhealthyQueues: [...active],
+    });
+    await dispatchWebhook(env, "origin_unhealthy", queue, detail);
+  } catch {
+    /* best-effort transition observation */
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "tideguard",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "Lightweight open-source waiting room for Cloudflare Workers",
   "homepage": "https://tideguard.dev",
   "repository": {
@@ -45,7 +45,7 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.21.1",
+    "@cloudflare/vitest-pool-workers": "^0.21.3",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
@@ -62,12 +62,12 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10",
-    "wrangler": "^4.121.0"
+    "wrangler": "^4.123.0"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,
     "fsevents@2.3.3": true,
-    "workerd@1.20260804.1": true
+    "workerd@1.20260811.1": true
   },
   "dependencies": {
     "@mantine/core": "^9.5.1",

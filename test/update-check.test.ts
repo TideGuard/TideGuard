@@ -27,9 +27,9 @@ describe("checkForUpdates", () => {
       fetch: async () =>
         new Response(
           JSON.stringify({
-            tag_name: "v0.4.0",
-            html_url: "https://github.com/TideGuard/TideGuard/releases/tag/v0.4.0",
-            name: "0.4.0",
+            tag_name: "v0.6.0",
+            html_url: "https://github.com/TideGuard/TideGuard/releases/tag/v0.6.0",
+            name: "0.6.0",
             draft: false,
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -37,8 +37,8 @@ describe("checkForUpdates", () => {
     });
 
     expect(result.currentVersion).toBe(VERSION);
-    expect(result.latestVersion).toBe("0.4.0");
-    expect(result.latestTag).toBe("v0.4.0");
+    expect(result.latestVersion).toBe("0.6.0");
+    expect(result.latestTag).toBe("v0.6.0");
     expect(result.updateAvailable).toBe(true);
     expect(result.source).toBe("github");
     expect(result.message).toMatch(/Update available/);

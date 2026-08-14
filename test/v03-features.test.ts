@@ -162,10 +162,13 @@ describe("depth webhook debounce", () => {
 });
 
 describe("waiting room i18n / a11y / embed", () => {
-  it("resolves locale stubs to en", () => {
+  it("resolves supported query and Accept-Language locales", () => {
     expect(resolveWaitingRoomLocale("en")).toBe("en");
-    expect(resolveWaitingRoomLocale("fr")).toBe("en");
+    expect(resolveWaitingRoomLocale("fr")).toBe("fr");
+    expect(resolveWaitingRoomLocale("de-DE,de;q=0.9,en;q=0.8")).toBe("de");
+    expect(resolveWaitingRoomLocale("zh,ja;q=0.8,en;q=0.7")).toBe("ja");
     expect(waitingRoomStrings("en").brand).toBe("TideGuard");
+    expect(waitingRoomStrings("es").positionLabel).toBe("Posición");
   });
 
   it("renders a11y hooks and embed height script", () => {
@@ -181,7 +184,7 @@ describe("waiting room i18n / a11y / embed", () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("tideguard-embed-height");
     expect(html).toContain("Next update");
-    expect(html).toContain("Queue is open — keep this page open");
+    expect(html).toContain("Queue is open — keep this tab open until you enter");
     expect(html).not.toContain("googletagmanager.com/gtag/js");
   });
 
@@ -192,6 +195,20 @@ describe("waiting room i18n / a11y / embed", () => {
     });
     expect(html).toContain("https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ");
     expect(html).toContain("gtag('config', 'G-ABC123XYZ')");
+  });
+
+  it("injects configured visitor Turnstile and notification behavior", () => {
+    const html = renderWaitingRoom({
+      queue: "default",
+      turnstileSitekey: "site-key",
+      branding: {
+        joinTurnstileEnabled: true,
+        enableWebNotifications: true,
+      },
+    });
+    expect(html).toContain("challenges.cloudflare.com/turnstile/v0/api.js");
+    expect(html).toContain("site-key");
+    expect(html).toContain("Notification.requestPermission");
   });
 });
 
@@ -209,6 +226,12 @@ describe("Google Analytics Measurement ID", () => {
     const branding = sanitizeBrandingInput({ googleAnalyticsId: "g-test99" });
     expect(branding.googleAnalyticsId).toBe("G-TEST99");
     expect(sanitizeBrandingInput({ googleAnalyticsId: "not-an-id" }).googleAnalyticsId).toBe("");
+    expect(
+      sanitizeBrandingInput({
+        joinTurnstileEnabled: true,
+        enableWebNotifications: true,
+      }),
+    ).toMatchObject({ joinTurnstileEnabled: true, enableWebNotifications: true });
   });
 
   it("allows Google Analytics hosts in CSP", () => {

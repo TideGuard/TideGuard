@@ -154,6 +154,7 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
     ],
     createdAt: now,
     defaultQueue: queue,
+    knownQueues: [queue],
   });
 
   const actor = { id: userId, username };

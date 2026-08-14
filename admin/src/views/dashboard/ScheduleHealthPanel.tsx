@@ -5,6 +5,7 @@ import {
   Checkbox,
   Group,
   NumberInput,
+  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -26,6 +27,10 @@ export function ScheduleHealthPanel({
 }) {
   const hc = state.traffic.healthConfig;
   const [opensAt, setOpensAt] = useState("");
+  const [closesAt, setClosesAt] = useState("");
+  const [closeAction, setCloseAction] = useState<"reject" | "passthrough">(
+    state.traffic.closeAction,
+  );
   const [enabled, setEnabled] = useState(Boolean(hc.enabled));
   const [url, setUrl] = useState(String(hc.url ?? ""));
   const [interval, setIntervalSec] = useState(Number(hc.intervalSeconds ?? 30));
@@ -47,11 +52,21 @@ export function ScheduleHealthPanel({
     }
   }, [metrics.opensAt]);
 
+  useEffect(() => {
+    if (metrics.closesAt) {
+      const d = new Date(metrics.closesAt);
+      setClosesAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    } else {
+      setClosesAt("");
+    }
+    setCloseAction(metrics.closeAction);
+  }, [metrics.closesAt, metrics.closeAction]);
+
   return (
     <Panel
       id="admission"
       title="Admission schedule & health"
-      description="Schedule when the room opens for the public. Until then, /wait shows a countdown and admissions stay closed. Pause and admit rate live in the event toolbar."
+      description="Schedule when the room opens and closes. Pause and admit rate live in the event toolbar."
     >
       <Stack>
         <Alert color="teal" title="Scheduled room open">
@@ -76,13 +91,35 @@ export function ScheduleHealthPanel({
           value={opensAt}
           onChange={(e) => setOpensAt(e.currentTarget.value)}
         />
+        <TextInput
+          label="Closing time (local)"
+          description="Leave empty to keep the room open indefinitely."
+          type="datetime-local"
+          value={closesAt}
+          onChange={(e) => setClosesAt(e.currentTarget.value)}
+        />
+        <Select
+          label="After closing"
+          value={closeAction}
+          data={[
+            { value: "reject", label: "Keep the gate closed" },
+            { value: "passthrough", label: "Allow traffic through" },
+          ]}
+          onChange={(value) => setCloseAction(value === "passthrough" ? "passthrough" : "reject")}
+        />
         <Group>
           <Button
             onClick={() => {
               const iso = opensAt ? new Date(opensAt).toISOString() : null;
+              const closesIso = closesAt ? new Date(closesAt).toISOString() : null;
               void api("/api/admin/schedule", {
                 method: "PUT",
-                body: JSON.stringify({ queue: state.queue, opensAt: iso }),
+                body: JSON.stringify({
+                  queue: state.queue,
+                  opensAt: iso,
+                  closesAt: closesIso,
+                  closeAction,
+                }),
               })
                 .then(() => {
                   notifyOk("Schedule saved");
@@ -91,14 +128,19 @@ export function ScheduleHealthPanel({
                 .catch(notifyError);
             }}
           >
-            Save opening time
+            Save schedule
           </Button>
           <Button
             variant="default"
             onClick={() => {
               void api("/api/admin/schedule", {
                 method: "PUT",
-                body: JSON.stringify({ queue: state.queue, opensAt: null }),
+                body: JSON.stringify({
+                  queue: state.queue,
+                  opensAt: null,
+                  closesAt: closesAt ? new Date(closesAt).toISOString() : null,
+                  closeAction,
+                }),
               })
                 .then(() => {
                   setOpensAt("");

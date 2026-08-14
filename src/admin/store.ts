@@ -36,10 +36,16 @@ export async function readAdminConfig(env: Env): Promise<AdminConfig | null> {
       users,
       createdAt: typeof config.createdAt === "number" ? config.createdAt : 0,
       defaultQueue: config.defaultQueue,
+      knownQueues: normalizeKnownQueues(config.defaultQueue, config.knownQueues),
     };
 
     // Persist migration away from legacy top-level password fields.
-    if (config.passwordHash || config.passwordSalt || !Array.isArray(config.users)) {
+    if (
+      config.passwordHash ||
+      config.passwordSalt ||
+      !Array.isArray(config.users) ||
+      !Array.isArray(config.knownQueues)
+    ) {
       await writeAdminConfig(env, normalized);
     }
 
@@ -104,8 +110,27 @@ export async function writeAdminConfig(env: Env, config: AdminConfig): Promise<v
     users: config.users,
     createdAt: config.createdAt,
     defaultQueue: config.defaultQueue,
+    knownQueues: normalizeKnownQueues(config.defaultQueue, config.knownQueues),
   };
   await env.CONFIG_KV.put(ADMIN_CONFIG_KEY, JSON.stringify(payload));
+}
+
+function normalizeKnownQueues(defaultQueue: string, raw: unknown): string[] {
+  const queues = Array.isArray(raw)
+    ? raw.filter((queue): queue is string => typeof queue === "string")
+    : [];
+  return [...new Set([defaultQueue, ...queues])];
+}
+
+export async function rememberKnownQueue(env: Env, queue: string): Promise<void> {
+  const config = await readAdminConfig(env);
+  if (!config || config.knownQueues.includes(queue)) {
+    return;
+  }
+  await writeAdminConfig(env, {
+    ...config,
+    knownQueues: [...config.knownQueues, queue],
+  });
 }
 
 export async function clearAdminConfig(env: Env): Promise<void> {
@@ -280,7 +305,10 @@ export async function writeBranding(
   queue: string,
   branding: WaitingRoomBranding,
 ): Promise<void> {
-  await env.CONFIG_KV.put(brandingKey(queue), JSON.stringify(branding));
+  await Promise.all([
+    env.CONFIG_KV.put(brandingKey(queue), JSON.stringify(branding)),
+    rememberKnownQueue(env, queue),
+  ]);
 }
 
 export function sanitizeBrandingInput(
@@ -308,6 +336,8 @@ export function sanitizeBrandingInput(
     admitHoldSeconds,
     enterButtonLabel: clampText(merged.enterButtonLabel, 40) || DEFAULT_BRANDING.enterButtonLabel,
     playTurnSound: Boolean(merged.playTurnSound),
+    joinTurnstileEnabled: Boolean(merged.joinTurnstileEnabled),
+    enableWebNotifications: Boolean(merged.enableWebNotifications),
     googleAnalyticsId: sanitizeGoogleAnalyticsId(merged.googleAnalyticsId),
   };
 }

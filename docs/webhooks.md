@@ -1,6 +1,6 @@
 # Operator webhooks
 
-TideGuard can POST HTTPS callbacks when operators pause admissions, change origin health config, or when waiting depth crosses a threshold. Delivery is **best-effort** (5s timeout, no retries) — use it for paging / Slack bridges, not as a durable audit log (see Activity for that).
+TideGuard can POST HTTPS callbacks for operator and queue transitions. It tries once with a 5s timeout. Failed or non-2xx deliveries are stored in the queue's Durable Object and retried up to eight times with exponential backoff. Activity remains the authoritative operator audit log.
 
 ## Configure
 
@@ -22,11 +22,15 @@ API: `PUT /api/admin/webhooks` (admin session). Settings appear on `GET /api/adm
 }
 ```
 
-| Event    | When                                                        | `detail` highlights    |
-| -------- | ----------------------------------------------------------- | ---------------------- |
-| `pause`  | Silent pause toggled                                        | `paused`               |
-| `health` | Origin health throttle config saved                         | `enabled`, `url`       |
-| `depth`  | Waiting count reaches threshold (once until it drops below) | `waiting`, `threshold` |
+| Event                | When                                                        | `detail` highlights       |
+| -------------------- | ----------------------------------------------------------- | ------------------------- |
+| `pause`              | Silent pause toggled                                        | `paused`                  |
+| `health`             | Origin health throttle config saved                         | `enabled`, `url`          |
+| `depth`              | Waiting count reaches threshold (once until it drops below) | `waiting`, `threshold`    |
+| `opened`             | A future opening schedule is cleared or becomes open        | `opensAt`                 |
+| `origin_unhealthy`   | Origin health first enters auto-pause                       | health level/status/error |
+| `queue_full`         | A join is rejected at the waiting cap                       | `rejected`                |
+| `admit_rate_changed` | An operator changes max outflow                             | rate and override         |
 
 ## Signature
 
@@ -43,6 +47,7 @@ Verify with the same secret using a timing-safe compare. See `hmacSign` in `src/
 - Factory reset (`POST /api/admin/reset`) clears webhook settings
 - Rotating `TOKEN_SECRET` invalidates the sealed signing secret — re-save it
 - Do not point webhooks at TideGuard itself on the hot path
+- Retry rows contain the prepared URL, headers, signature, and body; retries never read KV
 
 ## Related
 

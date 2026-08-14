@@ -34,6 +34,10 @@ export interface WaitingRoomBranding {
    * jingle when Continue appears so visitors notice in another tab.
    */
   playTurnSound: boolean;
+  /** Require a valid Turnstile challenge before a new browser joins. */
+  joinTurnstileEnabled: boolean;
+  /** Offer browser notifications for upcoming check-ins and admission. */
+  enableWebNotifications: boolean;
   /**
    * GA4 Measurement ID (`G-…`). When set, `/wait` loads Google’s official gtag
    * snippet. Empty string disables analytics.
@@ -57,6 +61,8 @@ export const DEFAULT_BRANDING: WaitingRoomBranding = {
   admitHoldSeconds: 120,
   enterButtonLabel: "Continue",
   playTurnSound: false,
+  joinTurnstileEnabled: false,
+  enableWebNotifications: false,
   googleAnalyticsId: "",
 };
 

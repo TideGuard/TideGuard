@@ -2,6 +2,9 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_QUEUE_CONFIG } from "../src/core/config";
 import type { QueueConfig } from "../src/core/types";
+import { buildAdmissionClaims, signAccessToken, verifyAccessToken } from "../src/auth";
+
+const TOKEN_SECRET = "test-token-secret-do-not-use-in-production";
 
 function room(name: string) {
   return env.QUEUE_ROOM.getByName(name);
@@ -12,6 +15,29 @@ function config(overrides: Partial<QueueConfig> = {}): QueueConfig {
 }
 
 describe("opening schedule and silent pause", () => {
+  it("invalidates an admission token after bumping the room epoch", async () => {
+    const stub = room("token-epoch");
+    const epoch = await stub.getTokenEpoch();
+    const token = await signAccessToken(
+      buildAdmissionClaims({
+        visitorId: "admitted",
+        queue: "token-epoch",
+        tokenTTLSeconds: 600,
+        epoch,
+      }),
+      TOKEN_SECRET,
+    );
+    await expect(
+      verifyAccessToken(token, TOKEN_SECRET, { expectedEpoch: epoch }),
+    ).resolves.toBeTruthy();
+
+    const nextEpoch = await stub.bumpTokenEpoch();
+    expect(nextEpoch).toBe(epoch + 1);
+    await expect(
+      verifyAccessToken(token, TOKEN_SECRET, { expectedEpoch: nextEpoch }),
+    ).rejects.toMatchObject({ code: "invalid_token" });
+  });
+
   it("keeps visitors waiting before opensAt even with free capacity", async () => {
     const stub = room("opens-later");
     const cfg = config({ maxConcurrentUsers: 10 });
@@ -33,6 +59,58 @@ describe("opening schedule and silent pause", () => {
       now: t0 + 60_000,
     });
     expect(after.status).toBe("admitted");
+  });
+
+  it("reports scheduled, open, and post-close reject phases", async () => {
+    const stub = room("full-schedule");
+    const cfg = config({ maxConcurrentUsers: 10 });
+    const opensAt = 10_000_000;
+    const closesAt = opensAt + 60_000;
+    await stub.setSchedule({ opensAt, closesAt, closeAction: "reject" });
+
+    const early = await stub.join({
+      queue: "full-schedule",
+      config: cfg,
+      visitorId: "early",
+      now: opensAt - 1,
+    });
+    expect(early).toMatchObject({
+      status: "waiting",
+      admissionOpen: false,
+      roomPhase: "scheduled",
+      opensAt,
+      closesAt: null,
+      closeAction: "reject",
+    });
+
+    const open = await stub.join({
+      queue: "full-schedule",
+      config: cfg,
+      visitorId: "open",
+      now: opensAt,
+    });
+    expect(open).toMatchObject({
+      status: "admitted",
+      admissionOpen: true,
+      roomPhase: "open",
+      opensAt: null,
+      closesAt,
+    });
+
+    const closed = await stub.join({
+      queue: "full-schedule",
+      config: cfg,
+      visitorId: "closed",
+      now: closesAt,
+    });
+    expect(closed).toMatchObject({
+      status: "waiting",
+      admissionOpen: false,
+      roomPhase: "closed",
+      opensAt: null,
+      closesAt,
+      closeAction: "reject",
+    });
   });
 
   it("defers nextCheckAt until opensAt for early joiners", async () => {

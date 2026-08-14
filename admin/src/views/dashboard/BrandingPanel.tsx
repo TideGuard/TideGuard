@@ -51,6 +51,8 @@ export function BrandingPanel({
   const [showWaiting, setShowWaiting] = useState(Boolean(b.showWaitingCount));
   const [requireClick, setRequireClick] = useState(Boolean(b.requireClickToEnter));
   const [playSound, setPlaySound] = useState(Boolean(b.playTurnSound));
+  const [joinTurnstile, setJoinTurnstile] = useState(Boolean(b.joinTurnstileEnabled));
+  const [webNotifications, setWebNotifications] = useState(Boolean(b.enableWebNotifications));
   const [redirectUrl, setRedirectUrl] = useState(b.redirectUrl ?? "");
   const [hold, setHold] = useState(Number(b.admitHoldSeconds ?? 60));
   const [enterLabel, setEnterLabel] = useState(b.enterButtonLabel ?? "Continue");
@@ -69,6 +71,8 @@ export function BrandingPanel({
     showWaitingCount: showWaiting,
     requireClickToEnter: requireClick,
     playTurnSound: playSound,
+    joinTurnstileEnabled: joinTurnstile,
+    enableWebNotifications: webNotifications,
     redirectUrl,
     admitHoldSeconds: hold,
     enterButtonLabel: enterLabel,
@@ -152,6 +156,18 @@ export function BrandingPanel({
             checked={playSound}
             onChange={(e) => setPlaySound(e.currentTarget.checked)}
           />
+          <Checkbox
+            label="Require Turnstile to join"
+            description="Challenges new browsers before they enter the queue. Requires configured Turnstile settings."
+            checked={joinTurnstile}
+            onChange={(e) => setJoinTurnstile(e.currentTarget.checked)}
+          />
+          <Checkbox
+            label="Offer web notifications"
+            description="Visitors can opt in to reminders near check-in time and when it is their turn."
+            checked={webNotifications}
+            onChange={(e) => setWebNotifications(e.currentTarget.checked)}
+          />
           <TextInput
             label="Redirect URL"
             value={redirectUrl}
@@ -226,7 +242,7 @@ export function BrandingPanel({
             <Text size="sm" mb="xs">
               Iframe the waiting room on a marketing page. The embed posts{" "}
               <Code>tideguard-embed-height</Code> so the parent can resize. Optional{" "}
-              <Code>?lang=en</Code> selects locale stubs (English today).
+              <Code>?lang=en</Code> selects English, German, French, Spanish, or Japanese.
             </Text>
             <Code block>
               {`<iframe\n  src="/wait?embed=1&return=/checkout&queue=${queue}"\n  title="Waiting room"\n  style="width:100%;border:0;min-height:28rem"\n></iframe>\n<script>\nwindow.addEventListener("message", (e) => {\n  if (e.data?.type === "tideguard-embed-height") {\n    const el = document.querySelector("iframe[title='Waiting room']");\n    if (el) el.style.height = e.data.height + "px";\n  }\n});\n</script>`}

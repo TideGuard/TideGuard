@@ -31,7 +31,7 @@ Liveness check.
 Enter a queue.
 
 ```json
-{ "queue": "product-launch", "visitorId": "optional-id" }
+{ "queue": "product-launch", "visitorId": "optional-id", "turnstileToken": "optional-token" }
 ```
 
 - `200` — admitted immediately (includes `accessToken`; sets HttpOnly `tg_access` + `tg_ticket`)
@@ -47,6 +47,8 @@ Waiting responses include `admissionMode` (`queue` | `lottery`), while waiting `
 Check-in timeslots keep Durable Object status load near a fixed **750 RPS** budget (`periodSec = max(5, ceil(waiting/750))`). Front-of-line waiters stay on a 5s period **after the room is open**. When `opensAt` is still in the future, `nextCheckAt` is deferred to a timeslot **at or after** `opensAt` (full-depth period, no front-band rush), so status polls do not run until admission can start. Early `/status` before `nextCheckAt` is **read-only** (does not renew liveness). The built-in waiting room (full page and `?embed=1`) schedules on `nextCheckAt`. Fixed intervals via `WAITING_ROOM_POLL_INTERVAL_MS` / `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` are advanced and not recommended.
 
 If a valid `tg_ticket` cookie is already present for the queue, join **resumes that visitor** and ignores a conflicting body `visitorId` (same-browser multi-tab). When the waiting-row cap is reached, `/join` returns `503 queue_full`.
+
+When Branding enables visitor Turnstile, a new browser must send `turnstileToken`. Invalid or missing challenges return `401`; missing Turnstile configuration returns `503`. A valid ticket resume skips the challenge. `/status` and `/heartbeat` never require Turnstile.
 
 ### `GET /status?queue=…&id=…`
 

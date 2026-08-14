@@ -26,7 +26,8 @@ Admission token format:
 base64url(json-claims).base64url(hmac-sha256)
 ```
 
-Claims: `sub` (visitor id), `queue`, `iat`, `exp` (unix seconds).
+Claims: `sub` (visitor id), `queue`, `iat`, `exp` (unix seconds), and `epoch` (the queue's
+admission-revocation generation).
 
 Accept the token from:
 
@@ -34,9 +35,25 @@ Accept the token from:
 2. `Authorization: Bearer <token>`
 3. Query `?accessToken=` (avoid in production URLs that get logged)
 
-Verify with the same `TOKEN_SECRET` as the Worker (timing-safe compare). Reject missing, bad signature, wrong queue, or expired `exp`.
+Verify with the same `TOKEN_SECRET` as the Worker (timing-safe compare). Reject missing, bad
+signature, wrong queue, expired `exp`, or an `epoch` that does not match the queue's current epoch
+(legacy tokens without the claim are epoch `0`).
 
-In this repo, `verifyAccessToken()` in `src/auth/token.ts` is the reference implementation. Copy that logic into your backend, or call a small Worker route that wraps it — do not expose `TOKEN_SECRET` to browsers.
+Admission TTL is fixed when the token is issued. Requests made with the token do not extend `exp`;
+there is no sliding expiration. An operator can revoke all admissions immediately from the admin
+danger zone, independently of the remaining TTL.
+
+The recommended server-side integration is `@tideguard/verify`:
+
+```js
+import { verifyAccessToken } from "@tideguard/verify";
+
+const claims = await verifyAccessToken(token, process.env.TOKEN_SECRET, {
+  expectedQueue: "default",
+});
+```
+
+The Worker reference implementation remains `src/auth/token.ts`. Never expose `TOKEN_SECRET` or token signing to browsers.
 
 ## Redirect after admission
 
@@ -74,7 +91,7 @@ Use `/wait?embed=1&return=/checkout` inside an iframe on a marketing host while 
 
 - Compact layout (no full-bleed tide background); `html.is-embed`
 - Posts `postMessage({ type: "tideguard-embed-height", height })` so the parent can resize
-- Optional `?lang=en` selects waiting-room locale stubs (English ships today; keys are stable for future locales)
+- Optional `?lang=en|de|fr|es|ja` overrides automatic `Accept-Language` selection
 - Progressbar / status regions use `aria-live="polite"` and a labeled progressbar
 
 Example:

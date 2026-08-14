@@ -32,6 +32,7 @@ import {
   handleAdminMetrics,
   handleAdminPage,
   handleAdminPass,
+  handleAdminRevokeAdmissions,
   handleAdminPause,
   handleAdminChangePassword,
   handleAdminPasswordRecover,
@@ -45,7 +46,9 @@ import {
   handleAdminReset,
   handleAdminRevokeInvite,
   handleAdminSaveBranding,
+  handleAdminCloneBranding,
   handleAdminSaveBypass,
+  handleAdminSaveRoomRules,
   handleAdminSaveCloudflare,
   handleAdminSaveGeoBlock,
   handleAdminSaveOrigin,
@@ -65,6 +68,7 @@ import {
 } from "./admin";
 import { geoBlockedResponse } from "../html/geo-blocked";
 import { isAdminSetupComplete } from "../admin/store";
+import { readRoomRules } from "../admin/room-rules-store";
 import { handleCostEstimateApi, handleCostPage } from "./cost";
 import { handleHealth } from "./health";
 import { handleDemo, handleWaitingRoom } from "./pages";
@@ -123,11 +127,21 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         if (gate.kind === "geo_blocked") {
           return withSecurityHeaders(geoBlockedResponse(gate.country));
         }
+        if (gate.kind === "passthrough" || gate.kind === "rule_bypass") {
+          return withSecurityHeaders(await proxyToOrigin(request, originConfig));
+        }
         const wait = waitingRoomRedirectUrl(
           url.origin,
           originConfig.queue,
           `${url.pathname}${url.search}`,
         );
+        const roomRules = await readRoomRules(env);
+        if (
+          roomRules.jsonMode &&
+          (request.headers.get("accept") ?? "").includes("application/json")
+        ) {
+          return withSecurityHeaders(Response.json({ redirect: `${wait.pathname}${wait.search}` }));
+        }
         return withSecurityHeaders(Response.redirect(wait.toString(), 302));
       }
 
@@ -252,8 +266,16 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminPass(request, env);
   }
 
+  if (request.method === "POST" && url.pathname === "/api/admin/revoke-admissions") {
+    return await handleAdminRevokeAdmissions(request, env);
+  }
+
   if (request.method === "PUT" && url.pathname === "/api/admin/branding") {
     return await handleAdminSaveBranding(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/queues/clone-branding") {
+    return await handleAdminCloneBranding(request, env);
   }
 
   if (request.method === "PUT" && url.pathname === "/api/admin/origin") {
@@ -266,6 +288,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "PUT" && url.pathname === "/api/admin/bypass") {
     return await handleAdminSaveBypass(request, env);
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/admin/room-rules") {
+    return await handleAdminSaveRoomRules(request, env);
   }
 
   if (request.method === "PUT" && url.pathname === "/api/admin/geo-block") {

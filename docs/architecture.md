@@ -150,6 +150,12 @@ Public `/join` / `/status` omit depth unless `showWaitingCount` is synced to the
 
 Same-browser multi-tab: `POST /join` resumes a valid `tg_ticket` and ignores a conflicting body `visitorId`.
 
+## Queue boundaries: do not shard one FIFO
+
+Each queue name maps to exactly one `QueueRoom` Durable Object. That single consistency boundary is what makes FIFO ordering, capacity, and admission decisions deterministic.
+
+Do not shard one logical FIFO across multiple objects: merging independently ordered shards would weaken ordering and add a coordinator bottleneck. If an event approaches roughly 1 million waiting rows or the 750 status-check-ins/second budget, split traffic into meaningful named queues instead—for example by event, venue, tenant, or protected path. The admin queue selector remembers those queue names and lets operators manage each room independently.
+
 ## QueueRoom responsibilities
 
 - Monotonic `sequence` for Queue Mode FIFO ordering

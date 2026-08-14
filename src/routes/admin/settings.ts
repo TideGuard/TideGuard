@@ -1,7 +1,12 @@
 import { ApiError, jsonOk } from "../../core/errors";
 import type { WaitingRoomBranding } from "../../core/branding";
 import { requireAdminSession } from "../../auth/operator";
-import { readAdminConfig, sanitizeBrandingInput, writeBranding } from "../../admin/store";
+import {
+  readAdminConfig,
+  readBranding,
+  sanitizeBrandingInput,
+  writeBranding,
+} from "../../admin/store";
 import { appendAuditEvent } from "../../admin/audit-store";
 import { writeOriginOverride } from "../../admin/origin-store";
 import { BypassConfigError, toBypassPublicView, writeAllowlist } from "../../admin/bypass-store";
@@ -30,6 +35,7 @@ import {
   writeWebhookSettings,
   type WebhookSettings,
 } from "../../admin/webhook-store";
+import { writeRoomRules } from "../../admin/room-rules-store";
 
 export async function handleAdminSaveBypass(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
@@ -63,6 +69,19 @@ export async function handleAdminSaveBypass(request: Request, env: Env): Promise
     }
     throw error;
   }
+}
+
+export async function handleAdminSaveRoomRules(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+  const roomRules = await writeRoomRules(env, body);
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "room_rules.save",
+    summary: "Updated waiting-room rules",
+  });
+  return jsonOk({ ok: true, roomRules });
 }
 
 export async function handleAdminSaveGeoBlock(request: Request, env: Env): Promise<Response> {
@@ -140,6 +159,35 @@ export async function handleAdminSaveBranding(request: Request, env: Env): Promi
   });
 
   return jsonOk({ ok: true, queue, branding });
+}
+
+export async function handleAdminCloneBranding(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const admin = await readAdminConfig(env);
+  if (!admin) {
+    throw new ApiError("not_found", "Admin has not been claimed yet", 404);
+  }
+  const body = await readJsonBody(request);
+  const from = parseQueueName(body.from, admin.defaultQueue);
+  const to = parseQueueName(body.to);
+  const branding = await readBranding(env, from);
+  await writeBranding(env, to, branding);
+  const config = configFromEnv(env);
+  await getQueueRoom(env, to).setAdmitUx({
+    queue: to,
+    config,
+    requireClickToEnter: branding.requireClickToEnter,
+    admitHoldSeconds: branding.admitHoldSeconds,
+    showWaitingCount: branding.showWaitingCount,
+  });
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "queue.clone_branding",
+    summary: `Cloned branding from “${from}” to “${to}”`,
+    meta: { from, to },
+  });
+  return jsonOk({ ok: true, from, to, branding });
 }
 
 export async function handleAdminSaveOrigin(request: Request, env: Env): Promise<Response> {

@@ -23,6 +23,10 @@ import { SetupWizard } from "./SetupWizard";
 
 type View = "loading" | "login" | "invite" | "wizard" | "dashboard" | "tos";
 
+function dashboardQueue(defaultQueue: string): string {
+  return new URLSearchParams(window.location.search).get("queue") || defaultQueue;
+}
+
 function isTosRequiredError(e: unknown): boolean {
   if (!(e instanceof ApiError) || e.status !== 403) return false;
   const code =
@@ -61,7 +65,7 @@ export function App() {
 
       try {
         const dash = await api<AdminState>(
-          `/api/admin/state?queue=${encodeURIComponent(bootData.defaultQueue)}`,
+          `/api/admin/state?queue=${encodeURIComponent(dashboardQueue(bootData.defaultQueue))}`,
         );
         if (!bootData.setupComplete) {
           setView("wizard");
@@ -102,7 +106,7 @@ export function App() {
 
     try {
       const dash = await api<AdminState>(
-        `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
+        `/api/admin/state?queue=${encodeURIComponent(dashboardQueue(refreshed.defaultQueue))}`,
       );
       setState(dash);
       setView("dashboard");
@@ -137,7 +141,7 @@ export function App() {
             return;
           }
           const dash = await api<AdminState>(
-            `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
+            `/api/admin/state?queue=${encodeURIComponent(dashboardQueue(refreshed.defaultQueue))}`,
           );
           setState(dash);
           setView("dashboard");
@@ -159,7 +163,7 @@ export function App() {
           const refreshed = await api<BootstrapResponse>("/api/admin/bootstrap");
           setBootstrap(refreshed);
           const dash = await api<AdminState>(
-            `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
+            `/api/admin/state?queue=${encodeURIComponent(dashboardQueue(refreshed.defaultQueue))}`,
           );
           setState(dash);
           setView("dashboard");
@@ -182,7 +186,7 @@ export function App() {
           const refreshed = await api<BootstrapResponse>("/api/admin/bootstrap");
           setBootstrap(refreshed);
           const dash = await api<AdminState>(
-            `/api/admin/state?queue=${encodeURIComponent(refreshed.defaultQueue)}`,
+            `/api/admin/state?queue=${encodeURIComponent(dashboardQueue(refreshed.defaultQueue))}`,
           );
           setState(dash);
           setView("dashboard");

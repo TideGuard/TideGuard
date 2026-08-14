@@ -2,7 +2,7 @@ import { ApiError, jsonOk } from "../../core/errors";
 import type { AdmissionMode } from "../../core/types";
 import { requireAdminSession } from "../../auth/operator";
 import { rateLimitOrThrow } from "../../auth";
-import { readAdminConfig, readBranding } from "../../admin/store";
+import { readAdminConfig, readBranding, rememberKnownQueue } from "../../admin/store";
 import { readAuditEvents } from "../../admin/audit-store";
 import { listInvites, toPublicInvite } from "../../admin/invite-store";
 import { resolveOriginConfig } from "../../admin/origin-store";
@@ -23,6 +23,9 @@ import { parseQueueName } from "../validation";
 import { clientKey } from "./helpers";
 import { maybeDispatchDepthWebhook } from "../../admin/webhook-dispatch";
 import { readWebhookSettings, toPublicWebhooks } from "../../admin/webhook-store";
+import { readRoomRules } from "../../admin/room-rules-store";
+import { checkInPeriodSeconds } from "../../queue/engine";
+import { maybeDispatchOriginUnhealthyWebhook } from "../../admin/webhook-dispatch";
 
 export async function handleAdminState(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
@@ -35,6 +38,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     new URL(request.url).searchParams.get("queue") ?? admin.defaultQueue,
     admin.defaultQueue,
   );
+  await rememberKnownQueue(env, queue);
   const config = configFromEnv(env);
   const room = getQueueRoom(env, queue);
   const [
@@ -48,6 +52,7 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     invites,
     turnstile,
     webhooksSettings,
+    roomRules,
   ] = await Promise.all([
     readBranding(env, queue),
     room.metrics({ queue, config }),
@@ -59,15 +64,27 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     listInvites(env),
     readTurnstileSettings(env),
     readWebhookSettings(env),
+    readRoomRules(env),
   ]);
 
+  const checkInPeriod = checkInPeriodSeconds(metrics.waiting);
+  void maybeDispatchOriginUnhealthyWebhook(env, queue, metrics.health.autoPaused, {
+    level: metrics.health.level,
+    lastStatus: metrics.health.lastStatus,
+    lastError: metrics.health.lastError,
+  });
   const clientIp = clientConnectingIp(request);
   const clientCountry = clientCountryCode(request);
   const blockedCountries = effectiveBlockedCountries(geoSettings);
   return jsonOk({
     queue,
+    knownQueues: [...new Set([...admin.knownQueues, queue])],
     branding,
-    metrics,
+    metrics: {
+      ...metrics,
+      checkInPeriodSeconds: checkInPeriod,
+      checkInPeriodWarning: checkInPeriod >= 120,
+    },
     admissionMode: metrics.admissionMode as AdmissionMode,
     origin,
     bypass: toBypassPublicView(bypassSettings, {
@@ -81,8 +98,12 @@ export async function handleAdminState(request: Request, env: Env): Promise<Resp
     }),
     turnstile: toTurnstilePublicView(turnstile),
     webhooks: toPublicWebhooks(webhooksSettings),
+    roomRules,
     traffic: {
       opensAt: metrics.opensAt,
+      closesAt: metrics.closesAt,
+      closeAction: metrics.closeAction,
+      roomPhase: metrics.roomPhase,
       paused: metrics.paused,
       health: metrics.health,
       effectiveAdmitPerSecond: metrics.effectiveAdmitPerSecond,
@@ -142,10 +163,20 @@ export async function handleAdminMetrics(request: Request, env: Env): Promise<Re
   ]);
   const clientCountry = clientCountryCode(request);
   const blockedCountries = effectiveBlockedCountries(geoSettings);
+  const checkInPeriod = checkInPeriodSeconds(metrics.waiting);
   void maybeDispatchDepthWebhook(env, queue, metrics.waiting);
+  void maybeDispatchOriginUnhealthyWebhook(env, queue, metrics.health.autoPaused, {
+    level: metrics.health.level,
+    lastStatus: metrics.health.lastStatus,
+    lastError: metrics.health.lastError,
+  });
   return jsonOk({
     ok: true,
-    metrics,
+    metrics: {
+      ...metrics,
+      checkInPeriodSeconds: checkInPeriod,
+      checkInPeriodWarning: checkInPeriod >= 120,
+    },
     geoBlock: toGeoBlockPublicView(geoSettings, {
       clientCountry,
       clientBlocked: isCountryBlocked(clientCountry, blockedCountries),

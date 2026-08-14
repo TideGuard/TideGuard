@@ -7,6 +7,8 @@ import { ApiError } from "../core/errors";
 import { maybeAdmitIpBypass, type IpBypassAdmission } from "../admin/ip-bypass";
 import { evaluateGeoBlock } from "../admin/geo-block";
 import { requireAdmission } from "./admission";
+import { getQueueRoom } from "../queue/client";
+import { evaluateRoomRuleBypass, readRoomRules } from "../admin/room-rules-store";
 
 export type AccessGateAdmitted = {
   kind: "admitted";
@@ -29,8 +31,22 @@ export type AccessGateRedirectWait = {
   kind: "redirect_wait";
 };
 
+export type AccessGatePassthrough = {
+  kind: "passthrough";
+};
+
+export type AccessGateRuleBypass = {
+  kind: "rule_bypass";
+  reason: "seo_crawler" | "cookie" | "header";
+};
+
 export type AccessGateResult =
-  AccessGateAdmitted | AccessGateBypass | AccessGateGeoBlocked | AccessGateRedirectWait;
+  | AccessGateAdmitted
+  | AccessGateBypass
+  | AccessGateRuleBypass
+  | AccessGateGeoBlocked
+  | AccessGateRedirectWait
+  | AccessGatePassthrough;
 
 /**
  * Resolve whether a request may access a protected surface.
@@ -41,8 +57,16 @@ export async function resolveAccessGate(
   env: Env,
   queue: string,
 ): Promise<AccessGateResult> {
+  const rules = await readRoomRules(env);
+  const ruleBypass = evaluateRoomRuleBypass(request, rules);
+  if (ruleBypass) {
+    return { kind: "rule_bypass", reason: ruleBypass };
+  }
+
+  const room = getQueueRoom(env, queue);
+  const [expectedEpoch, schedule] = await Promise.all([room.getTokenEpoch(), room.getSchedule()]);
   try {
-    const admission = await requireAdmission(request, env, queue);
+    const admission = await requireAdmission(request, env, queue, expectedEpoch);
     return {
       kind: "admitted",
       visitorId: admission.visitorId,
@@ -63,6 +87,10 @@ export async function resolveAccessGate(
   const geo = await evaluateGeoBlock(request, env);
   if (geo.blocked) {
     return { kind: "geo_blocked", country: geo.country };
+  }
+
+  if (schedule.roomPhase === "closed" && schedule.closeAction === "passthrough") {
+    return { kind: "passthrough" };
   }
 
   return { kind: "redirect_wait" };

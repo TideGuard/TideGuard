@@ -78,4 +78,24 @@ export function migrateQueueRoomSchema(deps: MigrateDeps): void {
     setMeta("schema_version", "5");
     version = 5;
   }
+
+  if (version < 6) {
+    sql.exec(`
+        CREATE TABLE IF NOT EXISTS webhook_outbox (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          event TEXT NOT NULL,
+          queue TEXT NOT NULL,
+          detail_json TEXT NOT NULL,
+          attempts INTEGER NOT NULL,
+          next_attempt_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        )
+      `);
+    sql.exec(`
+        CREATE INDEX IF NOT EXISTS idx_webhook_outbox_next_attempt
+          ON webhook_outbox (next_attempt_at)
+      `);
+    setMeta("schema_version", "6");
+    version = 6;
+  }
 }

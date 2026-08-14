@@ -55,6 +55,8 @@ paths:
         Depth fields appear only when branding `showWaitingCount` is enabled.
         Waiting responses include `nextCheckAt` (timeslot / next place update), `admissionOpen`,
         optional `opensAt` while still scheduled closed, and `nextPollAfterMs` (compat).
+        When visitor Turnstile is enabled, new browsers must send `turnstileToken`; a valid
+        `tg_ticket` resume is exempt. Verification failures return 401 and missing configuration 503.
       requestBody:
         required: true
         content:
@@ -664,6 +666,9 @@ components:
         visitorId:
           type: string
           description: Optional; ignored when a matching tg_ticket cookie resumes the visitor
+        turnstileToken:
+          type: string
+          description: Required for new browsers when visitor Turnstile is enabled
 
     VisitorQueueRequest:
       type: object

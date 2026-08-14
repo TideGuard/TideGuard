@@ -28,6 +28,7 @@ export interface AdminConfig {
   users: AdminUser[];
   createdAt: number;
   defaultQueue: string;
+  knownQueues: string[];
   /** @deprecated Legacy single-password installs; migrated on read. */
   passwordHash?: string;
   /** @deprecated Legacy single-password installs; migrated on read. */

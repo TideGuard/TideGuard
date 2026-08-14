@@ -9,27 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-15
+
 ### Added
 
+- **Roadmap** — public [ROADMAP.md](ROADMAP.md) (linked from README and admin footer); changelog remains shipped history only
 - **Google Analytics** — optional GA4 Measurement ID (`G-…`) in Branding; injects Google’s official gtag snippet on `/wait` (CSP allowlists Google analytics hosts)
 - **Timeslot status check-ins** — fixed 750 RPS budget, ≥5s period; server assigns `nextCheckAt`; early `/status` is read-only; missed-slot expiry; default queue stay timeout 24h
 - **Max waiting visitors** cap (default 1M) with `/api/admin/queue-limits` and System → Danger zone A→B confirm
 - **Missed-slot grace** override (default **120s**, clamp **30…900**) via queue config / `MISSED_SLOT_GRACE_SECONDS` and System → Danger zone (`/api/admin/queue-limits`)
 - **Versioned operator Terms of Service** ([`TERMS.md`](TERMS.md), `TOS_VERSION`) — claim / invite / re-accept require `acceptedTosVersion` matching the current version; re-accept on login after a version bump; session APIs return `403 tos_required` until accepted; admin footer links Terms / License / Issues
+- **Closing schedules** — rooms can close at `closesAt` and either keep rejecting admissions or pass protected traffic through after the event
+- **Admission revocation** — per-room token epochs let operators invalidate every active admission immediately from System → Danger zone
+- **Visitor Turnstile** — optional fail-closed verification for new `/join` requests, with valid ticket resumes exempt and status/heartbeat unchanged
+- **`@tideguard/verify`** — npm-ready server package for signing and verifying TideGuard admission tokens
+- **Waiting-room locales** — German, French, Spanish, and Japanese copy selected by `?lang=` or `Accept-Language`
+- **Background-tab notifications** — optional visitor reminders near check-in time and when click-to-enter becomes ready
+- **Durable operator webhooks** — failed deliveries retry from a per-queue SQLite outbox; new opened, origin-unhealthy, queue-full, and admit-rate events
+- **Multi-queue admin controls** — remembered queue selector plus validated queue creation and branding clone API
+- **Waiting-room rules** — crawler/cookie/header bypass, JSON redirect responses, and branded full-queue rejection
+- **Depth warning** — admin shows the effective check-in period and warns when waiting depth stretches it to 120s or more
+- **Staging load-test recipe** and explicit one-Durable-Object-per-queue/no-sharding guidance
 
 ### Changed
 
 - **README** — operator pitch regrouped by job (waiting room, control room, origin); internals stay in docs
 - Waiting UI / embed / API: schedule on `nextCheckAt`; optional **#X of Y** via Branding “Show place in line”
 - **Pre-open check-ins** — when `opensAt` is in the future, `nextCheckAt` is assigned at/after opening (full-depth timeslot spread); status does not renew liveness until then
-- **Room phase + next update** — public join/status include `admissionOpen` and (while scheduled closed) `opensAt`; waiting UI shows “Queue is open — keep this page open” / opening countdown plus **Next update** from `nextCheckAt`
+- **Room phase + next update** — public join/status include `admissionOpen` and (while scheduled closed) `opensAt`; waiting UI emphasizes keeping the tab open and shows **Next update** from `nextCheckAt`
+- Admission tokens use a fixed TTL (no sliding expiration) and carry the room token epoch
 - Cost estimate adaptive path uses timeslot period (`max(5, ceil(waiting/750))`) instead of √progress average
 - **Lint:** ESLint + `typescript-eslint` → [Oxlint](https://oxc.rs/) (`oxlint` + `oxlint-tsgolint`) for TypeScript 7–compatible, type-aware linting
 - **TypeScript 7.0** as the project compiler (`tsc` / typecheck)
-- Dev dependencies bumped (notably `wrangler` 4.121, `@cloudflare/vitest-pool-workers` 0.21, `vite` 8.2.1, `oxlint` 1.78, `@scure/bip39` 2.3)
+- Dependency bumps for release: `wrangler` 4.123, `@cloudflare/vitest-pool-workers` 0.21.3 (and earlier unreleased bumps including `vite` 8.2, `oxlint` 1.78, `@scure/bip39` 2.3)
 
 ### Upgrade notes
 
+- Durable Object schema upgrades to v6 automatically to create the webhook outbox. No Wrangler migration tag change is required.
 - Default `QUEUE_TIMEOUT_SECONDS` is now **86400** (24h). Override only if you intentionally want shorter max stays; too-short values expire deep-queue waiters between timeslots.
 - Missed-slot grace defaults to **120s** (unchanged behavior). Optionally tune in System → Danger zone or `MISSED_SLOT_GRACE_SECONDS` (30–900); lower values expire backgrounded waiters sooner.
 - After upgrading to a build that introduces or bumps `TOS_VERSION`, each admin must accept the Terms of Service in `/admin` before the control room APIs work again.

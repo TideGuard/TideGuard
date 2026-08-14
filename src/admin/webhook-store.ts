@@ -1,12 +1,19 @@
 /**
- * Operator outbound webhooks (pause / health / depth). Stored in CONFIG_KV.
+ * Operator outbound webhooks. Stored in CONFIG_KV.
  */
 
 import { sealSecret, openSecret } from "./secret-box";
 
 export const WEBHOOKS_KEY = "admin:webhooks";
 
-export type WebhookEvent = "pause" | "health" | "depth";
+export type WebhookEvent =
+  | "pause"
+  | "health"
+  | "depth"
+  | "opened"
+  | "origin_unhealthy"
+  | "queue_full"
+  | "admit_rate_changed";
 
 export interface WebhookSettings {
   enabled: boolean;
@@ -19,6 +26,8 @@ export interface WebhookSettings {
   updatedAt: number;
   /** Last depth fire waiting value (debounce while still above threshold). */
   lastDepthFiredAt?: number;
+  /** Queues currently reported auto-paused, used to debounce transition events. */
+  originUnhealthyQueues?: string[];
 }
 
 export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
@@ -29,7 +38,15 @@ export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
   updatedAt: 0,
 };
 
-const ALL_EVENTS: WebhookEvent[] = ["pause", "health", "depth"];
+const ALL_EVENTS: WebhookEvent[] = [
+  "pause",
+  "health",
+  "depth",
+  "opened",
+  "origin_unhealthy",
+  "queue_full",
+  "admit_rate_changed",
+];
 
 export function parseWebhookEvents(raw: unknown): WebhookEvent[] {
   if (!Array.isArray(raw)) return [...DEFAULT_WEBHOOK_SETTINGS.events];
@@ -62,6 +79,11 @@ export async function readWebhookSettings(env: Env): Promise<WebhookSettings> {
     }
     if (typeof o.lastDepthFiredAt === "number") {
       settings.lastDepthFiredAt = o.lastDepthFiredAt;
+    }
+    if (Array.isArray(o.originUnhealthyQueues)) {
+      settings.originUnhealthyQueues = o.originUnhealthyQueues.filter(
+        (queue): queue is string => typeof queue === "string",
+      );
     }
     return settings;
   } catch {

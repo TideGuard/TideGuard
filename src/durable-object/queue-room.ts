@@ -71,6 +71,26 @@ import {
   type VisitorRow,
 } from "./visitor-sql";
 
+export interface PreparedWebhookDelivery {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+  event: string;
+  queue: string;
+}
+
+type WebhookOutboxRow = {
+  id: number;
+  event: string;
+  queue: string;
+  detail_json: string;
+  attempts: number;
+  next_attempt_at: number;
+};
+
+const WEBHOOK_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 300_000, 900_000, 3_600_000, 10_800_000];
+const WEBHOOK_MAX_ATTEMPTS = 8;
+
 /**
  * Authoritative state for a single named waiting room.
  *
@@ -311,6 +331,9 @@ export class QueueRoom extends DurableObject<Env> {
       paused: this.isManualPaused(),
       admissionMode: this.admissionMode(request.config),
       opensAt: this.getOpensAt(),
+      closesAt: this.getClosesAt(),
+      closeAction: this.getCloseAction(),
+      roomPhase: this.roomPhase(now),
       effectiveAdmitPerSecond: this.effectiveAdmitPerSecond(request.config, now),
       admitPerSecondOverride: this.getAdmitPerSecondOverride(),
       admitPerSecondDefault: request.config.admitPerSecond,
@@ -409,18 +432,42 @@ export class QueueRoom extends DurableObject<Env> {
     return { paused };
   }
 
-  async setOpensAt(opensAt: number | null): Promise<QueueScheduleResponse> {
-    if (opensAt === null) {
-      this.setMeta("opens_at", "");
-    } else {
-      this.setMeta("opens_at", String(opensAt));
+  async setSchedule(input: {
+    opensAt?: number | null;
+    closesAt?: number | null;
+    closeAction?: "reject" | "passthrough";
+  }): Promise<QueueScheduleResponse> {
+    if (input.opensAt !== undefined) {
+      this.setMeta("opens_at", input.opensAt === null ? "" : String(input.opensAt));
+    }
+    if (input.closesAt !== undefined) {
+      this.setMeta("closes_at", input.closesAt === null ? "" : String(input.closesAt));
+    }
+    if (input.closeAction !== undefined) {
+      this.setMeta("close_action", input.closeAction);
     }
     await this.ensureAlarm();
-    return { opensAt: this.getOpensAt() };
+    return this.schedule(Date.now());
+  }
+
+  /** @deprecated Prefer setSchedule. */
+  async setOpensAt(opensAt: number | null): Promise<QueueScheduleResponse> {
+    return this.setSchedule({ opensAt });
   }
 
   async getSchedule(): Promise<QueueScheduleResponse> {
-    return { opensAt: this.getOpensAt() };
+    return this.schedule(Date.now());
+  }
+
+  async getTokenEpoch(): Promise<number> {
+    const value = Number(this.getMeta("token_epoch") ?? "0");
+    return Number.isInteger(value) && value >= 0 ? value : 0;
+  }
+
+  async bumpTokenEpoch(): Promise<number> {
+    const next = (await this.getTokenEpoch()) + 1;
+    this.setMeta("token_epoch", String(next));
+    return next;
   }
 
   async getHealth(): Promise<QueueHealthConfigResponse> {
@@ -542,17 +589,90 @@ export class QueueRoom extends DurableObject<Env> {
     };
   }
 
-  async alarm(): Promise<void> {
-    const config = this.alarmConfig();
-    if (!config) {
-      return;
-    }
-
+  async enqueueWebhook(delivery: PreparedWebhookDelivery): Promise<void> {
     const now = Date.now();
-    this.sweep(config, now, true);
-    await this.maybeProbeHealth(now);
-    this.admitFromBudget(config, now);
-    this.flushTrafficBucket(now, config);
+    this.ensureQueueName(delivery.queue);
+    this.ctx.storage.sql.exec(
+      `INSERT INTO webhook_outbox
+         (event, queue, detail_json, attempts, next_attempt_at, created_at)
+       VALUES (?, ?, ?, 1, ?, ?)`,
+      delivery.event,
+      delivery.queue,
+      JSON.stringify(delivery),
+      now + WEBHOOK_RETRY_DELAYS_MS[0]!,
+      now,
+    );
+    await this.ensureAlarm();
+  }
+
+  async processWebhookOutbox(now = Date.now()): Promise<void> {
+    const deliveries = this.ctx.storage.sql
+      .exec<WebhookOutboxRow>(
+        `SELECT id, event, queue, detail_json, attempts, next_attempt_at
+         FROM webhook_outbox
+         WHERE next_attempt_at <= ?
+         ORDER BY id
+         LIMIT 10`,
+        now,
+      )
+      .toArray();
+
+    for (const row of deliveries) {
+      let delivery: PreparedWebhookDelivery;
+      try {
+        delivery = JSON.parse(row.detail_json) as PreparedWebhookDelivery;
+      } catch {
+        this.ctx.storage.sql.exec(`DELETE FROM webhook_outbox WHERE id = ?`, row.id);
+        continue;
+      }
+
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5_000);
+        try {
+          const response = await fetch(delivery.url, {
+            method: "POST",
+            headers: delivery.headers,
+            body: delivery.body,
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`webhook returned ${response.status}`);
+          }
+        } finally {
+          clearTimeout(timer);
+        }
+        this.ctx.storage.sql.exec(`DELETE FROM webhook_outbox WHERE id = ?`, row.id);
+      } catch {
+        const attempts = row.attempts + 1;
+        if (attempts >= WEBHOOK_MAX_ATTEMPTS) {
+          this.ctx.storage.sql.exec(`DELETE FROM webhook_outbox WHERE id = ?`, row.id);
+          continue;
+        }
+        const delay =
+          WEBHOOK_RETRY_DELAYS_MS[Math.min(attempts - 1, WEBHOOK_RETRY_DELAYS_MS.length - 1)]!;
+        this.ctx.storage.sql.exec(
+          `UPDATE webhook_outbox
+           SET attempts = ?, next_attempt_at = ?
+           WHERE id = ?`,
+          attempts,
+          now + delay,
+          row.id,
+        );
+      }
+    }
+  }
+
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    await this.processWebhookOutbox(now);
+    const config = this.alarmConfig();
+    if (config) {
+      this.sweep(config, now, true);
+      await this.maybeProbeHealth(now);
+      this.admitFromBudget(config, now);
+      this.flushTrafficBucket(now, config);
+    }
 
     await this.ensureAlarm();
   }
@@ -1047,7 +1167,8 @@ export class QueueRoom extends DurableObject<Env> {
     }
 
     const opensAt = this.getOpensAt();
-    const admissionOpen = opensAt === null || now >= opensAt;
+    const closesAt = this.getClosesAt();
+    const roomPhase = this.roomPhase(now);
 
     return {
       id: visitor.id,
@@ -1067,8 +1188,11 @@ export class QueueRoom extends DurableObject<Env> {
       showWaitingCount: showDepth,
       nextPollAfterMs: pollAfterMs,
       nextCheckAt,
-      admissionOpen,
-      opensAt: admissionOpen ? null : opensAt,
+      admissionOpen: roomPhase === "open",
+      opensAt: roomPhase === "scheduled" ? opensAt : null,
+      closesAt: roomPhase === "scheduled" ? null : closesAt,
+      closeAction: this.getCloseAction(),
+      roomPhase,
     };
   }
 
@@ -1284,6 +1408,37 @@ export class QueueRoom extends DurableObject<Env> {
     return Number.isFinite(value) && value > 0 ? value : null;
   }
 
+  private getClosesAt(): number | null {
+    const raw = this.getMeta("closes_at");
+    if (!raw) {
+      return null;
+    }
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  private getCloseAction(): "reject" | "passthrough" {
+    return this.getMeta("close_action") === "passthrough" ? "passthrough" : "reject";
+  }
+
+  private roomPhase(now: number): "scheduled" | "open" | "closed" {
+    const opensAt = this.getOpensAt();
+    if (opensAt !== null && now < opensAt) {
+      return "scheduled";
+    }
+    const closesAt = this.getClosesAt();
+    return closesAt !== null && now >= closesAt ? "closed" : "open";
+  }
+
+  private schedule(now: number): QueueScheduleResponse {
+    return {
+      opensAt: this.getOpensAt(),
+      closesAt: this.getClosesAt(),
+      closeAction: this.getCloseAction(),
+      roomPhase: this.roomPhase(now),
+    };
+  }
+
   private showWaitingCount(): boolean {
     return this.getMeta("show_waiting_count") === "1";
   }
@@ -1294,6 +1449,10 @@ export class QueueRoom extends DurableObject<Env> {
     }
     const opensAt = this.getOpensAt();
     if (opensAt !== null && now < opensAt) {
+      return false;
+    }
+    const closesAt = this.getClosesAt();
+    if (closesAt !== null && now >= closesAt) {
       return false;
     }
     const health = this.readHealthConfig();
@@ -1369,7 +1528,19 @@ export class QueueRoom extends DurableObject<Env> {
     const opensAt = this.getOpensAt();
     const waitingForOpen = opensAt !== null && Date.now() < opensAt && waiting > 0;
 
-    if (waiting === 0 && admitted === 0 && !health.enabled && !waitingForOpen) {
+    const nextWebhook = this.ctx.storage.sql
+      .exec<{ next_attempt_at: number }>(
+        `SELECT next_attempt_at FROM webhook_outbox ORDER BY next_attempt_at LIMIT 1`,
+      )
+      .toArray()[0]?.next_attempt_at;
+
+    if (
+      waiting === 0 &&
+      admitted === 0 &&
+      !health.enabled &&
+      !waitingForOpen &&
+      nextWebhook === undefined
+    ) {
       await this.ctx.storage.deleteAlarm();
       return;
     }
@@ -1384,7 +1555,14 @@ export class QueueRoom extends DurableObject<Env> {
     if (health.enabled) {
       interval = Math.min(interval, health.intervalSeconds * 1000);
     }
-    const nextAt = Date.now() + interval;
+    const scheduled = Date.now() + interval;
+    const hasQueueAlarmWork = waiting > 0 || admitted > 0 || health.enabled || waitingForOpen;
+    const nextAt =
+      nextWebhook === undefined
+        ? scheduled
+        : hasQueueAlarmWork
+          ? Math.min(scheduled, nextWebhook)
+          : nextWebhook;
 
     if (existing === null || existing > nextAt + 250) {
       await this.ctx.storage.setAlarm(nextAt);

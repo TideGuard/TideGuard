@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { Anchor, Button, Code, Group, Stack, Tabs, Text, Title, Alert } from "@mantine/core";
+import {
+  Alert,
+  Anchor,
+  Button,
+  Code,
+  Group,
+  Select,
+  Stack,
+  Tabs,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { api } from "../lib/api";
 import type { AdminState, DashboardSection, GeoBlockSettings, QueueMetrics } from "../lib/types";
 import { LINKS } from "../lib/setup-guidance";
@@ -20,6 +32,7 @@ import { TeamPanel } from "../views/dashboard/TeamPanel";
 import { TurnstilePanel } from "../views/dashboard/TurnstilePanel";
 import { UpdatesPanel } from "../views/dashboard/UpdatesPanel";
 import { WebhooksPanel } from "../views/dashboard/WebhooksPanel";
+import { RoomRulesPanel } from "../views/dashboard/RoomRulesPanel";
 import { notifyError } from "../views/dashboard/notify";
 
 const SECTIONS: Array<{ value: DashboardSection; label: string }> = [
@@ -39,6 +52,7 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
   const [section, setSection] = useState<DashboardSection>("live");
   const [pollError, setPollError] = useState<string | null>(null);
   const [auditTick, setAuditTick] = useState(0);
+  const [newQueue, setNewQueue] = useState("");
   const [showFirstRun, setShowFirstRun] = useState(() => {
     try {
       return sessionStorage.getItem("tg-first-run") !== "1" && initial.metrics.waiting === 0;
@@ -47,6 +61,14 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
     }
   });
   const queue = state.queue;
+
+  const switchQueue = useCallback(async (nextQueue: string) => {
+    const data = await api<AdminState>(`/api/admin/state?queue=${encodeURIComponent(nextQueue)}`);
+    window.history.replaceState({}, "", `/admin/?queue=${encodeURIComponent(nextQueue)}`);
+    setState(data);
+    setMetrics(data.metrics);
+    setGeoBlock(data.geoBlock);
+  }, []);
 
   const refreshMetrics = useCallback(async () => {
     const data = await api<{ metrics: QueueMetrics; geoBlock?: GeoBlockSettings }>(
@@ -99,16 +121,48 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
             </Anchor>
           </Text>
         </div>
-        <Button
-          variant="default"
-          onClick={() => {
-            void api("/api/admin/logout", { method: "POST", body: "{}" })
-              .then(onLogout)
-              .catch(notifyError);
-          }}
-        >
-          Log out
-        </Button>
+        <Group align="end" wrap="wrap">
+          <Select
+            label="Queue"
+            data={state.knownQueues}
+            value={queue}
+            searchable
+            onChange={(value) => {
+              if (value) void switchQueue(value).catch(notifyError);
+            }}
+          />
+          <TextInput
+            label="New queue"
+            placeholder="campaign-2026"
+            value={newQueue}
+            onChange={(event) => setNewQueue(event.currentTarget.value)}
+          />
+          <Button
+            variant="default"
+            disabled={!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(newQueue)}
+            onClick={() => {
+              void api("/api/admin/queues/clone-branding", {
+                method: "POST",
+                body: JSON.stringify({ from: queue, to: newQueue }),
+              })
+                .then(() => switchQueue(newQueue))
+                .then(() => setNewQueue(""))
+                .catch(notifyError);
+            }}
+          >
+            Create
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => {
+              void api("/api/admin/logout", { method: "POST", body: "{}" })
+                .then(onLogout)
+                .catch(notifyError);
+            }}
+          >
+            Log out
+          </Button>
+        </Group>
       </Group>
 
       {showFirstRun ? (
@@ -133,6 +187,13 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
       {pollError ? (
         <Alert color="orange" title="Live metrics paused">
           {pollError}. Retrying every 5s.
+        </Alert>
+      ) : null}
+
+      {metrics.checkInPeriodWarning ? (
+        <Alert color="orange" title="Check-in period is stretched">
+          Waiting depth has increased the check-in period to {metrics.checkInPeriodSeconds}s.
+          Visitors should keep the waiting-room page open.
         </Alert>
       ) : null}
 
@@ -201,6 +262,7 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
             <ActivityPanel refreshKey={auditTick} />
             <UpdatesPanel />
             <WebhooksPanel state={state} onSaved={refreshState} />
+            <RoomRulesPanel state={state} onSaved={refreshState} />
             <SecretRotationPanel />
             <DangerZonePanel queue={queue} onReset={onLogout} />
           </Stack>

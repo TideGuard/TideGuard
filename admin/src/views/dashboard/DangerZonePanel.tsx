@@ -22,6 +22,7 @@ export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: ()
   const [draftGrace, setDraftGrace] = useState<number | null>(null);
   const [limitsBusy, setLimitsBusy] = useState(false);
   const [confirmAck, setConfirmAck] = useState(false);
+  const [revokeBusy, setRevokeBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +167,29 @@ export function DangerZonePanel({ queue, onReset }: { queue: string; onReset: ()
           }}
         >
           Save capacity override
+        </Button>
+
+        <Alert color="red" title="Revoke all admissions">
+          Immediately invalidates every admission token for this queue. Visitors must return through
+          the waiting room; token TTLs do not change.
+        </Alert>
+        <Button
+          color="red"
+          variant="outline"
+          loading={revokeBusy}
+          onClick={() => {
+            if (!window.confirm("Revoke every active admission for this queue?")) return;
+            setRevokeBusy(true);
+            void api("/api/admin/revoke-admissions", {
+              method: "POST",
+              body: JSON.stringify({ queue }),
+            })
+              .then(() => notifyOk("All admissions revoked"))
+              .catch(notifyError)
+              .finally(() => setRevokeBusy(false));
+          }}
+        >
+          Revoke all admissions
         </Button>
 
         <Alert color="red" title="Irreversible factory reset">

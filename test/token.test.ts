@@ -65,4 +65,36 @@ describe("access tokens", () => {
       verifyAccessToken(token, SECRET, { expectedQueue: "other" }),
     ).rejects.toMatchObject({ code: "invalid_token" });
   });
+
+  it("rejects tokens from an older room epoch", async () => {
+    const token = await signAccessToken(
+      buildAdmissionClaims({
+        visitorId: "visitor-1",
+        queue: "launch",
+        tokenTTLSeconds: 600,
+        epoch: 2,
+      }),
+      SECRET,
+    );
+
+    await expect(verifyAccessToken(token, SECRET, { expectedEpoch: 3 })).rejects.toMatchObject({
+      code: "invalid_token",
+    });
+    await expect(verifyAccessToken(token, SECRET, { expectedEpoch: 2 })).resolves.toMatchObject({
+      epoch: 2,
+    });
+  });
+
+  it("treats legacy tokens without epoch as epoch zero", async () => {
+    const token = await signAccessToken(
+      { sub: "legacy", queue: "launch", iat: 1, exp: 4_000_000_000 },
+      SECRET,
+    );
+    await expect(verifyAccessToken(token, SECRET, { expectedEpoch: 0 })).resolves.toMatchObject({
+      sub: "legacy",
+    });
+    await expect(verifyAccessToken(token, SECRET, { expectedEpoch: 1 })).rejects.toMatchObject({
+      code: "invalid_token",
+    });
+  });
 });

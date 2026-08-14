@@ -27,6 +27,14 @@ createRoot(document.getElementById("root")!).render(
             Docs
           </a>
           <span aria-hidden="true"> · </span>
+          <a
+            href="https://github.com/TideGuard/TideGuard/blob/main/ROADMAP.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Roadmap
+          </a>
+          <span aria-hidden="true"> · </span>
           <a href="https://github.com/TideGuard/TideGuard" target="_blank" rel="noreferrer">
             GitHub
           </a>

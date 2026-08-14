@@ -20,6 +20,10 @@ const EVENT_OPTIONS = [
   { value: "pause", label: "Silent pause on/off" },
   { value: "health", label: "Origin health config changes" },
   { value: "depth", label: "Waiting depth threshold" },
+  { value: "opened", label: "Scheduled room opened" },
+  { value: "origin_unhealthy", label: "Origin became unhealthy" },
+  { value: "queue_full", label: "Queue rejected at capacity" },
+  { value: "admit_rate_changed", label: "Admit rate changed" },
 ] as const;
 
 export function WebhooksPanel({
@@ -62,8 +66,7 @@ export function WebhooksPanel({
       }
     >
       <Text size="sm" c="dimmed">
-        HTTPS callbacks for pause, health config, and waiting depth. Best-effort delivery (5s
-        timeout).
+        HTTPS callbacks are attempted immediately, then retried durably after failures.
       </Text>
       <Stack>
         <Checkbox
@@ -124,7 +127,7 @@ export function WebhooksPanel({
           readOnly
           autosize
           minRows={3}
-          value={`{ "event": "pause|health|depth", "queue": "…", "at": 0, "detail": { … } }`}
+          value={`{ "event": "pause|health|depth|opened|origin_unhealthy|queue_full|admit_rate_changed", "queue": "…", "at": 0, "detail": { … } }`}
         />
         <Group>
           <Button
