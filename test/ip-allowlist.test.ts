@@ -32,8 +32,14 @@ describe("ip allowlist", () => {
 });
 
 describe("secret-box", () => {
-  it("round-trips sealed secrets", async () => {
+  it("round-trips sealed secrets (default v2)", async () => {
     const sealed = await sealSecret("cf-api-token-value", "test-token-secret-16");
+    expect(sealed.startsWith("v2.")).toBe(true);
+    expect(await openSecret(sealed, "test-token-secret-16")).toBe("cf-api-token-value");
+  });
+
+  it("round-trips legacy v1 sealed secrets", async () => {
+    const sealed = await sealSecret("cf-api-token-value", "test-token-secret-16", "v1");
     expect(sealed.startsWith("v1.")).toBe(true);
     expect(await openSecret(sealed, "test-token-secret-16")).toBe("cf-api-token-value");
   });

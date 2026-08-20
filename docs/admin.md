@@ -38,7 +38,7 @@ On **finish**, TideGuard:
 - Requires completed Cloudflare verify + Turnstile verify
 - Marks setup complete, writes branding, seals Cloudflare + Turnstile secrets, and sets admission mode on the queue
 
-`TOKEN_SECRET` remains a Wrangler secret. It signs visitor tickets, admission tokens, and admin session cookies. Daily login (after finish) uses username + password **plus Turnstile**.
+`TOKEN_SECRET` remains a Wrangler secret for claim, Bearer operator routes, and factory reset. Visitor tickets and admission tokens use `ADMISSION_SECRET` (falls back to `TOKEN_SECRET`). Admin session cookies use `ADMIN_SESSION_SECRET` (falls back). Daily login (after finish) uses username + password **plus Turnstile**. See [SECURITY.md](../SECURITY.md).
 
 ## Login
 

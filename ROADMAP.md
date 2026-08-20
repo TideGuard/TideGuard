@@ -24,9 +24,9 @@ See [CHANGELOG.md](CHANGELOG.md) Unreleased for details:
 
 ## Near term
 
-| Item                 | Notes                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| Split `TOKEN_SECRET` | Deferred — additive `ADMISSION_SECRET` / `ADMIN_SESSION_SECRET` / `SEAL_SECRET` later |
+| Item                     | Notes                                                                                                                        |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Split `TOKEN_SECRET`** | Shipped in Unreleased — additive `ADMISSION_SECRET` / `ADMIN_SESSION_SECRET` / `SEAL_SECRET` with fallback to `TOKEN_SECRET` |
 
 ## Later (Track 3)
 
@@ -44,7 +44,7 @@ See [CHANGELOG.md](CHANGELOG.md) Unreleased for details:
 
 ## Suggested GitHub issues
 
-1. **Split `TOKEN_SECRET` blast radius** — additive secrets with fallback to `TOKEN_SECRET` for existing deploys.
+1. ~~**Split `TOKEN_SECRET` blast radius**~~ — done in Unreleased (see CHANGELOG).
 2. **Hosted Starter control plane** — per [docs/hosted-saas.md](docs/hosted-saas.md) phases 1–3.
 3. **Shopify waiting-room adapter** — thin app proxy / checkout → `/wait` + verify SDK.
 4. **Staff / pre-reg named queue** — explicit fairness trade; never silent FIFO reorder.

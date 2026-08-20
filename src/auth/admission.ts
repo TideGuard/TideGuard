@@ -4,7 +4,7 @@
 
 import { ApiError } from "../core/errors";
 import { extractAccessToken } from "./cookies";
-import { requireTokenSecret } from "./operator";
+import { requireAdmissionSecret } from "./secrets";
 import { TokenError, verifyAccessToken } from "./token";
 
 export async function requireAdmission(
@@ -22,7 +22,7 @@ export async function requireAdmission(
   try {
     const claims = await verifyAccessToken(
       token,
-      requireTokenSecret(env),
+      requireAdmissionSecret(env),
       expectedQueue || expectedEpoch !== undefined
         ? {
             ...(expectedQueue ? { expectedQueue } : {}),

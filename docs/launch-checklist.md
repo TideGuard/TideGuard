@@ -5,6 +5,8 @@ Use this before pointing production traffic at TideGuard.
 ## Secrets and admin
 
 - [ ] `TOKEN_SECRET` set via Wrangler secret / Deploy-to-Cloudflare ([tideguard.dev/token](https://tideguard.dev/token) or `openssl rand -hex 32`)
+- [ ] Optional: `ADMISSION_SECRET`, `ADMIN_SESSION_SECRET`, `SEAL_SECRET` set (recommended for production — [SECURITY.md](../SECURITY.md))
+- [ ] Origin verify uses `ADMISSION_SECRET` only (not `TOKEN_SECRET`) when specialised secrets are set
 - [ ] `/admin` setup completed: Claim (TOKEN_SECRET + username/password) + **Cloudflare verify** + **Turnstile verify** + Finish
 - [ ] Per-admin passwords stored offline; login uses Turnstile after finish
 - [ ] Recovery phrases saved for each admin (Forgot password)

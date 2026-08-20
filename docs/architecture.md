@@ -111,18 +111,19 @@ Lottery Mode: estimatedWaitSeconds = ceil(waitingCount / effectiveRate)
 
 Cloudflare bills for Worker requests, Durable Object requests/duration, KV operations, and alarms. TideGuard is designed to stay cheap under load:
 
-| Path                            | Strategy                                                                                                        |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Queue join / status / heartbeat | Durable Object only — **no KV writes** on the hot path                                                          |
-| Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle                                             |
-| Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side                                          |
-| Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `TOKEN_SECRET`                                   |
-| Admin users                     | Named accounts in `admin:config.users[]`; invites hashed with 72h TTL                                           |
-| Activity audit                  | KV ring `admin:audit` (~200 events); no secrets                                                                 |
-| Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV                                             |
-| Status polling                  | Timeslots (`nextCheckAt`); early status is read-only; density ≤ ~750/s; deferred until `opensAt` when scheduled |
-| Heartbeat                       | Due status renews liveness; dedicated `/heartbeat` is fallback for long gaps                                    |
-| Missed-slot expiry              | After `nextCheckAt` + grace (default 120s, admin 30…900; ≥ one period)                                          |
+| Path                            | Strategy                                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Queue join / status / heartbeat | Durable Object only — **no KV writes** on the hot path                                                                                 |
+| Admission + expiry              | **One alarm per active queue** (~1s). Cleared when the room is idle                                                                    |
+| Branding / theme admin          | KV **write on Save / wizard finish only**; live preview is client-side                                                                 |
+| Admin password                  | PBKDF2 hash in KV (`admin:config`); session cookie signed with `ADMIN_SESSION_SECRET` (falls back to `TOKEN_SECRET`)                   |
+| Secrets                         | `ADMISSION_SECRET` for visitor tokens/tickets; `SEAL_SECRET` for KV credential seals (`v2`); `TOKEN_SECRET` for claim / Bearer / reset |
+| Admin users                     | Named accounts in `admin:config.users[]`; invites hashed with 72h TTL                                                                  |
+| Activity audit                  | KV ring `admin:audit` (~200 events); no secrets                                                                                        |
+| Metrics                         | Cached DO depth counters (reconciled on sweep) — not mirrored to KV                                                                    |
+| Status polling                  | Timeslots (`nextCheckAt`); early status is read-only; density ≤ ~750/s; deferred until `opensAt` when scheduled                        |
+| Heartbeat                       | Due status renews liveness; dedicated `/heartbeat` is fallback for long gaps                                                           |
+| Missed-slot expiry              | After `nextCheckAt` + grace (default 120s, admin 30…900; ≥ one period)                                                                 |
 
 Avoid:
 

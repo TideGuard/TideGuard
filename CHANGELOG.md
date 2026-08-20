@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Split secrets** — optional `ADMISSION_SECRET`, `ADMIN_SESSION_SECRET`, and `SEAL_SECRET` with fallback to `TOKEN_SECRET` for existing deploys. Central resolvers in `src/auth/secrets.ts`. Visitor tokens/tickets use admission secret; admin cookies use session secret; KV credential sealing uses seal secret (`v2` blobs); claim / Bearer / factory reset stay on `TOKEN_SECRET`.
+- Local `npm run setup` generates four distinct secrets into `.dev.vars` when missing
+- Security tests proving secret separation and v1→v2 seal migration
+
+### Changed
+
+- `@tideguard/verify` docs and verifying-admission guide recommend `ADMISSION_SECRET` for origin verification (not the operator `TOKEN_SECRET`)
+- Sealed KV credentials: new writes use `v2` when `SEAL_SECRET` is set; legacy `v1` (TOKEN_SECRET) remains readable and is re-sealed to `v2` on successful read
+
+### Upgrade notes
+
+- Existing `TOKEN_SECRET`-only deployments continue to work unchanged.
+- To reduce blast radius after upgrade:
+  ```bash
+  npx wrangler secret put ADMISSION_SECRET
+  npx wrangler secret put ADMIN_SESSION_SECRET
+  npx wrangler secret put SEAL_SECRET
+  ```
+- Adding `ADMIN_SESSION_SECRET` invalidates existing admin session cookies (operators log in again once).
+- Changing `ADMISSION_SECRET` during an active event invalidates visitor tokens and queue tickets — rotate only between events.
+- After adding `SEAL_SECRET`, re-open Cloudflare / Turnstile / webhook credentials in `/admin` once (or wait for automatic v1→v2 re-seal on next successful read). Do not delete KV keys on decrypt failure.
+
 ## [0.5.1] - 2026-08-15
 
 ### Added

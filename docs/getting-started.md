@@ -21,7 +21,7 @@ npm install
 npm run setup
 ```
 
-`npm run setup` regenerates Worker Env types, creates `.dev.vars` with a generated `TOKEN_SECRET` if needed, prints the admin handoff checklist, and can start `npm run dev`. For scripts/CI: `npm run setup -- --yes` (add `--dev` to also start the server).
+`npm run setup` regenerates Worker Env types, creates `.dev.vars` with generated secrets (`TOKEN_SECRET`, `ADMISSION_SECRET`, `ADMIN_SESSION_SECRET`, `SEAL_SECRET`) when missing, prints the admin handoff checklist, and can start `npm run dev`. For scripts/CI: `npm run setup -- --yes` (add `--dev` to also start the server).
 
 ### Or do it by hand
 
@@ -29,11 +29,25 @@ npm run setup
 npm run types
 cp .dev.vars.example .dev.vars
 openssl rand -hex 32
-# paste the value into .dev.vars as TOKEN_SECRET=...
+# paste into .dev.vars:
+# TOKEN_SECRET=...
+# ADMISSION_SECRET=...   # optional; falls back to TOKEN_SECRET
+# ADMIN_SESSION_SECRET=...
+# SEAL_SECRET=...
 npm run dev
 ```
 
 `.dev.vars` is gitignored. Never commit real secrets.
+
+Deploy-to-Cloudflare only requires `TOKEN_SECRET`. Add the specialised secrets after deploy:
+
+```bash
+npx wrangler secret put ADMISSION_SECRET
+npx wrangler secret put ADMIN_SESSION_SECRET
+npx wrangler secret put SEAL_SECRET
+```
+
+Give origin backends **only** `ADMISSION_SECRET` for admission verification — not `TOKEN_SECRET`. See [SECURITY.md](../SECURITY.md) and [verifying-admission.md](verifying-admission.md).
 
 ## 2. Run locally
 
@@ -73,7 +87,7 @@ Generate a secret first (so you can copy it):
 
 When Deploy prompts for `TOKEN_SECRET`, paste that value. Use the same string for the `/admin` Claim step.
 
-Only `TOKEN_SECRET` is a Deploy prompt. Capacity, origin, Turnstile, and the rest are configured in `/admin` after deploy.
+Only `TOKEN_SECRET` is a Deploy prompt. Capacity, origin, Turnstile, and the rest are configured in `/admin` after deploy. Optional specialised secrets (`ADMISSION_SECRET`, `ADMIN_SESSION_SECRET`, `SEAL_SECRET`) can be added with `wrangler secret put` afterward — see [SECURITY.md](../SECURITY.md).
 
 ### Option B: Wrangler CLI
 

@@ -1,5 +1,11 @@
 import { ApiError } from "../core/errors";
-export { requireTokenSecret } from "../auth/operator";
+export {
+  requireTokenSecret,
+  requireAdmissionSecret,
+  requireAdminSessionSecret,
+  requireOperatorSecret,
+  requireSealSecret,
+} from "../auth/operator";
 export { extractAccessToken } from "../auth/cookies";
 
 const QUEUE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;

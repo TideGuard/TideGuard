@@ -1,4 +1,8 @@
 # Copy to `.dev.vars` for local development (`npm run setup` does this).
-# Generate a secret: https://tideguard.dev/token  or  openssl rand -hex 32
-# Deploy-to-Cloudflare prompts for this value — leave empty here so the field starts blank.
+# Generate secrets: https://tideguard.dev/token  or  openssl rand -hex 32
+# Deploy-to-Cloudflare requires TOKEN_SECRET. The three specialised secrets are optional —
+# leave blank on first deploy and add later with `wrangler secret put` (see docs/upgrading.md).
 TOKEN_SECRET=
+ADMISSION_SECRET=
+ADMIN_SESSION_SECRET=
+SEAL_SECRET=

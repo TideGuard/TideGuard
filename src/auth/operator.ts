@@ -10,19 +10,29 @@ import {
   readAdminSessionCookie,
   verifyAdminSession,
 } from "./admin-session";
+import { requireAdminSessionSecret, requireOperatorSecret } from "./secrets";
+
+export {
+  requireAdmissionSecret,
+  requireAdminSessionSecret,
+  requireOperatorSecret,
+  requireSealSecret,
+  requireTokenSecret,
+  hasDedicatedAdmissionSecret,
+  hasDedicatedAdminSessionSecret,
+  hasDedicatedSealSecret,
+} from "./secrets";
 
 /**
  * Operator gate for privileged routes.
- * Accepts an admin session cookie, or TOKEN_SECRET via Bearer / X-TideGuard-Operator
- * (bootstrap, CI, and emergency access).
+ * Accepts an admin session cookie (ADMIN_SESSION_SECRET), or TOKEN_SECRET via
+ * Bearer / X-TideGuard-Operator (bootstrap, CI, and emergency access).
  */
 export async function requireOperator(request: Request, env: Env): Promise<void> {
-  const secret = requireTokenSecret(env);
-
   const session = readAdminSessionCookie(request);
   if (session) {
     try {
-      await verifyAdminSession(session, secret);
+      await verifyAdminSession(session, requireAdminSessionSecret(env));
       return;
     } catch (error) {
       if (!(error instanceof TokenError)) {
@@ -31,12 +41,13 @@ export async function requireOperator(request: Request, env: Env): Promise<void>
     }
   }
 
+  const operatorSecret = requireOperatorSecret(env);
   const header = request.headers.get("authorization");
   const bearer = header?.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : null;
   const operatorHeader = request.headers.get("x-tideguard-operator");
   const provided = bearer || operatorHeader;
 
-  if (!provided || !(await timingSafeEqual(provided, secret))) {
+  if (!provided || !(await timingSafeEqual(provided, operatorSecret))) {
     throw new ApiError("unauthorized", "Operator authentication required", 401);
   }
 }
@@ -46,7 +57,7 @@ export async function requireAdminSession(
   env: Env,
   options?: { allowStaleTos?: boolean },
 ): Promise<AdminActor> {
-  const secret = requireTokenSecret(env);
+  const secret = requireAdminSessionSecret(env);
   const session = readAdminSessionCookie(request);
   if (!session) {
     throw new ApiError("unauthorized", "Admin session required", 401);
@@ -73,18 +84,6 @@ export async function requireAdminSession(
   }
 
   return actor;
-}
-
-export function requireTokenSecret(env: Env): string {
-  const secret = env.TOKEN_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new ApiError(
-      "invalid_config",
-      "This Worker has no TOKEN_SECRET (or it is too short). Run npm run setup / set .dev.vars for local, or wrangler secret put TOKEN_SECRET for deploy, then restart.",
-      500,
-    );
-  }
-  return secret;
 }
 
 export { buildAdminSessionCookie, clearAdminSessionCookie, readAdminSessionCookie };

@@ -6,7 +6,7 @@ import { signAdminSession } from "../../auth/admin-session";
 import {
   buildAdminSessionCookie,
   requireAdminSession,
-  requireTokenSecret,
+  requireAdminSessionSecret,
 } from "../../auth/operator";
 import { rateLimitOrThrow } from "../../auth";
 import {
@@ -159,7 +159,7 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
   });
 
   const admin = await readAdminConfig(env);
-  const session = await signAdminSession(requireTokenSecret(env), actor);
+  const session = await signAdminSession(requireAdminSessionSecret(env), actor);
   return withCookie(
     jsonOk({
       ok: true,
@@ -260,7 +260,7 @@ export async function handleAdminPasswordRecover(request: Request, env: Env): Pr
   });
 
   const actor = { id: user.id, username: user.username };
-  const session = await signAdminSession(requireTokenSecret(env), actor);
+  const session = await signAdminSession(requireAdminSessionSecret(env), actor);
   return withCookie(
     jsonOk({
       ok: true,

@@ -7,7 +7,14 @@
  */
 declare namespace Cloudflare {
   interface Env {
+    /** Operator / emergency secret (claim, Bearer, factory reset). Required. */
     TOKEN_SECRET: string;
+    /** Visitor admission tokens + queue tickets. Optional; falls back to TOKEN_SECRET. */
+    ADMISSION_SECRET?: string;
+    /** Admin session cookies. Optional; falls back to TOKEN_SECRET. */
+    ADMIN_SESSION_SECRET?: string;
+    /** KV credential sealing (AES-GCM). Optional; falls back to TOKEN_SECRET. */
+    SEAL_SECRET?: string;
     /** Optional override; default queue name comes from setup / "default". */
     DEFAULT_QUEUE?: string;
     /** Optional override; live mode is set via /admin or POST /mode. */
@@ -25,6 +32,9 @@ declare namespace Cloudflare {
 
 interface Env {
   TOKEN_SECRET: string;
+  ADMISSION_SECRET?: string;
+  ADMIN_SESSION_SECRET?: string;
+  SEAL_SECRET?: string;
   DEFAULT_QUEUE?: string;
   ADMISSION_MODE?: string;
   ORIGIN_URL?: string;

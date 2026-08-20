@@ -10,7 +10,7 @@ import {
   clearAdminSessionCookie,
   readAdminSessionCookie,
   requireAdminSession,
-  requireTokenSecret,
+  requireAdminSessionSecret,
 } from "../../auth/operator";
 import { rateLimitOrThrow, withSecurityHeaders } from "../../auth";
 import {
@@ -77,7 +77,7 @@ export async function handleAdminBootstrap(request: Request, env: Env): Promise<
   const session = readAdminSessionCookie(request);
   if (session && admin) {
     try {
-      const claims = await verifyAdminSession(session, requireTokenSecret(env));
+      const claims = await verifyAdminSession(session, requireAdminSessionSecret(env));
       const user = findUserById(admin, claims.sub);
       acceptedTosVersion = readAcceptedTosVersion(user);
     } catch {
@@ -165,7 +165,7 @@ export async function handleAdminClaim(request: Request, env: Env): Promise<Resp
     summary: `First admin “${username}” claimed the Worker`,
   });
 
-  const session = await signAdminSession(requireTokenSecret(env), actor);
+  const session = await signAdminSession(requireAdminSessionSecret(env), actor);
   return withCookie(
     jsonOk({
       ok: true,
@@ -295,7 +295,7 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
   }
 
   const actor = { id: user.id, username: user.username };
-  const session = await signAdminSession(requireTokenSecret(env), actor);
+  const session = await signAdminSession(requireAdminSessionSecret(env), actor);
   return withCookie(
     jsonOk({
       ok: true,

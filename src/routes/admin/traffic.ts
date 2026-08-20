@@ -7,7 +7,7 @@ import {
 import { ApiError, jsonOk } from "../../core/errors";
 import { sanitizeRedirectUrl } from "../../core/branding";
 import { buildAccessCookie, buildAdmissionClaims, signAccessToken } from "../../auth";
-import { requireAdminSession, requireTokenSecret } from "../../auth/operator";
+import { requireAdminSession, requireAdmissionSecret } from "../../auth/operator";
 import { rateLimitOrThrow } from "../../auth";
 import { clearAdminConfig, readAdminConfig, readBranding } from "../../admin/store";
 import { appendAuditEvent, clearAuditLog } from "../../admin/audit-store";
@@ -55,7 +55,7 @@ export async function handleAdminPass(request: Request, env: Env): Promise<Respo
     fallback;
 
   const config = configFromEnv(env);
-  const secret = requireTokenSecret(env);
+  const secret = requireAdmissionSecret(env);
   const room = getQueueRoom(env, queue);
   const visitorId = `admin_pass_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const accessToken = await signAccessToken(

@@ -226,9 +226,9 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `PUT` | `/api/admin/health` | session | Origin health config / override / clear override |
 | `POST` | `/api/admin/reset` | `TOKEN_SECRET` bearer only | Clears admin, CF link, Turnstile, pending, origin |
 
-`/admit`, `/mode`, `/pause`, and `/metrics` accept either an admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
+`/admit`, `/mode`, `/pause`, and `/metrics` accept either an admin session cookie (`ADMIN_SESSION_SECRET`) or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`. Visitor admission tokens are signed with `ADMISSION_SECRET` (falls back to `TOKEN_SECRET`). See [SECURITY.md](../SECURITY.md).
 
-Admitted visitors receive an HMAC-SHA256 token (also set as HttpOnly cookie `tg_access`):
+Admitted visitors receive an HMAC-SHA256 token signed with `ADMISSION_SECRET` (also set as HttpOnly cookie `tg_access`):
 
 ```text
 base64url(payload).base64url(signature)

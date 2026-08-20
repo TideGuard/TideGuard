@@ -3,8 +3,7 @@
  * Promoted into permanent stores on Finish setup; cleared on reset.
  */
 
-import { requireTokenSecret } from "../auth/operator";
-import { sealSecret, openSecret } from "./secret-box";
+import { openCredentialWithMigration, sealCredential } from "./secret-box";
 
 export const SETUP_PENDING_KEY = "admin:setup-pending";
 
@@ -57,7 +56,7 @@ export async function clearSetupPending(env: Env): Promise<void> {
 
 export async function writeSetupPendingApiToken(env: Env, apiToken: string): Promise<SetupPending> {
   const current = await readSetupPending(env);
-  const sealed = await sealSecret(apiToken.trim(), requireTokenSecret(env));
+  const sealed = await sealCredential(env, apiToken.trim());
   const next: SetupPending = {
     ...current,
     cloudflare: current.cloudflare
@@ -102,7 +101,7 @@ export async function writeSetupPendingCloudflare(
       hostname: input.hostname.replace(/\.$/, "").toLowerCase(),
       accountId: input.accountId.trim(),
       workerService: input.workerService.trim() || "tideguard",
-      apiTokenSealed: await sealSecret(input.apiToken.trim(), requireTokenSecret(env)),
+      apiTokenSealed: await sealCredential(env, input.apiToken.trim()),
       verifiedAt: Date.now(),
       proxyOk: input.proxyOk,
       sslMode: input.sslMode,
@@ -133,7 +132,7 @@ export async function writeSetupPendingTurnstile(
     ...current,
     turnstile: {
       sitekey: input.sitekey.trim(),
-      secretSealed: await sealSecret(input.secret.trim(), requireTokenSecret(env)),
+      secretSealed: await sealCredential(env, input.secret.trim()),
       domains: input.domains.map((d) => d.trim().toLowerCase()).filter(Boolean),
       accountId: input.accountId.trim(),
       verifiedAt: input.verified ? Date.now() : 0,
@@ -164,8 +163,21 @@ export async function openSetupPendingApiToken(env: Env): Promise<string | null>
     return null;
   }
   try {
-    return await openSecret(pending.cloudflare.apiTokenSealed, requireTokenSecret(env));
+    const { plaintext, resealed } = await openCredentialWithMigration(
+      env,
+      pending.cloudflare.apiTokenSealed,
+    );
+    if (resealed && pending.cloudflare && resealed !== pending.cloudflare.apiTokenSealed) {
+      const next: SetupPending = {
+        ...pending,
+        cloudflare: { ...pending.cloudflare, apiTokenSealed: resealed },
+        updatedAt: Date.now(),
+      };
+      await env.CONFIG_KV.put(SETUP_PENDING_KEY, JSON.stringify(next));
+    }
+    return plaintext;
   } catch {
+    // Do not erase the sealed blob on decrypt failure.
     return null;
   }
 }
@@ -176,8 +188,21 @@ export async function openSetupPendingTurnstileSecret(env: Env): Promise<string 
     return null;
   }
   try {
-    return await openSecret(pending.turnstile.secretSealed, requireTokenSecret(env));
+    const { plaintext, resealed } = await openCredentialWithMigration(
+      env,
+      pending.turnstile.secretSealed,
+    );
+    if (resealed && pending.turnstile && resealed !== pending.turnstile.secretSealed) {
+      const next: SetupPending = {
+        ...pending,
+        turnstile: { ...pending.turnstile, secretSealed: resealed },
+        updatedAt: Date.now(),
+      };
+      await env.CONFIG_KV.put(SETUP_PENDING_KEY, JSON.stringify(next));
+    }
+    return plaintext;
   } catch {
+    // Do not erase the sealed blob on decrypt failure.
     return null;
   }
 }

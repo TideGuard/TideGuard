@@ -18,7 +18,7 @@ import { geoBlockedResponse } from "../html/geo-blocked";
 import { configFromEnv, getQueueRoom } from "../queue/client";
 import { parseQueueName } from "./validation";
 import { readRoomRules } from "../admin/room-rules-store";
-import { requireTokenSecret } from "./validation";
+import { requireAdmissionSecret } from "./validation";
 
 export async function handleWaitingRoom(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -36,7 +36,7 @@ export async function handleWaitingRoom(request: Request, env: Env): Promise<Res
   const ticket = readTicketCookie(request);
   if (ticket) {
     try {
-      await verifyVisitorTicket(ticket, requireTokenSecret(env), { expectedQueue: queue });
+      await verifyVisitorTicket(ticket, requireAdmissionSecret(env), { expectedQueue: queue });
       resumeTicket = true;
     } catch {
       // Invalid or expired tickets do not bypass a new visitor challenge.
