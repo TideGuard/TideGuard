@@ -35,7 +35,7 @@ Accept the token from:
 2. `Authorization: Bearer <token>`
 3. Query `?accessToken=` (avoid in production URLs that get logged)
 
-Verify with the same `TOKEN_SECRET` as the Worker (timing-safe compare). Reject missing, bad
+Verify with the same `ADMISSION_SECRET` as the Worker (or `TOKEN_SECRET` on older deploys that have not split secrets). Use a timing-safe compare. Reject missing, bad
 signature, wrong queue, expired `exp`, or an `epoch` that does not match the queue's current epoch
 (legacy tokens without the claim are epoch `0`).
 
@@ -43,17 +43,17 @@ Admission TTL is fixed when the token is issued. Requests made with the token do
 there is no sliding expiration. An operator can revoke all admissions immediately from the admin
 danger zone, independently of the remaining TTL.
 
-The recommended server-side integration is `@tideguard/verify`:
+The recommended server-side integration is `@tideguard/verify`. Give the origin **only** `ADMISSION_SECRET` — not the operator `TOKEN_SECRET`:
 
 ```js
 import { verifyAccessToken } from "@tideguard/verify";
 
-const claims = await verifyAccessToken(token, process.env.TOKEN_SECRET, {
+const claims = await verifyAccessToken(token, process.env.ADMISSION_SECRET, {
   expectedQueue: "default",
 });
 ```
 
-The Worker reference implementation remains `src/auth/token.ts`. Never expose `TOKEN_SECRET` or token signing to browsers.
+The Worker reference implementation remains `src/auth/token.ts`. Never expose `ADMISSION_SECRET`, `TOKEN_SECRET`, or token signing to browsers.
 
 ## Redirect after admission
 

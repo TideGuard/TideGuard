@@ -6,7 +6,7 @@ TideGuard can POST HTTPS callbacks for operator and queue transitions. It tries 
 
 1. Open `/admin` → **System → Operator webhooks**
 2. Enable, paste an `https://` URL, pick events
-3. Optionally set a **signing secret** (stored sealed with `TOKEN_SECRET`)
+3. Optionally set a **signing secret** (stored sealed with `SEAL_SECRET`, or `TOKEN_SECRET` when seal is unset)
 4. For depth events, set the waiting threshold (default 100)
 
 API: `PUT /api/admin/webhooks` (admin session). Settings appear on `GET /api/admin/state` as `webhooks` (secret never returned; `hasSecret` is a boolean).
@@ -45,7 +45,7 @@ Verify with the same secret using a timing-safe compare. See `hmacSign` in `src/
 ## Notes
 
 - Factory reset (`POST /api/admin/reset`) clears webhook settings
-- Rotating `TOKEN_SECRET` invalidates the sealed signing secret — re-save it
+- Rotating `SEAL_SECRET` / `TOKEN_SECRET` (when seal falls back) may require re-saving the signing secret — see [token-secret-rotation.md](token-secret-rotation.md)
 - Do not point webhooks at TideGuard itself on the hot path
 - Retry rows contain the prepared URL, headers, signature, and body; retries never read KV
 

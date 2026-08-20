@@ -8,15 +8,16 @@ First-time install: [getting-started.md](getting-started.md). Pre-launch checks:
 
 ## What survives a normal upgrade
 
-| Asset                      | Survives redeploy? | Notes                                                                                                                                |
-| -------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Worker code                | Replaced           | That is the point of upgrading                                                                                                       |
-| `TOKEN_SECRET`             | Yes                | Wrangler secret; do not re-prompt unless you intend to rotate                                                                        |
-| KV (`CONFIG_KV`) data      | Yes                | Admin password hash, branding, origin, allowlist, geo-block                                                                          |
-| Durable Object queue state | Yes                | Same class + migration tags; visitors stay in line across redeploys                                                                  |
-| Custom domains / routes    | Yes                | Dashboard / Workers Builds settings                                                                                                  |
-| `wrangler.jsonc` `vars`    | Replaced by deploy | Template ships minimal vars; capacity/timeouts use code defaults unless you add env overrides. Origin/queue/mode live in `/admin` KV |
-| Admin overrides in KV      | Yes                | Origin / branding / Cloudflare credentials saved in `/admin`                                                                         |
+| Asset                                                       | Survives redeploy? | Notes                                                                                                                                |
+| ----------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Worker code                                                 | Replaced           | That is the point of upgrading                                                                                                       |
+| `TOKEN_SECRET`                                              | Yes                | Wrangler secret; do not re-prompt unless you intend to rotate                                                                        |
+| `ADMISSION_SECRET` / `ADMIN_SESSION_SECRET` / `SEAL_SECRET` | Yes (if set)       | Optional specialised secrets; fall back to `TOKEN_SECRET` until set ([SECURITY.md](../SECURITY.md))                                  |
+| KV (`CONFIG_KV`) data                                       | Yes                | Admin password hash, branding, origin, allowlist, geo-block                                                                          |
+| Durable Object queue state                                  | Yes                | Same class + migration tags; visitors stay in line across redeploys                                                                  |
+| Custom domains / routes                                     | Yes                | Dashboard / Workers Builds settings                                                                                                  |
+| `wrangler.jsonc` `vars`                                     | Replaced by deploy | Template ships minimal vars; capacity/timeouts use code defaults unless you add env overrides. Origin/queue/mode live in `/admin` KV |
+| Admin overrides in KV                                       | Yes                | Origin / branding / Cloudflare credentials saved in `/admin`                                                                         |
 
 Re-clicking **Deploy to Cloudflare** on the README is a **new** install (new fork / new resources). It is not an upgrade.
 
@@ -114,11 +115,23 @@ Existing deploys that already finished the old 3-step wizard keep working for **
 
 Token permissions for the in-admin Cloudflare flow: Zone DNS Edit, Zone Read, Zone Settings Edit, Account Turnstile Edit, Workers Scripts Write. See [admin.md](admin.md) and [ip-allowlist.md](ip-allowlist.md).
 
+## Upgrade notes — split secrets
+
+Existing `TOKEN_SECRET`-only Workers keep working. To reduce blast radius after pulling this change:
+
+```bash
+npx wrangler secret put ADMISSION_SECRET
+npx wrangler secret put ADMIN_SESSION_SECRET
+npx wrangler secret put SEAL_SECRET
+```
+
+Adding `ADMIN_SESSION_SECRET` logs operators out once. Changing `ADMISSION_SECRET` mid-event invalidates visitor tokens — rotate between events. See [SECURITY.md](../SECURITY.md) and [token-secret-rotation.md](token-secret-rotation.md).
+
 ## Rollback
 
 1. Redeploy the previous known-good git revision (`git checkout <sha>` → `npm run deploy`, or revert the commit on the Builds branch and push).
 2. Do **not** delete the KV namespace or Durable Object class to “roll back.”
-3. Only rotate `TOKEN_SECRET` if you believe it leaked — see [token-secret-rotation.md](token-secret-rotation.md) (`npm run rotate:token-secret`). Rotation invalidates admission tokens and admin sessions.
+3. Only rotate secrets if you believe they leaked — see [token-secret-rotation.md](token-secret-rotation.md). Prefer splitting `ADMISSION_SECRET` / `ADMIN_SESSION_SECRET` / `SEAL_SECRET` so a visitor-token leak cannot forge admin sessions or open sealed KV credentials.
 
 ## Related
 

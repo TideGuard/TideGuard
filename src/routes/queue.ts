@@ -26,7 +26,7 @@ import {
   parseQueueName,
   parseRequiredVisitorId,
   readJsonBody,
-  requireTokenSecret,
+  requireAdmissionSecret,
 } from "./validation";
 
 /** Ticket TTL covers max queue stay (24h default) + buffer so waiters can poll until admission. */
@@ -96,7 +96,7 @@ function canIssueAccessToken(visitor: VisitorView): boolean {
 export async function handleJoin(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const config = loadConfig(env);
-  const secret = requireTokenSecret(env);
+  const secret = requireAdmissionSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
 
   const geo = await evaluateGeoBlock(request, env);
@@ -204,7 +204,7 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
 export async function handleStatus(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const config = loadConfig(env);
-  const secret = requireTokenSecret(env);
+  const secret = requireAdmissionSecret(env);
   const queue = parseQueueName(url.searchParams.get("queue"), env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(url.searchParams.get("id"));
 
@@ -244,7 +244,7 @@ export async function handleStatus(request: Request, env: Env): Promise<Response
 export async function handleEnter(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const config = loadConfig(env);
-  const secret = requireTokenSecret(env);
+  const secret = requireAdmissionSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
 
@@ -283,7 +283,7 @@ export async function handleEnter(request: Request, env: Env): Promise<Response>
 export async function handleLeave(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const config = loadConfig(env);
-  const secret = requireTokenSecret(env);
+  const secret = requireAdmissionSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
 
@@ -297,7 +297,7 @@ export async function handleLeave(request: Request, env: Env): Promise<Response>
 export async function handleHeartbeat(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const config = loadConfig(env);
-  const secret = requireTokenSecret(env);
+  const secret = requireAdmissionSecret(env);
   const queue = parseQueueName(body.queue, env.DEFAULT_QUEUE || "default");
   const visitorId = parseRequiredVisitorId(body.visitorId ?? body.id);
 

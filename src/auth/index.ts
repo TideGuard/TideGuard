@@ -35,4 +35,10 @@ export {
   requireAdminSession,
   buildAdminSessionCookie,
   clearAdminSessionCookie,
+  requireAdmissionSecret,
+  requireAdminSessionSecret,
+  requireOperatorSecret,
+  requireSealSecret,
+  requireTokenSecret,
 } from "./operator";
+export type { AdminActor } from "./operator";

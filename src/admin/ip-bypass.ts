@@ -4,7 +4,7 @@
 
 import { buildAccessCookie, buildAdmissionClaims, signAccessToken } from "../auth";
 import { clientConnectingIp } from "../auth/client-ip";
-import { requireTokenSecret } from "../auth/operator";
+import { requireAdmissionSecret } from "../auth/operator";
 import { configFromEnv, getQueueRoom } from "../queue/client";
 import { isIpAllowlisted, readBypassSettings } from "./bypass-store";
 
@@ -32,7 +32,7 @@ export async function maybeAdmitIpBypass(
   }
 
   const config = configFromEnv(env);
-  const secret = requireTokenSecret(env);
+  const secret = requireAdmissionSecret(env);
   const epoch = await getQueueRoom(env, queue).getTokenEpoch();
   const visitorId = `bypass_${clientIp.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 100)}`;
   const accessToken = await signAccessToken(

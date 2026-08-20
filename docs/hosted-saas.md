@@ -107,7 +107,7 @@ Cloudflare accounts (except white-glove edge cases).
   - No admin claim / password store / local invites
   - No “paste your Cloudflare API token” setup
   - Admin mutations only via platform-signed credentials
-- Visitor admission (`TOKEN_SECRET`, tickets) stays on the instance — customers
+- Visitor admission (`ADMISSION_SECRET`, tickets) stays on the instance — customers
   never manage those secrets.
 
 ### 2. Control plane (new app — clone SourceTrust shape)
@@ -147,7 +147,8 @@ TideGuard instance (headless runtime)
 | ----------------------------------- | ------------------- | -------------------------------- |
 | Login, org, roles, invites          | WorkOS + Convex     | No                               |
 | Payment, plan, suspend              | Paddle + Convex     | Entitlement check only if needed |
-| Visitor HMAC `TOKEN_SECRET`         | We mint & inject    | Holds binding; no UI             |
+| Visitor HMAC `ADMISSION_SECRET`     | We mint & inject    | Holds binding; no UI             |
+| Operator / seal secrets             | We mint & inject    | Never shown to customer          |
 | Queue / branding / admit rate       | Edit in platform UI | Stores operational config        |
 | Admin passwords / TideGuard invites | —                   | **Off** in hosted mode           |
 

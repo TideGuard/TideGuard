@@ -1,11 +1,10 @@
 /**
  * IP allowlist + optional Cloudflare API credentials for setup checks.
- * Stored in KV; API token is encrypted with TOKEN_SECRET.
+ * Stored in KV; API token is sealed (v2 with SEAL_SECRET when set, else v1 with TOKEN_SECRET).
  */
 
-import { requireTokenSecret } from "../auth/operator";
 import { ipMatchesAllowlist, parseAllowlistText } from "../auth/ip-allowlist";
-import { openSecret, sealSecret } from "./secret-box";
+import { openCredentialWithMigration, sealCredential } from "./secret-box";
 
 export const BYPASS_SETTINGS_KEY = "admin:bypass";
 
@@ -107,7 +106,7 @@ export async function writeCloudflareLink(
     if (token.length < 20) {
       throw new BypassConfigError("Cloudflare API token looks too short");
     }
-    apiTokenSealed = await sealSecret(token, requireTokenSecret(env));
+    apiTokenSealed = await sealCredential(env, token);
   }
 
   const zoneId = normalizeOptional(input.zoneId);
@@ -139,8 +138,16 @@ export async function readCloudflareApiToken(env: Env): Promise<string | null> {
     return null;
   }
   try {
-    return await openSecret(settings.apiTokenSealed, requireTokenSecret(env));
+    const { plaintext, resealed } = await openCredentialWithMigration(env, settings.apiTokenSealed);
+    if (resealed && resealed !== settings.apiTokenSealed) {
+      const next: BypassSettings = { ...settings, apiTokenSealed: resealed };
+      await env.CONFIG_KV.put(BYPASS_SETTINGS_KEY, JSON.stringify(next));
+      invalidateBypassCache();
+      cached = { at: Date.now(), value: next };
+    }
+    return plaintext;
   } catch {
+    // Do not erase the sealed blob on decrypt failure.
     return null;
   }
 }

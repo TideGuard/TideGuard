@@ -89,7 +89,7 @@ Operator guides are authored in this repo under `docs/` and published at [tidegu
 git clone https://github.com/TideGuard/TideGuard.git
 cd TideGuard
 npm install
-npm run setup   # types + .dev.vars TOKEN_SECRET + handoff (optional: starts dev)
+npm run setup   # types + .dev.vars secrets + handoff (optional: starts dev)
 # then open http://localhost:8787/admin
 ```
 
@@ -147,9 +147,14 @@ Advanced (not recommended — disables adaptive waiting-room polling):
 | `WAITING_ROOM_POLL_INTERVAL_MS`      | Fixed status poll interval                  |
 | `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` | Fixed heartbeat interval (with fixed polls) |
 
-| Secret         | Purpose                                                   |
-| -------------- | --------------------------------------------------------- |
-| `TOKEN_SECRET` | Signs visitor tickets and admin sessions; first-claim key |
+| Secret                 | Purpose                                                                |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `TOKEN_SECRET`         | Claim, Bearer operator routes, factory reset (required)                |
+| `ADMISSION_SECRET`     | Visitor admission tokens and queue tickets (optional; falls back)      |
+| `ADMIN_SESSION_SECRET` | Admin session cookies (optional; falls back)                           |
+| `SEAL_SECRET`          | Encrypts CF / Turnstile / webhook secrets in KV (optional; falls back) |
+
+Give origin backends only `ADMISSION_SECRET` for verification. See [SECURITY.md](SECURITY.md).
 
 Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)
 

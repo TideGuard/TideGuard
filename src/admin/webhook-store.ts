@@ -2,7 +2,7 @@
  * Operator outbound webhooks. Stored in CONFIG_KV.
  */
 
-import { sealSecret, openSecret } from "./secret-box";
+import { openCredentialWithMigration, sealCredential } from "./secret-box";
 
 export const WEBHOOKS_KEY = "admin:webhooks";
 
@@ -110,13 +110,22 @@ export function toPublicWebhooks(settings: WebhookSettings): Omit<
 }
 
 export async function sealWebhookSecret(env: Env, plain: string): Promise<string> {
-  return sealSecret(plain, env.TOKEN_SECRET);
+  return sealCredential(env, plain);
 }
 
+/** Open a webhook signing secret; migrate v1→v2 in place when SEAL_SECRET is dedicated. */
 export async function openWebhookSecret(env: Env, sealed: string): Promise<string | null> {
   try {
-    return await openSecret(sealed, env.TOKEN_SECRET);
+    const { plaintext, resealed } = await openCredentialWithMigration(env, sealed);
+    if (resealed && resealed !== sealed) {
+      const settings = await readWebhookSettings(env);
+      if (settings.sealedSecret === sealed) {
+        await writeWebhookSettings(env, { ...settings, sealedSecret: resealed });
+      }
+    }
+    return plaintext;
   } catch {
+    // Do not erase the sealed blob on decrypt failure.
     return null;
   }
 }
