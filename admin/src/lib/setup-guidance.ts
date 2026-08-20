@@ -33,6 +33,7 @@ export const LINKS = {
   findIds: "https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/",
   docs: "https://tideguard.dev/docs/",
   docsGettingStarted: "https://tideguard.dev/docs/getting-started/",
+  docsBeforeDeploy: "https://tideguard.dev/before-you-deploy",
   docsAdmin: "https://tideguard.dev/docs/admin/",
   docsOrigin: "https://tideguard.dev/docs/protecting-origin/",
   docsCustomDomain: "https://tideguard.dev/docs/custom-domain/",

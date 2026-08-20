@@ -69,6 +69,7 @@ import {
 import { geoBlockedResponse } from "../html/geo-blocked";
 import { isAdminSetupComplete } from "../admin/store";
 import { readRoomRules } from "../admin/room-rules-store";
+import { handleBeforeDeployDownload, handleBeforeDeployPage } from "./before-deploy";
 import { handleCostEstimateApi, handleCostPage } from "./cost";
 import { handleHealth } from "./health";
 import { handleDemo, handleWaitingRoom } from "./pages";
@@ -180,6 +181,14 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
 
   if (request.method === "GET" && url.pathname === "/cost") {
     return handleCostPage();
+  }
+
+  if (request.method === "GET" && url.pathname === "/before-you-deploy") {
+    return handleBeforeDeployPage();
+  }
+
+  if (request.method === "GET" && url.pathname === "/before-you-deploy/download") {
+    return handleBeforeDeployDownload();
   }
 
   if (request.method === "GET" && url.pathname === "/api/cost-estimate") {
@@ -523,6 +532,7 @@ function landingPage(): string {
         <a href="/wait?queue=default&return=/demo">Waiting room</a>
         <a href="/admin">Admin</a>
         <a href="/cost">Calculate cost</a>
+        <a href="/before-you-deploy">Before you deploy</a>
         <a href="/health">Health</a>
       </p>
     </main>

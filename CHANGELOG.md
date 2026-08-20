@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Before you deploy** — simple visual roadmap at `/before-you-deploy` (8 steps: deploy → wizard → go live); downloadable HTML at `/before-you-deploy/download` and `assets/before-you-deploy.html`; operator doc [docs/before-you-deploy.md](docs/before-you-deploy.md)
+
 ## [0.5.1] - 2026-08-15
 
 ### Added

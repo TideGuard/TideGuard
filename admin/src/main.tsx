@@ -26,6 +26,9 @@ createRoot(document.getElementById("root")!).render(
           <a href="https://tideguard.dev/docs/" target="_blank" rel="noreferrer">
             Docs
           </a>
+          <a href="https://tideguard.dev/before-you-deploy" target="_blank" rel="noreferrer">
+            Before you deploy
+          </a>
           <span aria-hidden="true"> · </span>
           <a
             href="https://github.com/TideGuard/TideGuard/blob/main/ROADMAP.md"

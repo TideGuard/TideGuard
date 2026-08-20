@@ -19,6 +19,7 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "rotate:token-secret": "node scripts/rotate-token-secret.mjs",
+    "export:before-deploy": "node --experimental-strip-types scripts/export-before-deploy.ts",
     "build:admin": "vite build --config admin/vite.config.ts",
     "dev:admin": "vite --config admin/vite.config.ts",
     "dev": "npm run build:admin && wrangler dev",
