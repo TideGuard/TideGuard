@@ -42,6 +42,8 @@ export const RESERVED_EXACT = new Set([
   "/metrics",
   "/admin",
   "/cost",
+  "/before-you-deploy",
+  "/before-you-deploy/download",
   "/demo",
   "/api/cost-estimate",
   "/sounds/notification.mp3",

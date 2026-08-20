@@ -6,6 +6,7 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 
 | Guide                                                 | Audience                                                                                 |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [Before you deploy](before-you-deploy.md)             | Visual roadmap: deploy → wizard → go live (downloadable)                                 |
 | [Getting started](getting-started.md)                 | Operators deploying or running locally for the first time                                |
 | [Upgrading](upgrading.md)                             | Pull a newer TideGuard into an existing Cloudflare deploy                                |
 | [Launch checklist](launch-checklist.md)               | Pre-production go-live review                                                            |
