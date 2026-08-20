@@ -12,23 +12,23 @@ Filter for every item: [PRODUCT.md](PRODUCT.md) — one job per surface, calm un
 
 Full notes: [CHANGELOG.md § 0.5.0](CHANGELOG.md#050---2026-08-15) and [§ 0.5.1](CHANGELOG.md#051---2026-08-15).
 
-| Theme | Highlights |
-| ----- | ---------- |
-| **Scale under load** | Timeslot status check-ins (~750 RPS budget, `nextCheckAt`); max waiting visitors (default 1M, raise to 50M via Danger zone); admin depth warning at 120s+ check-in period |
-| **Event lifecycle** | `opensAt` / `closesAt`, pre-open deferral, post-close reject or passthrough; admission revoke via `tokenEpoch` |
-| **Trust & abuse** | Visitor Turnstile on `/join`; versioned operator ToS; `@tideguard/verify` npm package |
-| **Operator control room** | Multi-queue admin, waiting-room rules, durable webhooks (SQLite outbox + retries), Google Analytics on `/wait` |
-| **Visitor UX** | Locales (DE/FR/ES/JA), background-tab notifications, optional place-in-line |
-| **Architecture honesty** | One Durable Object per queue — do not shard a single FIFO; staging load-test recipe |
-| **0.5.1** | Test coverage for the 0.5 feature surface (schedules, revoke, rules, webhooks, depth warnings) |
+| Theme                     | Highlights                                                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scale under load**      | Timeslot status check-ins (~750 RPS budget, `nextCheckAt`); max waiting visitors (default 1M, raise to 50M via Danger zone); admin depth warning at 120s+ check-in period |
+| **Event lifecycle**       | `opensAt` / `closesAt`, pre-open deferral, post-close reject or passthrough; admission revoke via `tokenEpoch`                                                            |
+| **Trust & abuse**         | Visitor Turnstile on `/join`; versioned operator ToS; `@tideguard/verify` npm package                                                                                     |
+| **Operator control room** | Multi-queue admin, waiting-room rules, durable webhooks (SQLite outbox + retries), Google Analytics on `/wait`                                                            |
+| **Visitor UX**            | Locales (DE/FR/ES/JA), background-tab notifications, optional place-in-line                                                                                               |
+| **Architecture honesty**  | One Durable Object per queue — do not shard a single FIFO; staging load-test recipe                                                                                       |
+| **0.5.1**                 | Test coverage for the 0.5 feature surface (schedules, revoke, rules, webhooks, depth warnings)                                                                            |
 
 ## Near term
 
-| Item | Notes |
-| ---- | ----- |
-| **Admin scale planner** | Always-visible check-in period + status RPS summary (not only the 120s warning); comfort / stretch / split-queue guidance; links to multi-queue create and [launch checklist](docs/launch-checklist.md). UI + copy only — no engine changes. |
-| **Roadmap / docs hygiene** | Keep this file and operator guides aligned with shipped releases (see Contributing below). |
-| **Split `TOKEN_SECRET`** | Deferred — additive `ADMISSION_SECRET` / `ADMIN_SESSION_SECRET` / `SEAL_SECRET` with fallback to `TOKEN_SECRET` for existing deploys. |
+| Item                       | Notes                                                                                                                                                                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Admin scale planner**    | Always-visible check-in period + status RPS summary (not only the 120s warning); comfort / stretch / split-queue guidance; links to multi-queue create and [launch checklist](docs/launch-checklist.md). UI + copy only — no engine changes. |
+| **Roadmap / docs hygiene** | Keep this file and operator guides aligned with shipped releases (see Contributing below).                                                                                                                                                   |
+| **Split `TOKEN_SECRET`**   | Deferred — additive `ADMISSION_SECRET` / `ADMIN_SESSION_SECRET` / `SEAL_SECRET` with fallback to `TOKEN_SECRET` for existing deploys.                                                                                                        |
 
 Candidate release: **0.5.2** (operator polish + doc sync, no breaking changes).
 
