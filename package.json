@@ -53,7 +53,7 @@
     "@vitest/coverage-istanbul": "^4.1.10",
     "@vitest/runner": "^4.1.10",
     "@vitest/snapshot": "^4.1.10",
-    "oxlint": "^1.78.0",
+    "oxlint": "^1.79.0",
     "oxlint-tsgolint": "^7.0.2001",
     "postcss": "^8.5.26",
     "postcss-preset-mantine": "^1.18.0",
