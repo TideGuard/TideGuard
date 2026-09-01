@@ -70,7 +70,7 @@
     "workerd@1.20260811.1": true
   },
   "dependencies": {
-    "@mantine/core": "^9.5.1",
+    "@mantine/core": "^9.5.2",
     "@mantine/hooks": "^9.5.1",
     "@mantine/notifications": "^9.5.1",
     "@scure/bip39": "^2.3.0",
