@@ -179,6 +179,8 @@ test/               Vitest + Workers pool tests
 
 ## Releases
 
+Current version: **0.6.0** (`package.json` / `src/version.ts` / `GET /health`).
+
 Shipped work lives in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/TideGuard/TideGuard/releases). Planned work lives in [ROADMAP.md](ROADMAP.md) — do not treat the changelog as a roadmap.
 
 ## Contributing

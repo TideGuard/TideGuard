@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-03
+
 ### Added
 
 - **Admin deep-links** — `/admin#webhooks`, `#turnstile`, `#origin`, tab names, etc.
@@ -17,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Waiting room** — tab reconnect copy, logo/favicon URLs, richer branding preview
 - **Day-of ops** — waiting series on traffic chart + pause/schedule/health badges; origin Test upstream; geo country MultiSelect + TTL countdown; branded geo-block page; invite copy/mailto hardening; audit CSV export
 - **Optional `ADMIN_SECRET`** — admin sessions / operator Bearer / KV seals; visitor HMAC stays on `TOKEN_SECRET`
-- OpenAPI contract catch-up (queue-limits, audit CSV, webhook test, origin probe, Turnstile rotate)
+- OpenAPI `0.6.0` contract catch-up (queue-limits, audit CSV, webhook test, origin probe, Turnstile rotate)
 - Pattern B verify snippets (Node + Python) in verifying-admission docs
 
 ### Changed

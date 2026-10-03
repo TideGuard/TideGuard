@@ -86,7 +86,7 @@ export async function deliverWebhook(
   const body = JSON.stringify(payload);
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    "user-agent": "TideGuard-Webhook/0.5",
+    "user-agent": "TideGuard-Webhook/0.6",
   };
   if (settings.sealedSecret) {
     const secret = await openWebhookSecret(env, settings.sealedSecret);

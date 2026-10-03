@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TideGuard API
-  version: 0.3.0
+  version: 0.6.0
   description: |
     HTTP contracts for TideGuard waiting-room Workers.
     Narrative guide: https://tideguard.dev/docs/api/ (source: docs/api.md in the repo).
