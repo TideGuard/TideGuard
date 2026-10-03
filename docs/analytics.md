@@ -10,9 +10,11 @@ The control room **Live** tab shows live queue metrics and a **server-backed tra
 - `GET /api/admin/traffic?queue=&rangeMs=&format=csv` downloads the same series as CSV (`t,iso,joins,admits,maxOutflow,waiting,entered`).
 - Chart series:
   - **Total inflow** — joins per bucket
+  - **Waiting** — optional toggle for waiting depth
   - **Max outflow** — admit/s setpoint during that bucket (stepped when operators update rate)
+- Markers for silent pause, opening schedule, and origin health when that state is available in metrics
 
-Metrics also expose `totalInflow`, `inflowCurrent`, `outflowCurrent`, `admitPerSecond`, and `admitPerSecondOverride`. Event-day controls (rate, pause, force-admit) live in the sticky toolbar.
+Metrics also expose `totalInflow`, `inflowCurrent`, `outflowCurrent`, `admitPerSecond`, and `admitPerSecondOverride`. Event-day controls (rate, pause, force-admit) live in the sticky toolbar. Activity export: `GET /api/admin/audit?format=csv`.
 
 ## Related
 

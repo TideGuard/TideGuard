@@ -57,6 +57,8 @@ export function BrandingPanel({
   const [hold, setHold] = useState(Number(b.admitHoldSeconds ?? 60));
   const [enterLabel, setEnterLabel] = useState(b.enterButtonLabel ?? "Continue");
   const [googleAnalyticsId, setGoogleAnalyticsId] = useState(b.googleAnalyticsId ?? "");
+  const [logoUrl, setLogoUrl] = useState(b.logoUrl ?? "");
+  const [faviconUrl, setFaviconUrl] = useState(b.faviconUrl ?? "");
 
   const draft: WaitingRoomBranding = {
     title,
@@ -77,6 +79,8 @@ export function BrandingPanel({
     admitHoldSeconds: hold,
     enterButtonLabel: enterLabel,
     googleAnalyticsId,
+    logoUrl,
+    faviconUrl,
   };
 
   return (
@@ -186,6 +190,19 @@ export function BrandingPanel({
             onChange={(e) => setEnterLabel(e.currentTarget.value)}
           />
           <TextInput
+            label="Logo URL (https)"
+            description="Optional image above the title on /wait and geo-block pages."
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.currentTarget.value)}
+            placeholder="https://cdn.example.com/logo.svg"
+          />
+          <TextInput
+            label="Favicon URL (https)"
+            value={faviconUrl}
+            onChange={(e) => setFaviconUrl(e.currentTarget.value)}
+            placeholder="https://cdn.example.com/favicon.ico"
+          />
+          <TextInput
             label="Google Analytics Measurement ID"
             description="Optional GA4 ID (G-…). Loads Google’s tag on the waiting room. You are responsible for consent and cookie policy."
             placeholder="G-XXXXXXXX"
@@ -242,7 +259,8 @@ export function BrandingPanel({
             <Text size="sm" mb="xs">
               Iframe the waiting room on a marketing page. The embed posts{" "}
               <Code>tideguard-embed-height</Code> so the parent can resize. Optional{" "}
-              <Code>?lang=en</Code> selects English, German, French, Spanish, or Japanese.
+              <Code>?lang=en</Code> selects English, German, French, Spanish, or Japanese (or
+              Accept-Language).
             </Text>
             <Code block>
               {`<iframe\n  src="/wait?embed=1&return=/checkout&queue=${queue}"\n  title="Waiting room"\n  style="width:100%;border:0;min-height:28rem"\n></iframe>\n<script>\nwindow.addEventListener("message", (e) => {\n  if (e.data?.type === "tideguard-embed-height") {\n    const el = document.querySelector("iframe[title='Waiting room']");\n    if (el) el.style.height = e.data.height + "px";\n  }\n});\n</script>`}
@@ -252,7 +270,7 @@ export function BrandingPanel({
             </Anchor>
           </Alert>
         </Stack>
-        <WaitingRoomPreview branding={draft} />
+        <WaitingRoomPreview branding={draft} admissionMode={mode} />
       </div>
     </Panel>
   );

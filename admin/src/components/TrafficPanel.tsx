@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Anchor,
+  Badge,
   Button,
+  Checkbox,
   Group,
   SegmentedControl,
   SimpleGrid,
@@ -71,6 +73,7 @@ export function TrafficPanel({
   const [totalInflow, setTotalInflow] = useState(metrics.totalInflow);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rangeMs, setRangeMs] = useState(String(2 * 60 * 60 * 1000));
+  const [showWaitingSeries, setShowWaitingSeries] = useState(true);
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const reduceMotion =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -131,32 +134,46 @@ export function TrafficPanel({
     const labels = buckets.map((b) => formatTime(b.t));
     const joins = buckets.map((b) => b.joins);
     const maxOut = buckets.map((b) => b.maxOutflow);
-    return {
-      labels,
-      datasets: [
-        {
-          label: "Total inflow",
-          data: joins,
-          borderColor: inflow,
-          backgroundColor: `${inflow}26`,
-          tension: 0.25,
-          pointRadius: 0,
-          borderWidth: 2,
-          fill: true,
-        },
-        {
-          label: "Max outflow",
-          data: maxOut,
-          borderColor: outflow,
-          backgroundColor: "transparent",
-          tension: 0,
-          stepped: true,
-          pointRadius: 0,
-          borderWidth: 2,
-        },
-      ],
-    };
-  }, [buckets, inflow, outflow]);
+    const waitingSeries = buckets.map((b) => b.waiting);
+    const datasets: ChartData<"line">["datasets"] = [
+      {
+        label: "Total inflow",
+        data: joins,
+        borderColor: inflow,
+        backgroundColor: `${inflow}26`,
+        tension: 0.25,
+        pointRadius: 0,
+        borderWidth: 2,
+        fill: true,
+        yAxisID: "y",
+      },
+      {
+        label: "Max outflow",
+        data: maxOut,
+        borderColor: outflow,
+        backgroundColor: "transparent",
+        tension: 0,
+        stepped: true,
+        pointRadius: 0,
+        borderWidth: 2,
+        yAxisID: "y",
+      },
+    ];
+    if (showWaitingSeries) {
+      datasets.push({
+        label: "Waiting",
+        data: waitingSeries,
+        borderColor: waiting,
+        backgroundColor: "transparent",
+        tension: 0.2,
+        pointRadius: 0,
+        borderWidth: 2,
+        borderDash: [4, 3],
+        yAxisID: "y1",
+      });
+    }
+    return { labels, datasets };
+  }, [buckets, inflow, outflow, waiting, showWaitingSeries]);
 
   const chartOptions: ChartOptions<"line"> = useMemo(
     () => ({
@@ -178,6 +195,7 @@ export function TrafficPanel({
               const label = ctx.dataset.label ?? "";
               const v = ctx.parsed.y ?? 0;
               if (label === "Max outflow") return `${label}: ${v}/s`;
+              if (label === "Waiting") return `${label}: ${v}`;
               return `${label}: ${v} joins / interval`;
             },
           },
@@ -193,10 +211,29 @@ export function TrafficPanel({
           ticks: { color: "#8aa4b0" },
           grid: { color: "rgba(232, 241, 245, 0.06)" },
         },
+        y1: {
+          beginAtZero: true,
+          position: "right",
+          display: showWaitingSeries,
+          ticks: { color: "#8aa4b0" },
+          grid: { drawOnChartArea: false },
+        },
       },
     }),
-    [reduceMotion],
+    [reduceMotion, showWaitingSeries],
   );
+
+  const eventMarkers: string[] = [];
+  if (metrics.paused) eventMarkers.push("Silent pause on");
+  if (metrics.opensAt && metrics.opensAt > Date.now()) {
+    eventMarkers.push(`Opens ${new Date(metrics.opensAt).toLocaleString()}`);
+  } else if (metrics.opensAt === null && metrics.waiting > 0) {
+    /* open */
+  }
+  if (metrics.health.enabled && metrics.health.level !== "ok") {
+    eventMarkers.push(`Health ${metrics.health.level}`);
+  }
+  if (metrics.health.autoPaused) eventMarkers.push("Auto-paused by health");
 
   const hasTraffic = buckets.some((b) => b.joins > 0 || b.admits > 0 || b.waiting > 0);
 
@@ -220,10 +257,27 @@ export function TrafficPanel({
           onChange={setRangeMs}
           data={[...RANGE_OPTIONS]}
         />
-        <Button size="xs" variant="default" onClick={() => void exportCsv()}>
-          Export CSV
-        </Button>
+        <Group gap="sm">
+          <Checkbox
+            size="xs"
+            label="Waiting series"
+            checked={showWaitingSeries}
+            onChange={(e) => setShowWaitingSeries(e.currentTarget.checked)}
+          />
+          <Button size="xs" variant="default" onClick={() => void exportCsv()}>
+            Export CSV
+          </Button>
+        </Group>
       </Group>
+      {eventMarkers.length > 0 ? (
+        <Group gap="xs" mb="sm">
+          {eventMarkers.map((m) => (
+            <Badge key={m} variant="light" color="orange">
+              {m}
+            </Badge>
+          ))}
+        </Group>
+      ) : null}
       <div className="tg-chart-wrap" style={{ height: 280 }}>
         {!hasTraffic && buckets.length > 0 ? (
           <div className="tg-chart-empty">

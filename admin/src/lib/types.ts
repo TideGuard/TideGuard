@@ -102,6 +102,8 @@ export interface WaitingRoomBranding {
   joinTurnstileEnabled: boolean;
   enableWebNotifications: boolean;
   googleAnalyticsId: string;
+  logoUrl: string;
+  faviconUrl: string;
 }
 
 export interface OriginSettings {
@@ -149,6 +151,13 @@ export interface TurnstileSettings {
   domains: string[];
 }
 
+export interface WebhookLastDelivery {
+  at: number;
+  status: number | null;
+  error: string | null;
+  event: string;
+}
+
 export interface WebhookSettingsPublic {
   enabled: boolean;
   url: string | null;
@@ -156,6 +165,7 @@ export interface WebhookSettingsPublic {
   depthThreshold: number;
   updatedAt: number;
   hasSecret: boolean;
+  lastDelivery?: WebhookLastDelivery;
 }
 
 export interface RoomRules {

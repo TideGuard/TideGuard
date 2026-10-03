@@ -16,7 +16,7 @@ import { ApiError, jsonOk } from "../core/errors";
 import type { JoinResult, StatusResult } from "../core/types";
 import { configFromEnv, getQueueRoom } from "../queue/client";
 import { evaluateGeoBlock } from "../admin/geo-block";
-import { dispatchWebhook } from "../admin/webhook-dispatch";
+import { maybeDispatchQueueFullWebhook } from "../admin/webhook-dispatch";
 import { verifyTurnstileToken } from "../admin/cloudflare-api";
 import { readBranding } from "../admin/store";
 import { readTurnstileSecret, readTurnstileSettings } from "../admin/turnstile-store";
@@ -159,9 +159,7 @@ export async function handleJoin(request: Request, env: Env): Promise<Response> 
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     if (message === "queue_full" || message.includes("queue_full")) {
-      void dispatchWebhook(env, "queue_full", queue, {
-        maxWaitingVisitors: null,
-      });
+      void maybeDispatchQueueFullWebhook(env, queue);
       throw new ApiError(
         "queue_full",
         "The waiting room is at capacity. Please try again later.",

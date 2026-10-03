@@ -25,6 +25,8 @@ export interface WaitingRoomStrings {
   statusWaiting: string;
   statusAdmitted: string;
   statusHold: string;
+  statusReconnect: string;
+  statusConnectionIssue: string;
 }
 
 export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings> = {
@@ -48,6 +50,8 @@ export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings>
     statusWaiting: "Waiting for your turn…",
     statusAdmitted: "You are through — continuing…",
     statusHold: "Your spot is ready — continue when you are",
+    statusReconnect: "Still in line — reconnecting…",
+    statusConnectionIssue: "Connection issue. Retrying…",
   },
   de: {
     brand: "TideGuard",
@@ -69,6 +73,8 @@ export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings>
     statusWaiting: "Du wartest auf deinen Aufruf…",
     statusAdmitted: "Du bist drin — weiter geht’s…",
     statusHold: "Dein Platz ist bereit — fahre fort",
+    statusReconnect: "Noch in der Warteschlange — Verbindung wird wiederhergestellt…",
+    statusConnectionIssue: "Verbindungsproblem. Erneuter Versuch…",
   },
   fr: {
     brand: "TideGuard",
@@ -91,6 +97,8 @@ export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings>
     statusWaiting: "En attente de votre tour…",
     statusAdmitted: "Vous pouvez entrer — redirection…",
     statusHold: "Votre place est prête — continuez",
+    statusReconnect: "Toujours dans la file — reconnexion…",
+    statusConnectionIssue: "Problème de connexion. Nouvel essai…",
   },
   es: {
     brand: "TideGuard",
@@ -112,6 +120,8 @@ export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings>
     statusWaiting: "Esperando tu turno…",
     statusAdmitted: "Ya puedes entrar — continuando…",
     statusHold: "Tu lugar está listo — continúa",
+    statusReconnect: "Sigues en la fila — reconectando…",
+    statusConnectionIssue: "Problema de conexión. Reintentando…",
   },
   ja: {
     brand: "TideGuard",
@@ -133,6 +143,8 @@ export const WAITING_ROOM_STRINGS: Record<WaitingRoomLocale, WaitingRoomStrings>
     statusWaiting: "順番を待っています…",
     statusAdmitted: "入場できます — 移動中…",
     statusHold: "入場枠を確保しました — 続行してください",
+    statusReconnect: "まだ待機中です — 再接続しています…",
+    statusConnectionIssue: "接続に問題があります。再試行しています…",
   },
 };
 

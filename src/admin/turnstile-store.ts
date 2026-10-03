@@ -2,8 +2,7 @@
  * Turnstile sitekey + sealed secret for admin login / invite protection.
  */
 
-import { requireTokenSecret } from "../auth/operator";
-import { openSecret, sealSecret } from "./secret-box";
+import { openWithAdminSecretDetailed, sealWithAdminSecret } from "../auth/secrets";
 
 export const TURNSTILE_SETTINGS_KEY = "admin:turnstile";
 
@@ -61,7 +60,7 @@ export async function writeTurnstileSettings(
   }
   const next: TurnstileSettings = {
     sitekey,
-    secretSealed: await sealSecret(secret, requireTokenSecret(env)),
+    secretSealed: await sealWithAdminSecret(env, secret),
     accountId: input.accountId.trim(),
     domains: input.domains.map((d) => d.trim().toLowerCase()).filter(Boolean),
     createdAt: Date.now(),
@@ -83,7 +82,17 @@ export async function readTurnstileSecret(env: Env): Promise<string | null> {
     return null;
   }
   try {
-    return await openSecret(settings.secretSealed, requireTokenSecret(env));
+    const opened = await openWithAdminSecretDetailed(env, settings.secretSealed);
+    if (opened.usedTokenSecretFallback) {
+      const next: TurnstileSettings = {
+        ...settings,
+        secretSealed: await sealWithAdminSecret(env, opened.plaintext),
+      };
+      await env.CONFIG_KV.put(TURNSTILE_SETTINGS_KEY, JSON.stringify(next));
+      invalidateTurnstileCache();
+      cached = { at: Date.now(), value: next };
+    }
+    return opened.plaintext;
   } catch {
     return null;
   }

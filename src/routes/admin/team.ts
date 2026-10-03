@@ -3,11 +3,8 @@ import { hashPassword, verifyPassword } from "../../auth/password";
 import { assertAdminPassword } from "../../auth/password-policy";
 import { createRecoveryVerifier, verifyRecoveryMnemonic } from "../../auth/recovery";
 import { signAdminSession } from "../../auth/admin-session";
-import {
-  buildAdminSessionCookie,
-  requireAdminSession,
-  requireTokenSecret,
-} from "../../auth/operator";
+import { adminSecret } from "../../auth/secrets";
+import { buildAdminSessionCookie, requireAdminSession } from "../../auth/operator";
 import { rateLimitOrThrow } from "../../auth";
 import {
   addAdminUser,
@@ -62,6 +59,7 @@ export async function handleAdminCreateInvite(request: Request, env: Env): Promi
     invite: toPublicInvite(invite),
     token: `${invite.id}.${token}`,
     acceptUrl,
+    expiresAt: invite.expiresAt,
   });
 }
 
@@ -159,7 +157,7 @@ export async function handleAdminAcceptInvite(request: Request, env: Env): Promi
   });
 
   const admin = await readAdminConfig(env);
-  const session = await signAdminSession(requireTokenSecret(env), actor);
+  const session = await signAdminSession(adminSecret(env), actor);
   return withCookie(
     jsonOk({
       ok: true,
@@ -260,7 +258,7 @@ export async function handleAdminPasswordRecover(request: Request, env: Env): Pr
   });
 
   const actor = { id: user.id, username: user.username };
-  const session = await signAdminSession(requireTokenSecret(env), actor);
+  const session = await signAdminSession(adminSecret(env), actor);
   return withCookie(
     jsonOk({
       ok: true,

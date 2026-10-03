@@ -28,7 +28,7 @@ import {
 } from "../../queue/traffic";
 import { parseQueueName, readJsonBody } from "../validation";
 import { clientKey, requireSetupBearer, withCookie } from "./helpers";
-import { dispatchWebhook } from "../../admin/webhook-dispatch";
+import { dispatchWebhook, maybeDispatchScheduleOpenWebhook } from "../../admin/webhook-dispatch";
 import { clearWebhookSettings } from "../../admin/webhook-store";
 import { clearRoomRules } from "../../admin/room-rules-store";
 
@@ -321,6 +321,7 @@ export async function handleAdminSchedule(request: Request, env: Env): Promise<R
   ) {
     void dispatchWebhook(env, "opened", queue, { opensAt: result.opensAt });
   }
+  void maybeDispatchScheduleOpenWebhook(env, queue, result.opensAt);
   return jsonOk(result);
 }
 

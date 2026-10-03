@@ -38,7 +38,7 @@ On **finish**, TideGuard:
 - Requires completed Cloudflare verify + Turnstile verify
 - Marks setup complete, writes branding, seals Cloudflare + Turnstile secrets, and sets admission mode on the queue
 
-`TOKEN_SECRET` remains a Wrangler secret. It signs visitor tickets, admission tokens, and admin session cookies. Daily login (after finish) uses username + password **plus Turnstile**.
+`TOKEN_SECRET` remains a Wrangler secret for visitor tickets, admission HMAC, and claim/factory-reset Bearer. Optional `ADMIN_SECRET` signs admin session cookies, operator Bearer routes, and KV seals (Cloudflare / Turnstile / webhook secrets); when unset, those uses fall back to `TOKEN_SECRET`. Daily login (after finish) uses username + password **plus Turnstile**. Rotate Turnstile from [`/admin#turnstile`](/admin#turnstile) without factory reset.
 
 ## Login
 
@@ -57,7 +57,7 @@ Raw invite tokens are hashed in KV (not stored in clear). Forgot password uses t
 
 ## Activity audit log
 
-Consequential control-room actions append to a KV ring (`admin:audit`, ~200 events): who, what, when. The **Activity** panel lists them. Secrets are never logged.
+Consequential control-room actions append to a KV ring (`admin:audit`, ~200 events): who, what, when. The **Activity** panel lists them and can export `GET /api/admin/audit?format=csv`. Secrets are never logged.
 
 ## Confirmations
 
@@ -69,7 +69,7 @@ React SPA (Mantine + Chart.js) served from Workers Static Assets under `/admin/`
 
 - **Sticky event toolbar** — waiting/admitted chips, pause, admit rate (+ clear override), force-admit, Pass queue
 - **Queue selector** — switch remembered named queues, or create one by cloning the current queue's branding
-- **Tabs** — Live (metrics + 24h traffic chart / CSV), Admission (schedule + health), Branding (preview + embed snippet), Access (origin + Cloudflare Access guidance), Cloudflare (+ Turnstile), Team, System (activity, updates, webhooks, TOKEN_SECRET rotation, max waiting / missed-slot grace / Danger zone, factory reset)
+- **Tabs** — Live (metrics + 24h traffic chart / CSV), Admission (schedule + health), Branding (preview + embed snippet), Access (origin + Cloudflare Access guidance), Cloudflare (+ Turnstile), Team, System (activity, updates, webhooks, TOKEN_SECRET rotation, max waiting / missed-slot grace / Danger zone, factory reset). Deep-link with hashes such as `/admin#webhooks`, `/admin#turnstile`, `/admin#origin`, or a tab name (`/admin#admission`).
 
 Build with `npm run build:admin` (also runs before `npm run dev` / `npm run deploy`).
 
@@ -88,7 +88,7 @@ Operators can change admit rate without redeploying:
 3. Clear the override with **Clear override** (`DELETE /api/admin/rate`) to fall back to `ADMIT_PER_SECOND`
 4. Force-admit waiting visitors via **Force admit** (`POST /admit`)
 
-The chart shows joins per interval (inflow) vs the setpoint (max outflow). Series come from the Durable Object (`GET /api/admin/traffic`, ~15s buckets, ~**24h** retention). Export with `?format=csv`. Range presets in the UI: 2h / 12h / 24h.
+The chart shows joins per interval (inflow), optional **waiting** depth, and the setpoint (max outflow), with pause / schedule / health markers when available. Series come from the Durable Object (`GET /api/admin/traffic`, ~15s buckets, ~**24h** retention). Export with `?format=csv`. Range presets in the UI: 2h / 12h / 24h.
 
 **Queues vs paths:** path prefixes choose which URLs require admission; they do not create separate queues. The toolbar selects remembered queue names and updates `?queue=` for state loads. **Create** validates a new queue name and copies the current queue's branding; integrations must still send that queue name to `/join` and `/status`.
 
@@ -118,11 +118,14 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `PUT`                | `/api/admin/webhooks`                       | Session (operator outbound webhooks)                               |
 | `PUT`                | `/api/admin/room-rules`                     | Session (crawler/cookie/header bypass and full/JSON behavior)      |
 | `POST`               | `/api/admin/queues/clone-branding`          | Session (copy branding and remember destination queue)             |
+| `POST`               | `/api/admin/webhooks/test`                  | Session (synthetic test ping + lastDelivery)                       |
+| `POST`               | `/api/admin/turnstile/rotate`               | Session (new Turnstile widget; needs CF API token)                 |
+| `POST`               | `/api/admin/origin/probe`                   | Session (test saved origin upstream)                               |
+| `GET`                | `/api/admin/audit`                          | Session (`format=csv` for download)                                |
 | `PUT`                | `/api/admin/cloudflare/ip-geolocation`      | Session                                                            |
 | `PUT`                | `/api/admin/cloudflare/ssl`                 | Session (set Full strict)                                          |
 | `GET`/`PUT`/`DELETE` | `/api/admin/cloudflare/domains`             | Session (list / attach / detach)                                   |
 | `GET`                | `/api/admin/updates`                        | Session (optional `?refresh=1`)                                    |
-| `GET`                | `/api/admin/audit`                          | Session                                                            |
 | `GET`                | `/api/admin/invites`                        | Session                                                            |
 | `POST`               | `/api/admin/invites`                        | Session (returns accept URL once)                                  |
 | `DELETE`             | `/api/admin/invites/:id`                    | Session                                                            |
@@ -139,7 +142,7 @@ Office / staff bypass: [IP allowlist](ip-allowlist.md). Temporary country blocks
 | `PUT`                | `/api/admin/health`                         | Session                                                            |
 | `POST`               | `/api/admin/reset`                          | Bearer `TOKEN_SECRET` only                                         |
 
-Operator routes `/admit`, `/mode`, `/pause`, and `/metrics` accept either the admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
+Operator routes `/admit`, `/mode`, `/pause`, and `/metrics` accept either the admin session cookie or Bearer / `X-TideGuard-Operator` using `ADMIN_SECRET` when set, otherwise `TOKEN_SECRET`.
 
 ## Emergency reset
 

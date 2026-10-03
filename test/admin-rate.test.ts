@@ -119,6 +119,21 @@ describe("admin rate and traffic APIs", () => {
     );
     expect(bad.status).toBe(400);
 
+    const privateHost = await exports.default.fetch(
+      new Request("https://example.com/api/admin/webhooks", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({
+          enabled: true,
+          url: "https://127.0.0.1/hook",
+        }),
+      }),
+    );
+    expect(privateHost.status).toBe(400);
+
     const missingUrl = await exports.default.fetch(
       new Request("https://example.com/api/admin/webhooks", {
         method: "PUT",
@@ -200,5 +215,91 @@ describe("admin rate and traffic APIs", () => {
       }),
     );
     expect(bad.status).toBe(400);
+  });
+
+  it("exports audit CSV and probes origin / webhook test", async () => {
+    await resetAdmin();
+    const cookie = await setupAdmin("day-of-ops");
+
+    const auditCsv = await exports.default.fetch(
+      new Request("https://example.com/api/admin/audit?format=csv", {
+        headers: { cookie },
+      }),
+    );
+    expect(auditCsv.status).toBe(200);
+    expect(auditCsv.headers.get("content-type")).toContain("text/csv");
+    expect(auditCsv.headers.get("content-disposition")).toContain("tideguard-audit.csv");
+    const auditBody = await auditCsv.text();
+    expect(auditBody.startsWith("at,iso,actorUsername,action,summary")).toBe(true);
+
+    const probeMissing = await exports.default.fetch(
+      new Request("https://example.com/api/admin/origin/probe", {
+        method: "POST",
+        headers: { cookie },
+      }),
+    );
+    expect(probeMissing.status).toBe(400);
+
+    const saveOrigin = await exports.default.fetch(
+      new Request("https://example.com/api/admin/origin", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({
+          enabled: true,
+          originUrl: "https://origin.example.com",
+          protectAll: true,
+        }),
+      }),
+    );
+    expect(saveOrigin.status).toBe(200);
+
+    const probe = await exports.default.fetch(
+      new Request("https://example.com/api/admin/origin/probe", {
+        method: "POST",
+        headers: { cookie },
+      }),
+    );
+    expect(probe.status).toBe(200);
+    const probeBody = (await probe.json()) as {
+      originUrl: string;
+      note: string;
+      healthUrl: string;
+    };
+    expect(probeBody.originUrl).toBe("https://origin.example.com");
+    expect(probeBody.note).toContain("Set-Cookie");
+    expect(probeBody.healthUrl).toContain("/health");
+
+    await exports.default.fetch(
+      new Request("https://example.com/api/admin/webhooks", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({
+          enabled: false,
+          url: "https://hooks.example.com/test-ping",
+          events: ["pause"],
+        }),
+      }),
+    );
+    const testPing = await exports.default.fetch(
+      new Request("https://example.com/api/admin/webhooks/test", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({}),
+      }),
+    );
+    expect(testPing.status).toBe(200);
+    const pingBody = (await testPing.json()) as {
+      lastDelivery: { event: string; error: string | null };
+    };
+    expect(pingBody.lastDelivery.event).toBe("test");
   });
 });

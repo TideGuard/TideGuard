@@ -24,9 +24,36 @@ export function ActivityPanel({ refreshKey = 0 }: { refreshKey?: number }) {
       id="activity"
       title="Activity"
       actions={
-        <Button size="xs" variant="default" onClick={load}>
-          Refresh
-        </Button>
+        <Group gap="xs">
+          <Button size="xs" variant="default" onClick={load}>
+            Refresh
+          </Button>
+          <Button
+            size="xs"
+            variant="default"
+            onClick={() => {
+              void (async () => {
+                try {
+                  const res = await fetch("/api/admin/audit?format=csv", {
+                    credentials: "same-origin",
+                  });
+                  if (!res.ok) throw new Error(`Export failed (${res.status})`);
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "tideguard-audit.csv";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  notifyError(e);
+                }
+              })();
+            }}
+          >
+            Export CSV
+          </Button>
+        </Group>
       }
     >
       <Stack gap="xs">

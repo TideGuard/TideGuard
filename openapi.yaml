@@ -1,12 +1,14 @@
 openapi: 3.1.0
 info:
   title: TideGuard API
-  version: 0.2.0
+  version: 0.6.0
   description: |
     HTTP contracts for TideGuard waiting-room Workers.
     Narrative guide: https://tideguard.dev/docs/api/ (source: docs/api.md in the repo).
     Base URL is your Worker hostname.
     Canonical project: https://github.com/TideGuard/TideGuard · https://tideguard.dev
+    Waiting responses use timeslot check-ins (`nextCheckAt`); early `/status` may be read-only.
+    Join may return `queue_full` when the max waiting visitors cap is reached.
   license:
     name: MIT
     url: https://github.com/TideGuard/TideGuard/blob/main/LICENSE
@@ -519,8 +521,7 @@ paths:
                 events:
                   type: array
                   items:
-                    type: string
-                    enum: [pause, health, depth]
+                    $ref: "#/components/schemas/WebhookEvent"
                 depthThreshold:
                   type: integer
                 signingSecret:
@@ -529,12 +530,151 @@ paths:
                   type: boolean
       responses:
         "200":
-          description: Webhooks saved
+          description: Webhooks saved (includes lastDelivery when present)
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
+
+  /api/admin/webhooks/test:
+    post:
+      tags: [Admin]
+      summary: Send a test webhook ping
+      operationId: adminWebhooksTest
+      description: Posts a synthetic event "test" to the configured URL and records lastDelivery.
+      security:
+        - AdminSession: []
+      responses:
+        "200":
+          description: Delivery attempt finished (check lastDelivery for status)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/audit:
+    get:
+      tags: [Admin]
+      summary: Activity audit log
+      operationId: adminAudit
+      description: Recent audit events (~200). Pass format=csv for download.
+      security:
+        - AdminSession: []
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+      responses:
+        "200":
+          description: Audit events (JSON) or CSV attachment
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+            text/csv:
+              schema:
+                type: string
+
+  /api/admin/queue-limits:
+    get:
+      tags: [Admin]
+      summary: Max waiting visitors cap
+      operationId: adminQueueLimitsGet
+      security:
+        - AdminSession: []
+      parameters:
+        - name: queue
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current maxWaitingVisitors and default
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    put:
+      tags: [Admin]
+      summary: Update max waiting visitors (A→B confirm)
+      operationId: adminQueueLimitsPut
+      security:
+        - AdminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [maxWaitingVisitors, confirmChanges, previousMaxWaitingVisitors]
+              properties:
+                queue:
+                  type: string
+                maxWaitingVisitors:
+                  type: integer
+                confirmChanges:
+                  type: boolean
+                previousMaxWaitingVisitors:
+                  type: integer
+      responses:
+        "200":
+          description: Cap updated
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/turnstile/rotate:
+    post:
+      tags: [Admin]
+      summary: Rotate Turnstile widget without factory reset
+      operationId: adminTurnstileRotate
+      security:
+        - AdminSession: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                domains:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: New sitekey stored
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "4XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/origin/probe:
+    post:
+      tags: [Admin]
+      summary: Probe saved origin upstream
+      operationId: adminOriginProbe
+      security:
+        - AdminSession: []
+      responses:
+        "200":
+          description: Probe result (status, latency, notes)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "4XX":
+          $ref: "#/components/responses/ApiError"
 
   /api/admin/pass:
     post:
@@ -656,6 +796,10 @@ components:
     AdmissionMode:
       type: string
       enum: [queue, lottery]
+
+    WebhookEvent:
+      type: string
+      enum: [pause, health, depth, schedule_open, queue_full, depth_cleared, test]
 
     JoinRequest:
       type: object

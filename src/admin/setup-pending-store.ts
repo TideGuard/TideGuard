@@ -3,8 +3,7 @@
  * Promoted into permanent stores on Finish setup; cleared on reset.
  */
 
-import { requireTokenSecret } from "../auth/operator";
-import { sealSecret, openSecret } from "./secret-box";
+import { openWithAdminSecretDetailed, sealWithAdminSecret } from "../auth/secrets";
 
 export const SETUP_PENDING_KEY = "admin:setup-pending";
 
@@ -57,7 +56,7 @@ export async function clearSetupPending(env: Env): Promise<void> {
 
 export async function writeSetupPendingApiToken(env: Env, apiToken: string): Promise<SetupPending> {
   const current = await readSetupPending(env);
-  const sealed = await sealSecret(apiToken.trim(), requireTokenSecret(env));
+  const sealed = await sealWithAdminSecret(env, apiToken.trim());
   const next: SetupPending = {
     ...current,
     cloudflare: current.cloudflare
@@ -102,7 +101,7 @@ export async function writeSetupPendingCloudflare(
       hostname: input.hostname.replace(/\.$/, "").toLowerCase(),
       accountId: input.accountId.trim(),
       workerService: input.workerService.trim() || "tideguard",
-      apiTokenSealed: await sealSecret(input.apiToken.trim(), requireTokenSecret(env)),
+      apiTokenSealed: await sealWithAdminSecret(env, input.apiToken.trim()),
       verifiedAt: Date.now(),
       proxyOk: input.proxyOk,
       sslMode: input.sslMode,
@@ -133,7 +132,7 @@ export async function writeSetupPendingTurnstile(
     ...current,
     turnstile: {
       sitekey: input.sitekey.trim(),
-      secretSealed: await sealSecret(input.secret.trim(), requireTokenSecret(env)),
+      secretSealed: await sealWithAdminSecret(env, input.secret.trim()),
       domains: input.domains.map((d) => d.trim().toLowerCase()).filter(Boolean),
       accountId: input.accountId.trim(),
       verifiedAt: input.verified ? Date.now() : 0,
@@ -164,7 +163,18 @@ export async function openSetupPendingApiToken(env: Env): Promise<string | null>
     return null;
   }
   try {
-    return await openSecret(pending.cloudflare.apiTokenSealed, requireTokenSecret(env));
+    const opened = await openWithAdminSecretDetailed(env, pending.cloudflare.apiTokenSealed);
+    if (opened.usedTokenSecretFallback && pending.cloudflare) {
+      const next = {
+        ...pending,
+        cloudflare: {
+          ...pending.cloudflare,
+          apiTokenSealed: await sealWithAdminSecret(env, opened.plaintext),
+        },
+      };
+      await env.CONFIG_KV.put(SETUP_PENDING_KEY, JSON.stringify(next));
+    }
+    return opened.plaintext;
   } catch {
     return null;
   }
@@ -176,7 +186,18 @@ export async function openSetupPendingTurnstileSecret(env: Env): Promise<string 
     return null;
   }
   try {
-    return await openSecret(pending.turnstile.secretSealed, requireTokenSecret(env));
+    const opened = await openWithAdminSecretDetailed(env, pending.turnstile.secretSealed);
+    if (opened.usedTokenSecretFallback && pending.turnstile) {
+      const next = {
+        ...pending,
+        turnstile: {
+          ...pending.turnstile,
+          secretSealed: await sealWithAdminSecret(env, opened.plaintext),
+        },
+      };
+      await env.CONFIG_KV.put(SETUP_PENDING_KEY, JSON.stringify(next));
+    }
+    return opened.plaintext;
   } catch {
     return null;
   }

@@ -20,6 +20,8 @@ export interface WaitingRoomClientConfig {
     notificationSoon: string;
     notificationReady: string;
   };
+  statusReconnect: string;
+  statusConnectionIssue: string;
 }
 
 /**
@@ -43,6 +45,8 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         let scheduledOpensAt = ${JSON.stringify(config.opensAt)};
         let admissionOpen = !scheduledOpensAt || scheduledOpensAt <= Date.now();
         const copy = ${JSON.stringify(config.copy)};
+        const statusReconnect = ${JSON.stringify(config.statusReconnect)};
+        const statusConnectionIssue = ${JSON.stringify(config.statusConnectionIssue)};
         const storageKey = "tg_visitor:" + queue;
         const soundPrefKey = "tg_turn_sound:" + queue;
         const turnSoundUrl = "/sounds/notification.mp3";
@@ -64,6 +68,7 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
         let turnstileResolve = null;
         let turnstileReject = null;
         let stopped = false;
+        let pausedForHidden = false;
 
         const el = {
           stats: document.getElementById("stats"),
@@ -577,8 +582,25 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           try {
             await poll();
           } catch (err) {
-            setStatus(err.message || "Connection issue. Retrying…", "err");
+            setStatus(err.message || statusConnectionIssue, "err");
           }
+        }
+
+        function resumePolling() {
+          if (entering) return;
+          stopped = false;
+          pausedForHidden = false;
+          setStatus(statusReconnect, "");
+          tick().then(() => {
+            if (stopped) return;
+            if (useFixedIntervals) startFixed();
+            else scheduleAdaptive();
+          }).catch(() => {
+            if (!stopped) {
+              if (useFixedIntervals) startFixed();
+              else scheduleAdaptive();
+            }
+          });
         }
 
         function clearPollTimer() {
@@ -695,6 +717,24 @@ export function waitingRoomClientScript(config: WaitingRoomClientConfig): string
           if (holdTimer) clearInterval(holdTimer);
           if (openTimer) clearInterval(openTimer);
           if (notificationTimer) clearTimeout(notificationTimer);
+        });
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") {
+            if (!stopped && !entering) {
+              pausedForHidden = true;
+              clearPollTimer();
+              clearHeartbeatTimer();
+              if (checkInPaintTimer) {
+                clearInterval(checkInPaintTimer);
+                checkInPaintTimer = null;
+              }
+            }
+            return;
+          }
+          if (pausedForHidden || stopped) {
+            resumePolling();
+          }
         });
       })();
     </script>`;

@@ -3,6 +3,7 @@ import { findUserById, readAdminConfig } from "../admin/store";
 import { hasAcceptedCurrentTos, TOS_VERSION } from "../admin/tos";
 import { TokenError } from "./token";
 import { timingSafeEqual } from "./crypto";
+import { adminSecret, visitorSecret } from "./secrets";
 import {
   type AdminActor,
   buildAdminSessionCookie,
@@ -13,11 +14,11 @@ import {
 
 /**
  * Operator gate for privileged routes.
- * Accepts an admin session cookie, or TOKEN_SECRET via Bearer / X-TideGuard-Operator
- * (bootstrap, CI, and emergency access).
+ * Accepts an admin session cookie, or ADMIN_SECRET (falling back to TOKEN_SECRET)
+ * via Bearer / X-TideGuard-Operator.
  */
 export async function requireOperator(request: Request, env: Env): Promise<void> {
-  const secret = requireTokenSecret(env);
+  const secret = adminSecret(env);
 
   const session = readAdminSessionCookie(request);
   if (session) {
@@ -46,7 +47,7 @@ export async function requireAdminSession(
   env: Env,
   options?: { allowStaleTos?: boolean },
 ): Promise<AdminActor> {
-  const secret = requireTokenSecret(env);
+  const secret = adminSecret(env);
   const session = readAdminSessionCookie(request);
   if (!session) {
     throw new ApiError("unauthorized", "Admin session required", 401);
@@ -75,16 +76,9 @@ export async function requireAdminSession(
   return actor;
 }
 
+/** Visitor-facing TOKEN_SECRET (admission HMAC). Prefer visitorSecret() in new code. */
 export function requireTokenSecret(env: Env): string {
-  const secret = env.TOKEN_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new ApiError(
-      "invalid_config",
-      "This Worker has no TOKEN_SECRET (or it is too short). Run npm run setup / set .dev.vars for local, or wrangler secret put TOKEN_SECRET for deploy, then restart.",
-      500,
-    );
-  }
-  return secret;
+  return visitorSecret(env);
 }
 
 export { buildAdminSessionCookie, clearAdminSessionCookie, readAdminSessionCookie };

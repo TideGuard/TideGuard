@@ -2,6 +2,8 @@
  * Soft deny page when a visitor's CF-IPCountry is on the temporary block list.
  */
 
+import { mergeBranding, type WaitingRoomBranding } from "../core/branding";
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -10,22 +12,39 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function renderGeoBlockedPage(options: { country: string | null; embed?: boolean }): string {
+function escapeCss(value: string): string {
+  return value.replaceAll(/[;{}]/g, "");
+}
+
+export function renderGeoBlockedPage(options: {
+  country: string | null;
+  embed?: boolean;
+  branding?: Partial<WaitingRoomBranding>;
+}): string {
   const country = options.country ? escapeHtml(options.country) : "your region";
   const embed = options.embed === true;
+  const branding = mergeBranding(options.branding);
+  const faviconLink = branding.faviconUrl
+    ? `<link rel="icon" href="${escapeHtml(branding.faviconUrl)}" />`
+    : "";
+  const logoHtml = branding.logoUrl
+    ? `<img class="logo" src="${escapeHtml(branding.logoUrl)}" alt="" width="160" height="48" />`
+    : `<p class="brand">TideGuard</p>`;
   return `<!DOCTYPE html>
 <html lang="en" class="${embed ? "is-embed" : ""}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Not available</title>
+  ${faviconLink}
   <style>
     :root {
-      --bg: #07151c;
-      --surface: #0b1f2a;
-      --text: #e8f1f5;
-      --muted: #8aa4b0;
-      --accent: #3dd6c8;
+      --bg: ${escapeCss(branding.backgroundColor)};
+      --surface: ${escapeCss(branding.surfaceColor)};
+      --text: ${escapeCss(branding.textColor)};
+      --muted: ${escapeCss(branding.mutedColor)};
+      --accent: ${escapeCss(branding.accentColor)};
+      --font: ${escapeCss(branding.fontFamily)};
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; }
@@ -34,7 +53,7 @@ export function renderGeoBlockedPage(options: { country: string | null; embed?: 
       display: grid;
       place-items: center;
       padding: 2rem 1.25rem;
-      font-family: "Source Sans 3", system-ui, sans-serif;
+      font-family: var(--font), "Source Sans 3", system-ui, sans-serif;
       background:
         radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in oklab, var(--accent) 18%, transparent), transparent),
         var(--bg);
@@ -57,6 +76,15 @@ export function renderGeoBlockedPage(options: { country: string | null; embed?: 
       padding: 0.5rem 0.25rem;
       width: 100%;
       background: transparent;
+    }
+    .logo {
+      display: block;
+      max-width: 10rem;
+      max-height: 3rem;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      margin: 0 0 0.75rem;
     }
     .brand {
       font-size: 0.8rem;
@@ -84,7 +112,7 @@ export function renderGeoBlockedPage(options: { country: string | null; embed?: 
 </head>
 <body>
   <main>
-    <p class="brand">TideGuard</p>
+    ${logoHtml}
     <h1>Not available in your region</h1>
     <p>
       Access from <code>${country}</code> is temporarily unavailable for this event.
@@ -97,12 +125,13 @@ export function renderGeoBlockedPage(options: { country: string | null; embed?: 
 
 export function geoBlockedResponse(
   country: string | null,
-  options: { embed?: boolean } = {},
+  options: { embed?: boolean; branding?: Partial<WaitingRoomBranding> } = {},
 ): Response {
   return new Response(
     renderGeoBlockedPage({
       country,
       ...(options.embed !== undefined ? { embed: options.embed } : {}),
+      ...(options.branding !== undefined ? { branding: options.branding } : {}),
     }),
     {
       status: 403,

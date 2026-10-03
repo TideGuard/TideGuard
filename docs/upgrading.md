@@ -106,6 +106,7 @@ Breaking changes (renamed bindings, removed KV keys, token format, DO class rena
 - [ ] Live queue / metrics respond for your default queue
 - [ ] If you use origin proxy: unauthenticated path → `/wait`; admitted → origin
 - [ ] If CHANGELOG lists new `vars`, decide whether to adopt upstream defaults or keep your tuned values, then redeploy
+- [ ] Optional: set `ADMIN_SECRET` after upgrade if you want admin sessions / KV seals off `TOKEN_SECRET` — then re-login and open Cloudflare / Turnstile / webhooks once so seals re-encrypt ([token-secret-rotation.md](token-secret-rotation.md))
 - [ ] Smoke-test `/wait` join → admit once before a real launch
 
 ## Upgrade notes (from pre-Turnstile installs)

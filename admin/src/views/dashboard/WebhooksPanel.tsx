@@ -3,6 +3,7 @@ import {
   Anchor,
   Button,
   Checkbox,
+  Code,
   Group,
   NumberInput,
   Stack,
@@ -19,8 +20,10 @@ import { notifyError, notifyOk } from "./notify";
 const EVENT_OPTIONS = [
   { value: "pause", label: "Silent pause on/off" },
   { value: "health", label: "Origin health config changes" },
-  { value: "depth", label: "Waiting depth threshold" },
+  { value: "depth", label: "Waiting depth threshold crossed up" },
+  { value: "depth_cleared", label: "Waiting depth drops below threshold" },
   { value: "opened", label: "Scheduled room opened" },
+  { value: "schedule_open", label: "Scheduled opening time reached / open now" },
   { value: "origin_unhealthy", label: "Origin became unhealthy" },
   { value: "queue_full", label: "Queue rejected at capacity" },
   { value: "admit_rate_changed", label: "Admit rate changed" },
@@ -47,13 +50,16 @@ export function WebhooksPanel({
   const [depthThreshold, setDepth] = useState(w.depthThreshold);
   const [signingSecret, setSigningSecret] = useState("");
   const [clearSecret, setClearSecret] = useState(false);
+  const [lastDelivery, setLastDelivery] = useState(w.lastDelivery);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     setEnabled(w.enabled);
     setUrl(w.url ?? "");
     setEvents(w.events);
     setDepth(w.depthThreshold);
-  }, [w.enabled, w.url, w.events, w.depthThreshold]);
+    setLastDelivery(w.lastDelivery);
+  }, [w.enabled, w.url, w.events, w.depthThreshold, w.lastDelivery]);
 
   return (
     <Panel
@@ -66,7 +72,8 @@ export function WebhooksPanel({
       }
     >
       <Text size="sm" c="dimmed">
-        HTTPS callbacks are attempted immediately, then retried durably after failures.
+        HTTPS callbacks for pause, health, depth, schedule, and capacity. Attempted immediately,
+        then retried durably after failures.
       </Text>
       <Stack>
         <Checkbox
@@ -127,8 +134,23 @@ export function WebhooksPanel({
           readOnly
           autosize
           minRows={3}
-          value={`{ "event": "pause|health|depth|opened|origin_unhealthy|queue_full|admit_rate_changed", "queue": "…", "at": 0, "detail": { … } }`}
+          value={`{ "event": "pause|health|depth|opened|schedule_open|origin_unhealthy|queue_full|admit_rate_changed|depth_cleared", "queue": "…", "at": 0, "detail": { … } }`}
         />
+        {lastDelivery ? (
+          <Text size="sm" c="dimmed">
+            Last delivery:{" "}
+            <Code>
+              {lastDelivery.event}
+              {lastDelivery.status !== null ? ` HTTP ${lastDelivery.status}` : ""}
+              {lastDelivery.error ? ` · ${lastDelivery.error}` : " · ok"}
+            </Code>{" "}
+            at {new Date(lastDelivery.at).toLocaleString()}
+          </Text>
+        ) : (
+          <Text size="sm" c="dimmed">
+            No deliveries recorded yet. Save a URL, then Send test.
+          </Text>
+        )}
         <Group>
           <Button
             onClick={() => {
@@ -143,7 +165,9 @@ export function WebhooksPanel({
                   ...(clearSecret ? { clearSecret: true } : {}),
                 }),
               })
-                .then(() => {
+                .then((res) => {
+                  const body = res as { webhooks?: WebhookSettingsPublic };
+                  if (body.webhooks?.lastDelivery) setLastDelivery(body.webhooks.lastDelivery);
                   setSigningSecret("");
                   setClearSecret(false);
                   notifyOk("Webhooks saved");
@@ -153,6 +177,30 @@ export function WebhooksPanel({
             }}
           >
             Save webhooks
+          </Button>
+          <Button
+            variant="default"
+            loading={testing}
+            onClick={() => {
+              setTesting(true);
+              void api<{
+                ok: boolean;
+                lastDelivery: NonNullable<WebhookSettingsPublic["lastDelivery"]>;
+              }>("/api/admin/webhooks/test", {
+                method: "POST",
+                body: "{}",
+              })
+                .then((res) => {
+                  setLastDelivery(res.lastDelivery);
+                  if (res.ok) notifyOk("Test webhook delivered");
+                  else notifyError(new Error(res.lastDelivery.error || "Test delivery failed"));
+                  return onSaved();
+                })
+                .catch(notifyError)
+                .finally(() => setTesting(false));
+            }}
+          >
+            Send test
           </Button>
         </Group>
       </Stack>

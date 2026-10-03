@@ -22,13 +22,15 @@ Checked on protected origin paths, `/wait`, `/demo`, and `POST /join` — before
 
 ## Admin setup
 
-1. `/admin` → **Country block**
-2. Enter ISO codes (one per line), e.g. `CN`, `RU`
-3. Set **TTL (hours)** (required when enabling; max 30 days)
+1. [`/admin#bypass-geo`](/admin#bypass-geo) (or Access → Country block)
+2. Pick ISO codes with the searchable multi-select (or paste codes), e.g. `CN`, `RU`
+3. Set **TTL (hours)** (required when enabling; max 30 days) — UI shows a countdown while active
 4. Enable + **Save country block** (resets the hit counter window)
 5. Status shows your `CF-IPCountry` and whether you would be blocked
 6. **Live queue** shows **Geo blocks** total + per-country hits (refreshes every 5s)
 7. **Disable now** clears the active gate (keeps the code list in the form)
+
+The blocked page uses waiting-room branding CSS variables and optional logo/favicon URLs when set under Branding.
 
 Hit stats live in KV (`admin:geo-block-stats`) separately from the block list so saves keep history until you enable a new window. Totals appear in the admin Live metrics strip and Access tab (see [analytics.md](analytics.md)).
 

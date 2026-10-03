@@ -15,13 +15,13 @@ TideGuard docs are short on purpose. Start with the guide that matches your job.
 | [Architecture](architecture.md)                       | Engineers who need the Workers / Durable Object / KV story                               |
 | [Hosted SaaS](hosted-saas.md)                         | Planning: hosted tier, WorkOS/Paddle/Convex patterns, Starter vs Dedicated               |
 | [API](api.md)                                         | Anyone integrating join, status, tokens, or operator routes                              |
-| [Admin](admin.md)                                     | Set up `/admin`, invite operators, branding, traffic                                     |
+| [Admin](admin.md)                                     | Set up `/admin`, invite operators, branding, traffic, deep-links                         |
 | [Analytics](analytics.md)                             | Live metrics + 24h traffic chart / CSV export; geo-block hits (operator traffic, not GA) |
 | [IP allowlist](ip-allowlist.md)                       | Staff bypass, Pass queue, and Cloudflare zone helpers from admin                         |
 | [Waiting-room rules](room-rules.md)                   | Crawler/cookie/header bypass, JSON redirects, and full-queue rejection                   |
 | [Country block](geo-block.md)                         | Temporary event-window geo gate via `CF-IPCountry`                                       |
-| [Operator webhooks](webhooks.md)                      | HTTPS callbacks for pause, health config, waiting depth                                  |
-| [TOKEN_SECRET rotation](token-secret-rotation.md)     | Rotate the master secret safely                                                          |
+| [Operator webhooks](webhooks.md)                      | HTTPS callbacks for pause, health, depth, schedule, capacity + test ping                 |
+| [TOKEN_SECRET rotation](token-secret-rotation.md)     | Rotate `TOKEN_SECRET` / introduce optional `ADMIN_SECRET` safely                         |
 | [Load testing](load-testing.md)                       | Contributors validating queue behavior at scale                                          |
 
 Project overview and sales pitch live in the root [README](../README.md). Planned work: [ROADMAP.md](../ROADMAP.md) (not the changelog). Published guides: [tideguard.dev/docs](https://tideguard.dev/docs/). Security expectations live in [SECURITY.md](../SECURITY.md). Operator Terms of Service: [TERMS.md](../TERMS.md). MIT license: [LICENSE](../LICENSE).

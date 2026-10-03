@@ -30,10 +30,12 @@ export {
   handleAdminSaveBranding,
   handleAdminCloneBranding,
   handleAdminSaveOrigin,
+  handleAdminOriginProbe,
   handleAdminSaveBypass,
   handleAdminSaveRoomRules,
   handleAdminSaveGeoBlock,
   handleAdminSaveWebhooks,
+  handleAdminWebhooksTest,
 } from "./settings";
 
 export {
@@ -43,6 +45,7 @@ export {
   handleAdminCloudflareIpGeolocation,
   handleAdminCloudflareSsl,
   handleAdminCloudflareDomains,
+  handleAdminTurnstileRotate,
 } from "./cloudflare";
 
 export {

@@ -43,6 +43,10 @@ export interface WaitingRoomBranding {
    * snippet. Empty string disables analytics.
    */
   googleAnalyticsId: string;
+  /** Optional https logo URL shown above the waiting-room title. */
+  logoUrl: string;
+  /** Optional https favicon URL for the waiting room / geo-block pages. */
+  faviconUrl: string;
 }
 
 export const DEFAULT_BRANDING: WaitingRoomBranding = {
@@ -64,7 +68,24 @@ export const DEFAULT_BRANDING: WaitingRoomBranding = {
   joinTurnstileEnabled: false,
   enableWebNotifications: false,
   googleAnalyticsId: "",
+  logoUrl: "",
+  faviconUrl: "",
 };
+
+/** Public https image URL only; empty string clears. */
+export function sanitizeHttpsImageUrl(value: unknown, fallback = ""): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.length > 2048) return fallback;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:") return fallback;
+    return parsed.toString();
+  } catch {
+    return fallback;
+  }
+}
 
 export function mergeBranding(
   overrides: Partial<WaitingRoomBranding> | null | undefined,

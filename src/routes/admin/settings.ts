@@ -24,12 +24,20 @@ import {
 import { clientConnectingIp, hasConnectingIpHeader } from "../../auth/client-ip";
 import { clientCountryCode, isCountryBlocked } from "../../auth/geo-country";
 import { normalizeOriginUrl, parsePathPrefixes } from "../../core/origin";
+import {
+  defaultHealthUrlFromOrigin,
+  parseHealthConfig,
+  probeOriginHealth,
+} from "../../health/origin-probe";
 import { configFromEnv, getQueueRoom } from "../../queue/client";
 import { parseQueueName, readJsonBody } from "../validation";
+import { deliverWebhook } from "../../admin/webhook-dispatch";
+import { resolveOriginConfig } from "../../admin/origin-store";
 import {
   DEFAULT_WEBHOOK_SETTINGS,
   parseWebhookEvents,
   readWebhookSettings,
+  sanitizeWebhookUrl,
   sealWebhookSecret,
   toPublicWebhooks,
   writeWebhookSettings,
@@ -239,6 +247,68 @@ export async function handleAdminSaveOrigin(request: Request, env: Env): Promise
   return jsonOk({ ok: true, origin });
 }
 
+/** One-shot upstream probe against the saved origin (does not change health state). */
+export async function handleAdminOriginProbe(request: Request, env: Env): Promise<Response> {
+  await requireAdminSession(request, env);
+  const origin = await resolveOriginConfig(env);
+  if (!origin.originUrl) {
+    throw new ApiError("bad_request", "Save an origin URL before probing upstream", 400);
+  }
+  const healthUrl = defaultHealthUrlFromOrigin(origin.originUrl) ?? `${origin.originUrl}/`;
+  const config = parseHealthConfig({
+    enabled: true,
+    url: healthUrl,
+    timeoutMs: 5_000,
+    maxLatencyMs: 10_000,
+    expectStatus: 200,
+  });
+  // Prefer probing the origin root when /health is missing — accept any 2xx/3xx.
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  let status: number | null = null;
+  let error: string | null = null;
+  let ok = false;
+  let setCookieStrippedNote =
+    "TideGuard strips Set-Cookie from proxied origin responses when admitting visitors via the Worker.";
+  try {
+    const res = await fetch(origin.originUrl, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: { "user-agent": "TideGuard-OriginProbe/1.0" },
+    });
+    status = res.status;
+    ok = res.status >= 200 && res.status < 400;
+    if (!ok) error = `Unexpected status ${res.status}`;
+    await res.arrayBuffer().catch(() => undefined);
+    if (res.headers.has("set-cookie")) {
+      setCookieStrippedNote =
+        "Origin sent Set-Cookie; TideGuard strips these on proxied responses so visitor cookies stay Worker-owned.";
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Probe failed";
+  } finally {
+    clearTimeout(timer);
+  }
+  const latencyMs = Date.now() - started;
+  // Also try configured health URL when different from origin root.
+  let healthProbe: Awaited<ReturnType<typeof probeOriginHealth>> | null = null;
+  if (healthUrl !== origin.originUrl && healthUrl !== `${origin.originUrl}/`) {
+    healthProbe = await probeOriginHealth(config);
+  }
+  return jsonOk({
+    ok,
+    originUrl: origin.originUrl,
+    status,
+    latencyMs,
+    error,
+    note: setCookieStrippedNote,
+    healthUrl,
+    healthProbe,
+  });
+}
+
 export async function handleAdminSaveWebhooks(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
   const body = await readJsonBody(request);
@@ -246,14 +316,13 @@ export async function handleAdminSaveWebhooks(request: Request, env: Env): Promi
   const urlRaw = typeof body.url === "string" ? body.url.trim() : "";
   let url: string | null = null;
   if (urlRaw) {
-    try {
-      const parsed = new URL(urlRaw);
-      if (parsed.protocol !== "https:") {
-        throw new Error("https only");
-      }
-      url = parsed.toString();
-    } catch {
-      throw new ApiError("bad_request", "url must be a public https:// endpoint", 400);
+    url = sanitizeWebhookUrl(urlRaw);
+    if (!url) {
+      throw new ApiError(
+        "bad_request",
+        "url must be a public https:// endpoint (private/metadata hosts are blocked)",
+        400,
+      );
     }
   }
   if (enabled && !url) {
@@ -286,6 +355,15 @@ export async function handleAdminSaveWebhooks(request: Request, env: Env): Promi
   if (existing.lastDepthFiredAt) {
     settings.lastDepthFiredAt = existing.lastDepthFiredAt;
   }
+  if (existing.lastQueueFullFiredAt) {
+    settings.lastQueueFullFiredAt = existing.lastQueueFullFiredAt;
+  }
+  if (existing.waitingForScheduleOpen) {
+    settings.waitingForScheduleOpen = true;
+  }
+  if (existing.lastDelivery) {
+    settings.lastDelivery = existing.lastDelivery;
+  }
 
   await writeWebhookSettings(env, settings);
   await appendAuditEvent(env, {
@@ -298,4 +376,34 @@ export async function handleAdminSaveWebhooks(request: Request, env: Env): Promi
     meta: { enabled },
   });
   return jsonOk({ ok: true, webhooks: toPublicWebhooks(settings) });
+}
+
+/** Synthetic ping — does not require enabled/events; still needs a saved https URL. */
+export async function handleAdminWebhooksTest(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const settings = await readWebhookSettings(env);
+  if (!settings.url) {
+    throw new ApiError("bad_request", "Save an https:// webhook URL before sending a test", 400);
+  }
+  const lastDelivery = await deliverWebhook(
+    env,
+    "test",
+    "default",
+    { ok: true, source: "admin_test" },
+    { requireEnabled: false },
+  );
+  await appendAuditEvent(env, {
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "webhooks.test",
+    summary: lastDelivery.error
+      ? `Webhook test failed: ${lastDelivery.error}`
+      : `Webhook test delivered (HTTP ${lastDelivery.status ?? "?"})`,
+    meta: {
+      status: lastDelivery.status,
+      error: lastDelivery.error,
+    },
+  });
+  const latest = await readWebhookSettings(env);
+  return jsonOk({ ok: !lastDelivery.error, lastDelivery, webhooks: toPublicWebhooks(latest) });
 }

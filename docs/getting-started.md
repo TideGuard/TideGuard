@@ -73,13 +73,14 @@ Generate a secret first (so you can copy it):
 
 When Deploy prompts for `TOKEN_SECRET`, paste that value. Use the same string for the `/admin` Claim step.
 
-Only `TOKEN_SECRET` is a Deploy prompt. Capacity, origin, Turnstile, and the rest are configured in `/admin` after deploy.
+Only `TOKEN_SECRET` is a Deploy prompt. Capacity, origin, Turnstile, and the rest are configured in `/admin` after deploy. For production, consider also setting optional `ADMIN_SECRET` so admin sessions and sealed KV credentials are not tied to the visitor HMAC key ([token-secret-rotation.md](token-secret-rotation.md)).
 
 ### Option B: Wrangler CLI
 
 ```bash
 npm run deploy
 npx wrangler secret put TOKEN_SECRET
+# optional: npx wrangler secret put ADMIN_SECRET
 ```
 
 Placeholder KV IDs in `wrangler.jsonc` are intentional — Wrangler replaces them on first provision.
