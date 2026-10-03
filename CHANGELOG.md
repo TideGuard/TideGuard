@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Admin deep-links** — `/admin#webhooks`, `#turnstile`, `#origin`, tab names, etc.
+- **Operator webhooks** — Send test + `lastDelivery`; events `schedule_open`, `depth_cleared` (alongside durable retry / `opened` / `origin_unhealthy` / `admit_rate_changed`)
+- **Turnstile rotate** without factory reset (`POST /api/admin/turnstile/rotate`)
+- **Waiting room** — tab reconnect copy, logo/favicon URLs, richer branding preview
+- **Day-of ops** — waiting series on traffic chart + pause/schedule/health badges; origin Test upstream; geo country MultiSelect + TTL countdown; branded geo-block page; invite copy/mailto hardening; audit CSV export
+- **Optional `ADMIN_SECRET`** — admin sessions / operator Bearer / KV seals; visitor HMAC stays on `TOKEN_SECRET`
+- OpenAPI contract catch-up (queue-limits, audit CSV, webhook test, origin probe, Turnstile rotate)
+- Pattern B verify snippets (Node + Python) in verifying-admission docs
+
+### Changed
+
+- **Workers Vitest:** `@cloudflare/vitest-pool-workers` → [`@cloudflare/vitest-plugin`](https://developers.cloudflare.com/workers/testing/vitest-integration/) (Vitest stays on 4.1 until the plugin supports 5)
+- Dependency bumps: wrangler, Mantine, React, Vite, Oxlint, and related tooling
+
+### Fixed
+
+- Webhook `queue_full` debounced (≤1/min) to prevent join-spam amplification
+- Webhook URLs reject private/metadata hosts (SSRF parity with origin URLs)
+- Webhook delivery fails closed when a sealed signing secret cannot be decrypted (no unsigned POST)
+- Sealed CF / Turnstile / webhook secrets auto-re-seal under `ADMIN_SECRET` on first open after introducing the split
+- Waiting-room CSP `img-src` allows `https:` so branding logo/favicon URLs render
+- Turnstile rotate requires confirmation; no silent localhost domain default
+- Audit CSV cells hardened against Excel formula injection
+
+### Upgrade notes
+
+- Optional: set Worker secret `ADMIN_SECRET` (`wrangler secret put ADMIN_SECRET`) to separate admin signing from visitor tokens. Existing deploys keep working when unset. After setting it, re-login to `/admin`; sealed credentials dual-open once then re-seal under `ADMIN_SECRET` on first use.
+
 ## [0.5.1] - 2026-08-15
 
 ### Added

@@ -4,7 +4,9 @@ import type { WaitingRoomBranding } from "../../lib/types";
 /** Lightweight waiting-room mock for branding edits (no iframe required). */
 export function WaitingRoomPreview({
   branding,
+  admissionMode = "queue",
   waitingCount = 128,
+  position = 42,
 }: {
   branding: Pick<
     WaitingRoomBranding,
@@ -20,9 +22,18 @@ export function WaitingRoomPreview({
     | "showWaitingCount"
     | "enterButtonLabel"
     | "requireClickToEnter"
-  >;
+  > & { logoUrl?: string };
+  admissionMode?: "queue" | "lottery";
   waitingCount?: number;
+  position?: number;
 }) {
+  const placeLine =
+    admissionMode === "lottery"
+      ? `Your chance · about 1 in ${Math.max(1, waitingCount)}`
+      : branding.showWaitingCount
+        ? `#${position} of ${waitingCount.toLocaleString()}`
+        : `Position ${position}`;
+
   return (
     <div
       className="tg-wait-preview"
@@ -40,14 +51,24 @@ export function WaitingRoomPreview({
           borderColor: `${branding.accentColor}44`,
         }}
       >
+        {branding.logoUrl ? (
+          <img
+            src={branding.logoUrl}
+            alt=""
+            style={{ maxWidth: "8rem", maxHeight: "2.5rem", objectFit: "contain", marginBottom: 8 }}
+          />
+        ) : null}
         <Title order={4} style={{ color: branding.textColor, fontFamily: "inherit" }}>
           {branding.title || "You’re in line"}
         </Title>
         <Text size="sm" style={{ color: branding.mutedColor, fontFamily: "inherit" }} mt="xs">
           {branding.message || "We’re letting people in at a steady pace."}
         </Text>
-        {branding.showWaitingCount ? (
-          <Text size="sm" mt="md" style={{ color: branding.mutedColor, fontFamily: "inherit" }}>
+        <Text size="sm" mt="md" style={{ color: branding.textColor, fontFamily: "inherit" }}>
+          {placeLine}
+        </Text>
+        {branding.showWaitingCount && admissionMode === "queue" ? (
+          <Text size="sm" mt={4} style={{ color: branding.mutedColor, fontFamily: "inherit" }}>
             About {waitingCount.toLocaleString()} people waiting
           </Text>
         ) : null}
@@ -75,7 +96,11 @@ export function WaitingRoomPreview({
           >
             {branding.enterButtonLabel || "Continue"}
           </button>
-        ) : null}
+        ) : (
+          <Text size="xs" mt="sm" style={{ color: branding.mutedColor, fontFamily: "inherit" }}>
+            Auto-continue when admitted
+          </Text>
+        )}
       </div>
     </div>
   );

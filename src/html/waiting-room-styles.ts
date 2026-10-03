@@ -61,6 +61,15 @@ export function waitingRoomStyles(vars: WaitingRoomStyleVars): string {
         width: min(100%, 28rem);
         text-align: center;
       }
+      .logo {
+        display: block;
+        max-width: 10rem;
+        max-height: 3rem;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        margin: 0 auto 1rem;
+      }
       .brand {
         font-family: var(--tg-font-body);
         font-size: 0.85rem;

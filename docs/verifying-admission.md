@@ -55,6 +55,57 @@ const claims = await verifyAccessToken(token, process.env.TOKEN_SECRET, {
 
 The Worker reference implementation remains `src/auth/token.ts`. Never expose `TOKEN_SECRET` or token signing to browsers.
 
+### Node (Web Crypto) snippet
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function b64urlJson(obj) {
+  return Buffer.from(JSON.stringify(obj)).toString("base64url");
+}
+
+function verifyAccessToken(
+  token,
+  secret,
+  { nowSeconds = Math.floor(Date.now() / 1000), expectedQueue } = {},
+) {
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature) throw new Error("invalid_token");
+  const expected = createHmac("sha256", secret).update(payload).digest("base64url");
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error("invalid_token");
+  const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  if (claims.exp <= nowSeconds) throw new Error("expired_token");
+  if (expectedQueue && claims.queue !== expectedQueue) throw new Error("invalid_token");
+  return claims;
+}
+```
+
+### Python snippet
+
+```python
+import base64, hashlib, hmac, json, time
+
+def _b64url_decode(s: str) -> bytes:
+    pad = "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode(s + pad)
+
+def verify_access_token(token: str, secret: str, *, expected_queue: str | None = None):
+    payload, signature = token.split(".", 1)
+    expected = base64.urlsafe_b64encode(
+        hmac.new(secret.encode(), payload.encode(), hashlib.sha256).digest()
+    ).rstrip(b"=").decode()
+    if not hmac.compare_digest(signature, expected):
+        raise ValueError("invalid_token")
+    claims = json.loads(_b64url_decode(payload))
+    if int(claims["exp"]) <= int(time.time()):
+        raise ValueError("expired_token")
+    if expected_queue and claims.get("queue") != expected_queue:
+        raise ValueError("invalid_token")
+    return claims
+```
+
 ## Redirect after admission
 
 Priority for where visitors go after they get through:

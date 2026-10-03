@@ -21,11 +21,14 @@ import { configFromEnv, getQueueRoom } from "../../queue/client";
 import { VERSION } from "../../version";
 import { parseQueueName } from "../validation";
 import { clientKey } from "./helpers";
-import { maybeDispatchDepthWebhook } from "../../admin/webhook-dispatch";
+import {
+  maybeDispatchDepthWebhook,
+  maybeDispatchOriginUnhealthyWebhook,
+  maybeDispatchScheduleOpenWebhook,
+} from "../../admin/webhook-dispatch";
 import { readWebhookSettings, toPublicWebhooks } from "../../admin/webhook-store";
 import { readRoomRules } from "../../admin/room-rules-store";
 import { checkInPeriodSeconds } from "../../queue/engine";
-import { maybeDispatchOriginUnhealthyWebhook } from "../../admin/webhook-dispatch";
 
 export async function handleAdminState(request: Request, env: Env): Promise<Response> {
   const actor = await requireAdminSession(request, env);
@@ -140,6 +143,24 @@ export async function handleAdminUpdates(request: Request, env: Env): Promise<Re
 export async function handleAdminAudit(request: Request, env: Env): Promise<Response> {
   await requireAdminSession(request, env);
   const events = await readAuditEvents(env);
+  const format = new URL(request.url).searchParams.get("format");
+  if (format === "csv") {
+    const header = "at,iso,actorUsername,action,summary\n";
+    const rows = events
+      .map((e) => {
+        const iso = new Date(e.at).toISOString();
+        return `${e.at},${iso},${csvCell(e.actorUsername ?? "")},${csvCell(e.action ?? "")},${csvCell(e.summary ?? "")}`;
+      })
+      .join("\n");
+    return new Response(header + rows + (rows ? "\n" : ""), {
+      status: 200,
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": 'attachment; filename="tideguard-audit.csv"',
+        "cache-control": "no-store",
+      },
+    });
+  }
   return jsonOk({ events });
 }
 
@@ -170,6 +191,7 @@ export async function handleAdminMetrics(request: Request, env: Env): Promise<Re
     lastStatus: metrics.health.lastStatus,
     lastError: metrics.health.lastError,
   });
+  void maybeDispatchScheduleOpenWebhook(env, queue, metrics.opensAt);
   return jsonOk({
     ok: true,
     metrics: {
@@ -184,4 +206,13 @@ export async function handleAdminMetrics(request: Request, env: Env): Promise<Re
     }),
     refreshedAt: Date.now(),
   });
+}
+
+/** CSV cell: JSON-quoted, with leading apostrophe for Excel formula injection. */
+function csvCell(value: string): string {
+  let v = value;
+  if (/^[=+\-@\t\r]/.test(v)) {
+    v = `'${v}`;
+  }
+  return JSON.stringify(v);
 }

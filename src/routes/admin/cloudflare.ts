@@ -18,10 +18,17 @@ import {
   getIpGeolocation,
   listWorkerDomains,
   setIpGeolocation,
+  createTurnstileWidget,
   setSslMode,
+  turnstileDomainsForHostname,
   verifyCloudflareAccess,
 } from "../../admin/cloudflare-api";
 import { rethrowCloudflareAsApiError } from "../../admin/operator-errors";
+import {
+  readTurnstileSettings,
+  toTurnstilePublicView,
+  writeTurnstileSettings,
+} from "../../admin/turnstile-store";
 import { clientConnectingIp, hasConnectingIpHeader } from "../../auth/client-ip";
 import { readJsonBody } from "../validation";
 import { requireSavedCloudflare } from "./helpers";
@@ -285,4 +292,79 @@ export async function handleAdminCloudflareDomains(request: Request, env: Env): 
   }
 
   throw new ApiError("bad_request", "Method not allowed", 405);
+}
+
+/**
+ * Create a new Turnstile widget and replace stored keys without factory reset.
+ * Requires a sealed Cloudflare API token under Access / Cloudflare link.
+ */
+export async function handleAdminTurnstileRotate(request: Request, env: Env): Promise<Response> {
+  const actor = await requireAdminSession(request, env);
+  const body = await readJsonBody(request);
+  const apiToken = await readCloudflareApiToken(env);
+  const bypass = await readBypassSettings(env);
+  const current = await readTurnstileSettings(env);
+  const accountId = current?.accountId || bypass.accountId;
+  if (!apiToken || !accountId) {
+    throw new ApiError(
+      "bad_request",
+      "Save a Cloudflare API token and account id under Cloudflare before rotating Turnstile.",
+      400,
+    );
+  }
+
+  let domains: string[];
+  if (Array.isArray(body.domains)) {
+    domains = body.domains
+      .filter((d): d is string => typeof d === "string")
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean);
+  } else if (typeof body.domainsText === "string") {
+    domains = body.domainsText
+      .split(/[\s,]+/)
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean);
+  } else if (current?.domains.length) {
+    domains = [...current.domains];
+  } else if (bypass.hostname) {
+    domains = turnstileDomainsForHostname(bypass.hostname);
+  } else {
+    throw new ApiError(
+      "bad_request",
+      "Provide domains for the new Turnstile widget (or save a Cloudflare hostname first).",
+      400,
+    );
+  }
+  if (domains.length === 0) {
+    throw new ApiError("bad_request", "At least one Turnstile domain is required", 400);
+  }
+
+  try {
+    const widget = await createTurnstileWidget({
+      apiToken,
+      accountId,
+      name: `TideGuard Admin ${new Date().toISOString().slice(0, 10)}`,
+      domains,
+      mode: "managed",
+    });
+    const next = await writeTurnstileSettings(env, {
+      sitekey: widget.sitekey,
+      secret: widget.secret,
+      accountId,
+      domains: widget.domains.length > 0 ? widget.domains : domains,
+    });
+    await appendAuditEvent(env, {
+      actorId: actor.id,
+      actorUsername: actor.username,
+      action: "turnstile.rotate",
+      summary: "Rotated Turnstile widget",
+      meta: { sitekey: next.sitekey, domains: next.domains.join(",") },
+    });
+    return jsonOk({
+      ok: true,
+      turnstile: toTurnstilePublicView(next),
+    });
+  } catch (error) {
+    rethrowCloudflareAsApiError(error);
+  }
 }

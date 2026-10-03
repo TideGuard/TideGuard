@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Button, Code, Group, PasswordInput, Stack, Text, TextInput } from "@mantine/core";
-import { IconCopy } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
+import { Alert, Button, Code, Group, PasswordInput, Stack, Text, TextInput } from "@mantine/core";
+import { IconCopy, IconMail } from "@tabler/icons-react";
 import { api } from "../../lib/api";
 import type { AdminState } from "../../lib/types";
 import { isPasswordReady } from "../../lib/setup-guidance";
@@ -11,11 +11,24 @@ import { notifyError, notifyOk } from "./notify";
 
 export function TeamPanel({ state, onSaved }: { state: AdminState; onSaved: () => Promise<void> }) {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<number | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteNote, setInviteNote] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryMnemonic, setRecoveryMnemonic] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!inviteUrl || inviteCopied) return;
+    const onLeave = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [inviteUrl, inviteCopied]);
 
   return (
     <Panel
@@ -67,14 +80,23 @@ export function TeamPanel({ state, onSaved }: { state: AdminState; onSaved: () =
           </Group>
         ))}
 
+        <TextInput
+          label="Note for invitee (optional)"
+          description="Included in the mailto body only — not stored on the server."
+          value={inviteNote}
+          onChange={(e) => setInviteNote(e.currentTarget.value)}
+          placeholder="e.g. Day-of ops for Friday drop"
+        />
         <Button
           onClick={() => {
-            void api<{ acceptUrl?: string }>("/api/admin/invites", {
+            void api<{ acceptUrl?: string; expiresAt?: number }>("/api/admin/invites", {
               method: "POST",
               body: "{}",
             })
               .then((data) => {
                 setInviteUrl(data.acceptUrl ?? null);
+                setInviteExpiresAt(data.expiresAt ?? Date.now() + 72 * 3600_000);
+                setInviteCopied(false);
                 notifyOk("Invite created — copy the link now");
                 return onSaved();
               })
@@ -84,21 +106,50 @@ export function TeamPanel({ state, onSaved }: { state: AdminState; onSaved: () =
           Create invite
         </Button>
         {inviteUrl ? (
-          <Group align="flex-end" wrap="nowrap">
-            <TextInput label="Invite link" value={inviteUrl} readOnly style={{ flex: 1 }} />
-            <Button
-              variant="default"
-              leftSection={<IconCopy size={16} />}
-              onClick={() => {
-                void navigator.clipboard.writeText(inviteUrl).then(
-                  () => notifyOk("Invite link copied"),
-                  () => notifyError(new Error("Could not copy")),
-                );
-              }}
-            >
-              Copy
-            </Button>
-          </Group>
+          <Stack gap="xs">
+            <Alert color="orange" title="Copy this link now">
+              <Text size="sm">
+                It is shown once.{" "}
+                {inviteExpiresAt
+                  ? `Expires ${new Date(inviteExpiresAt).toLocaleString()}.`
+                  : "Expires in 72 hours."}{" "}
+                {!inviteCopied ? "Leaving the page may lose it." : "Copied — safe to leave."}
+              </Text>
+            </Alert>
+            <Group align="flex-end" wrap="wrap">
+              <TextInput label="Invite link" value={inviteUrl} readOnly style={{ flex: 1 }} />
+              <Button
+                variant="default"
+                leftSection={<IconCopy size={16} />}
+                onClick={() => {
+                  void navigator.clipboard.writeText(inviteUrl).then(
+                    () => {
+                      setInviteCopied(true);
+                      notifyOk("Invite link copied");
+                    },
+                    () => notifyError(new Error("Could not copy")),
+                  );
+                }}
+              >
+                Copy
+              </Button>
+              <Button
+                variant="default"
+                leftSection={<IconMail size={16} />}
+                component="a"
+                href={`mailto:?subject=${encodeURIComponent("TideGuard admin invite")}${inviteNote ? encodeURIComponent(` — ${inviteNote}`) : ""}&body=${encodeURIComponent(
+                  [
+                    "You have been invited to the TideGuard control room.",
+                    inviteNote ? `\nNote: ${inviteNote}\n` : "",
+                    `Accept link (expires soon):\n${inviteUrl}`,
+                  ].join("\n"),
+                )}`}
+                onClick={() => setInviteCopied(true)}
+              >
+                Email link
+              </Button>
+            </Group>
+          </Stack>
         ) : null}
 
         {state.team.invites.length > 0 ? (

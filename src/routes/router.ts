@@ -52,7 +52,9 @@ import {
   handleAdminSaveCloudflare,
   handleAdminSaveGeoBlock,
   handleAdminSaveOrigin,
+  handleAdminOriginProbe,
   handleAdminSaveWebhooks,
+  handleAdminWebhooksTest,
   handleAdminSchedule,
   handleAdminSetMode,
   handleAdminSetup,
@@ -64,6 +66,7 @@ import {
   handleAdminSetupTurnstileProvision,
   handleAdminSetupTurnstileVerify,
   handleAdminState,
+  handleAdminTurnstileRotate,
   handleAdminUpdates,
 } from "./admin";
 import { geoBlockedResponse } from "../html/geo-blocked";
@@ -242,6 +245,10 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminSetupTurnstileVerify(request, env);
   }
 
+  if (request.method === "POST" && url.pathname === "/api/admin/turnstile/rotate") {
+    return await handleAdminTurnstileRotate(request, env);
+  }
+
   if (request.method === "POST" && url.pathname === "/api/admin/login") {
     return await handleAdminLogin(request, env);
   }
@@ -282,8 +289,16 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return await handleAdminSaveOrigin(request, env);
   }
 
+  if (request.method === "POST" && url.pathname === "/api/admin/origin/probe") {
+    return await handleAdminOriginProbe(request, env);
+  }
+
   if (request.method === "PUT" && url.pathname === "/api/admin/webhooks") {
     return await handleAdminSaveWebhooks(request, env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/webhooks/test") {
+    return await handleAdminWebhooksTest(request, env);
   }
 
   if (request.method === "PUT" && url.pathname === "/api/admin/bypass") {

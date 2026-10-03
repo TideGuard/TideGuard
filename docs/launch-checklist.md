@@ -5,10 +5,11 @@ Use this before pointing production traffic at TideGuard.
 ## Secrets and admin
 
 - [ ] `TOKEN_SECRET` set via Wrangler secret / Deploy-to-Cloudflare ([tideguard.dev/token](https://tideguard.dev/token) or `openssl rand -hex 32`)
+- [ ] Optional production: `ADMIN_SECRET` set (`wrangler secret put ADMIN_SECRET`) so visitor HMAC and admin seals are split ([token-secret-rotation.md](token-secret-rotation.md))
 - [ ] `/admin` setup completed: Claim (TOKEN_SECRET + username/password) + **Cloudflare verify** + **Turnstile verify** + Finish
 - [ ] Per-admin passwords stored offline; login uses Turnstile after finish
 - [ ] Recovery phrases saved for each admin (Forgot password)
-- [ ] Extra operators invited via Team panel (72h links), not by sharing one password
+- [ ] Extra operators invited via Team panel (72h links; copy/mailto before navigating away), not by sharing one password
 - [ ] Custom domain attached ([custom-domain.md](custom-domain.md)) — full NS or partial CNAME as applicable
 - [ ] Cloudflare panel: DNS proxied, IP Geolocation as needed, SSL Full (strict) if origin is ready
 
@@ -45,6 +46,7 @@ Use `/cost` for Cloudflare Workers paid-plan estimates (adaptive by default).
 ## Origin proxy
 
 - [ ] Left demo mode: origin proxy enabled with protect-all or path prefixes ([protecting-origin.md](protecting-origin.md#demo-mode-smoke-test-without-gating-the-site))
+- [ ] Origin **Test upstream** from [`/admin#origin`](/admin#origin) returns a reachable status before Go live
 - [ ] Origin URL is a **public** `https://` host (loopback / private IPs are rejected)
 - [ ] Origin only accepts traffic from Cloudflare — **Full (strict)** SSL + **Authenticated Origin Pulls** (see [protecting-origin.md](protecting-origin.md))
 - [ ] Protected path smoke-test: unauthenticated → `/wait`; admitted → origin content
@@ -56,6 +58,7 @@ Use `/cost` for Cloudflare Workers paid-plan estimates (adaptive by default).
 - [ ] Opening time set (or cleared) for launch; `/wait` shows countdown before open
 - [ ] Silent pause smoke-tested: admissions stop; waiting UI unchanged
 - [ ] Origin health URL is public HTTPS (private hosts rejected); thresholds tuned; override known
+- [ ] If using webhooks: public `https://` URL only; **Send test** OK; signing secret saved ([webhooks.md](webhooks.md))
 - [ ] Understood: one seat per browser profile via ticket; extra devices can take extra seats
 - [ ] Visitor Turnstile (if enabled): new browser is challenged; an existing valid ticket resumes; missing widget configuration fails closed
 - [ ] Web notifications (if enabled): permission is requested only after a visitor gesture; the waiting tab still stays open

@@ -56,7 +56,7 @@ export async function handleWaitingRoom(request: Request, env: Env): Promise<Res
 
   const geo = await evaluateGeoBlock(request, env);
   if (geo.blocked) {
-    return withSecurityHeaders(geoBlockedResponse(geo.country, { embed }));
+    return withSecurityHeaders(geoBlockedResponse(geo.country, { embed, branding }));
   }
 
   if (roomRules.rejectWhenFull) {

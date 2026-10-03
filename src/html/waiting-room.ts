@@ -98,7 +98,16 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
       notificationSoon: copy.notificationSoon,
       notificationReady: copy.notificationReady,
     },
+    statusReconnect: copy.statusReconnect,
+    statusConnectionIssue: copy.statusConnectionIssue,
   });
+
+  const faviconLink = branding.faviconUrl
+    ? `<link rel="icon" href="${escapeHtml(branding.faviconUrl)}" />`
+    : "";
+  const logoHtml = branding.logoUrl
+    ? `<img class="logo" src="${escapeHtml(branding.logoUrl)}" alt="" width="160" height="48" />`
+    : `<p class="brand">${escapeHtml(copy.brand)}</p>`;
 
   return `<!DOCTYPE html>
 <html lang="${escapeHtml(locale)}" class="${embed ? "is-embed" : ""}">
@@ -106,6 +115,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(branding.title)} · TideGuard</title>
+    ${faviconLink}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -117,7 +127,7 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
   </head>
   <body>
     <main>
-      <p class="brand">${escapeHtml(copy.brand)}</p>
+      ${logoHtml}
       <div class="tide" aria-hidden="true"></div>
       <h1>${escapeHtml(branding.title)}</h1>
       <p class="message">${escapeHtml(branding.message)}</p>

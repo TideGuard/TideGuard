@@ -13,6 +13,7 @@ import {
   Title,
 } from "@mantine/core";
 import { api } from "../lib/api";
+import { hashForSection, parseAdminHash, scrollToAdminPanel } from "../lib/admin-hash";
 import type { AdminState, DashboardSection, GeoBlockSettings, QueueMetrics } from "../lib/types";
 import { LINKS } from "../lib/setup-guidance";
 import { EventToolbar } from "./EventToolbar";
@@ -49,7 +50,10 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
   const [state, setState] = useState(initial);
   const [metrics, setMetrics] = useState<QueueMetrics>(initial.metrics);
   const [geoBlock, setGeoBlock] = useState<GeoBlockSettings>(initial.geoBlock);
-  const [section, setSection] = useState<DashboardSection>("live");
+  const [section, setSection] = useState<DashboardSection>(() => {
+    if (typeof window === "undefined") return "live";
+    return parseAdminHash(window.location.hash).section;
+  });
   const [pollError, setPollError] = useState<string | null>(null);
   const [auditTick, setAuditTick] = useState(0);
   const [newQueue, setNewQueue] = useState("");
@@ -96,6 +100,25 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
     }, 5000);
     return () => window.clearInterval(id);
   }, [refreshMetrics]);
+
+  useEffect(() => {
+    function applyHash() {
+      const { section: next, panelId } = parseAdminHash(window.location.hash);
+      setSection(next);
+      scrollToAdminPanel(panelId);
+    }
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  function selectSection(next: DashboardSection) {
+    setSection(next);
+    const desired = hashForSection(next);
+    if (window.location.hash !== desired) {
+      window.history.replaceState(null, "", desired);
+    }
+  }
 
   function dismissFirstRun() {
     setShowFirstRun(false);
@@ -200,14 +223,14 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
       <DemoModeBanner
         state={state}
         onGoLive={refreshState}
-        onOpenAccess={() => setSection("access")}
+        onOpenAccess={() => selectSection("access")}
       />
 
       <EventToolbar queue={queue} metrics={metrics} onRefresh={refreshMetrics} />
 
       <Tabs
         value={section}
-        onChange={(v) => setSection((v as DashboardSection) || "live")}
+        onChange={(v) => selectSection((v as DashboardSection) || "live")}
         className="tg-section-tabs"
         keepMounted={false}
       >
@@ -249,7 +272,7 @@ export function Dashboard({ initial, onLogout }: { initial: AdminState; onLogout
         <Tabs.Panel value="cloudflare" pt="md">
           <Stack gap="lg">
             <CloudflarePanel state={state} onSaved={refreshState} />
-            <TurnstilePanel state={state} />
+            <TurnstilePanel state={state} onSaved={refreshState} />
           </Stack>
         </Tabs.Panel>
 

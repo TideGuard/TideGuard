@@ -8,6 +8,11 @@
 declare namespace Cloudflare {
   interface Env {
     TOKEN_SECRET: string;
+    /**
+     * Optional. When set (≥16 chars), signs admin sessions, operator Bearer,
+     * and seals KV credentials. Visitor admission tokens stay on TOKEN_SECRET.
+     */
+    ADMIN_SECRET?: string;
     /** Optional override; default queue name comes from setup / "default". */
     DEFAULT_QUEUE?: string;
     /** Optional override; live mode is set via /admin or POST /mode. */
@@ -25,6 +30,7 @@ declare namespace Cloudflare {
 
 interface Env {
   TOKEN_SECRET: string;
+  ADMIN_SECRET?: string;
   DEFAULT_QUEUE?: string;
   ADMISSION_MODE?: string;
   ORIGIN_URL?: string;

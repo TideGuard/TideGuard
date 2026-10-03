@@ -104,8 +104,10 @@ Operator-only: admit up to `count` waiters into open slots, ignoring the rate bu
 Auth:
 
 - Admin session cookie `tg_admin`, or
-- `Authorization: Bearer <TOKEN_SECRET>`, or
-- `X-TideGuard-Operator: <TOKEN_SECRET>`
+- `Authorization: Bearer <ADMIN_SECRET|TOKEN_SECRET>`, or
+- `X-TideGuard-Operator: <ADMIN_SECRET|TOKEN_SECRET>`
+
+Use `ADMIN_SECRET` when that Worker secret is set; otherwise `TOKEN_SECRET`. Visitor admission HMAC always uses `TOKEN_SECRET`.
 
 ```json
 { "queue": "product-launch", "count": 2 }
@@ -205,7 +207,11 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `PUT` | `/api/admin/geo-block` | session | Country block enable / list / TTL |
 | `POST` | `/api/admin/pass` | session | Mint admission cookie for this browser |
 | `GET` | `/api/admin/updates` | session | GitHub latest release vs running `VERSION` (KV cache) |
-| `GET` | `/api/admin/audit` | session | Recent admin activity events |
+| `GET` | `/api/admin/audit` | session | Recent admin activity (`format=csv` optional) |
+| `PUT` | `/api/admin/webhooks` | session | Operator outbound webhooks |
+| `POST` | `/api/admin/webhooks/test` | session | Synthetic test ping + `lastDelivery` |
+| `POST` | `/api/admin/turnstile/rotate` | session | New Turnstile widget (needs CF API token) |
+| `POST` | `/api/admin/origin/probe` | session | One-shot upstream probe of saved origin |
 | `GET` | `/api/admin/invites` | session | Pending invites (no raw tokens) |
 | `POST` | `/api/admin/invites` | session | Create 72h invite; returns accept URL once |
 | `DELETE` | `/api/admin/invites/:id` | session | Revoke invite |
@@ -226,7 +232,7 @@ Build assets with `npm run build:admin` before `wrangler deploy`.
 | `PUT` | `/api/admin/health` | session | Origin health config / override / clear override |
 | `POST` | `/api/admin/reset` | `TOKEN_SECRET` bearer only | Clears admin, CF link, Turnstile, pending, origin |
 
-`/admit`, `/mode`, `/pause`, and `/metrics` accept either an admin session cookie or `TOKEN_SECRET` via Bearer / `X-TideGuard-Operator`.
+`/admit`, `/mode`, `/pause`, and `/metrics` accept either an admin session cookie or Bearer / `X-TideGuard-Operator` (`ADMIN_SECRET` when set, else `TOKEN_SECRET`).
 
 Admitted visitors receive an HMAC-SHA256 token (also set as HttpOnly cookie `tg_access`):
 

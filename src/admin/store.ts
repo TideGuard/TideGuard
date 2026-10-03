@@ -2,6 +2,7 @@ import {
   DEFAULT_BRANDING,
   mergeBranding,
   sanitizeGoogleAnalyticsId,
+  sanitizeHttpsImageUrl,
   sanitizeRedirectUrl,
   type WaitingRoomBranding,
 } from "../core/branding";
@@ -339,6 +340,8 @@ export function sanitizeBrandingInput(
     joinTurnstileEnabled: Boolean(merged.joinTurnstileEnabled),
     enableWebNotifications: Boolean(merged.enableWebNotifications),
     googleAnalyticsId: sanitizeGoogleAnalyticsId(merged.googleAnalyticsId),
+    logoUrl: sanitizeHttpsImageUrl(merged.logoUrl, ""),
+    faviconUrl: sanitizeHttpsImageUrl(merged.faviconUrl, ""),
   };
 }
 

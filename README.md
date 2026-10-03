@@ -36,27 +36,28 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 
 ## Running the event
 
-| Feature                 | What you get                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------------- |
-| **Control room**        | Pause, change admit rate, force-admit, watch live metrics — from `/admin`, without redeploying.    |
-| **Schedule and health** | Open at a set time, pause the room, throttle if origin health drops.                               |
-| **Team**                | Invite co-operators so more than one person can run the room.                                      |
-| **Activity log**        | Who changed pause, rate, proxy, and other controls.                                                |
-| **Staff access**        | IP allowlist and a temporary Pass so your team can skip the line and smoke-test.                   |
-| **Country gate**        | Temporarily block countries for the event window.                                                  |
-| **Traffic history**     | 24h inflow/outflow chart and CSV export.                                                           |
-| **Branding**            | Colors, copy, optional place-in-line, optional Google Analytics on `/wait`.                        |
-| **Webhooks**            | HTTPS callbacks when the room pauses, health config changes, or waiting depth crosses a threshold. |
-| **Cost estimate**       | Ballpark Cloudflare spend on `/cost` before you launch.                                            |
+| Feature                 | What you get                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------- |
+| **Control room**        | Pause, change admit rate, force-admit, watch live metrics — from `/admin`, without redeploying. |
+| **Schedule and health** | Open at a set time, pause the room, throttle if origin health drops.                            |
+| **Team**                | Invite co-operators so more than one person can run the room.                                   |
+| **Activity log**        | Who changed pause, rate, proxy, and other controls; JSON + CSV export.                          |
+| **Staff access**        | IP allowlist and a temporary Pass so your team can skip the line and smoke-test.                |
+| **Country gate**        | Temporarily block countries for the event window.                                               |
+| **Traffic history**     | 24h inflow/outflow chart and CSV export.                                                        |
+| **Branding**            | Colors, copy, logo/favicon, optional place-in-line, optional Google Analytics on `/wait`.       |
+| **Webhooks**            | HTTPS callbacks (pause, health, depth, schedule, capacity) + test ping / lastDelivery.          |
+| **Cost estimate**       | Ballpark Cloudflare spend on `/cost` before you launch.                                         |
 
 ## Origin and Cloudflare
 
-| Feature                   | What you get                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Origin proxy**          | Unauthenticated traffic hits the waiting room; admitted traffic is forwarded to your site.           |
-| **Zone from admin**       | After a one-time API token: DNS/proxy checks, SSL, custom domains — without living in the dashboard. |
-| **Protected admin login** | Turnstile on sign-in, provisioned during setup.                                                      |
-| **One-click deploy**      | Deploy-to-Cloudflare; `wrangler.jsonc` is ready.                                                     |
+| Feature                     | What you get                                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Origin proxy**            | Unauthenticated traffic hits the waiting room; admitted traffic is forwarded to your site.           |
+| **Zone from admin**         | After a one-time API token: DNS/proxy checks, SSL, custom domains — without living in the dashboard. |
+| **Protected admin login**   | Turnstile on sign-in, provisioned during setup; rotatable without factory reset.                     |
+| **Optional `ADMIN_SECRET`** | Split admin sessions / KV seals from visitor HMAC (`TOKEN_SECRET`).                                  |
+| **One-click deploy**        | Deploy-to-Cloudflare; `wrangler.jsonc` is ready.                                                     |
 
 Deep guides: [custom domain](https://tideguard.dev/docs/custom-domain/), [protecting origin](https://tideguard.dev/docs/protecting-origin/) (including Authenticated Origin Pulls), [admin](https://tideguard.dev/docs/admin/), [upgrading](https://tideguard.dev/docs/upgrading/).
 
@@ -78,8 +79,8 @@ Operator guides are authored in this repo under `docs/` and published at [tidegu
 | [Analytics](docs/analytics.md) · [web](https://tideguard.dev/docs/analytics/)                                     | Watch live traffic and export 24h history                                 |
 | [IP allowlist](docs/ip-allowlist.md) · [web](https://tideguard.dev/docs/ip-allowlist/)                            | Let staff skip the line                                                   |
 | [Country block](docs/geo-block.md) · [web](https://tideguard.dev/docs/geo-block/)                                 | Temporarily block countries for the event                                 |
-| [Operator webhooks](docs/webhooks.md) · [web](https://tideguard.dev/docs/webhooks/)                               | Notify your tools when the room pauses or fills                           |
-| [TOKEN_SECRET rotation](docs/token-secret-rotation.md) · [web](https://tideguard.dev/docs/token-secret-rotation/) | Rotate the master secret safely                                           |
+| [Operator webhooks](docs/webhooks.md) · [web](https://tideguard.dev/docs/webhooks/)                               | Notify your tools (pause, depth, schedule, capacity + test ping)          |
+| [TOKEN_SECRET rotation](docs/token-secret-rotation.md) · [web](https://tideguard.dev/docs/token-secret-rotation/) | Rotate `TOKEN_SECRET` / introduce optional `ADMIN_SECRET` safely          |
 | [Load testing](docs/load-testing.md) · [web](https://tideguard.dev/docs/load-testing/)                            | Prove queue behavior at scale                                             |
 | [Security](SECURITY.md)                                                                                           | Secrets, tokens, and what not to put in git                               |
 
@@ -147,9 +148,10 @@ Advanced (not recommended — disables adaptive waiting-room polling):
 | `WAITING_ROOM_POLL_INTERVAL_MS`      | Fixed status poll interval                  |
 | `WAITING_ROOM_HEARTBEAT_INTERVAL_MS` | Fixed heartbeat interval (with fixed polls) |
 
-| Secret         | Purpose                                                   |
-| -------------- | --------------------------------------------------------- |
-| `TOKEN_SECRET` | Signs visitor tickets and admin sessions; first-claim key |
+| Secret         | Purpose                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| `TOKEN_SECRET` | Visitor tickets / admission HMAC; claim + factory-reset Bearer; admin fallback when unset below          |
+| `ADMIN_SECRET` | Optional. Admin sessions, operator Bearer, KV seals. When unset, those uses fall back to `TOKEN_SECRET`. |
 
 Full deploy checklist: [docs/getting-started.md](docs/getting-started.md)
 

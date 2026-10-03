@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Checkbox, Stack, Text, TextInput, Textarea } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Code,
+  Group,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+} from "@mantine/core";
 import { api } from "../../lib/api";
 import { isDemoMode } from "../../lib/demo-mode";
 import type { AdminState } from "../../lib/types";
@@ -22,6 +32,8 @@ export function OriginPanel({
   const [prefixes, setPrefixes] = useState(
     Array.isArray(o.pathPrefixes) ? o.pathPrefixes.join("\n") : "",
   );
+  const [probeBusy, setProbeBusy] = useState(false);
+  const [probeResult, setProbeResult] = useState<string | null>(null);
 
   useEffect(() => {
     setEnabled(Boolean(o.enabled));
@@ -91,28 +103,63 @@ export function OriginPanel({
             UI, or run separate Workers.
           </Text>
         </Alert>
-        <Button
-          onClick={() => {
-            if (!window.confirm("Save origin proxy settings?")) return;
-            void api("/api/admin/origin", {
-              method: "PUT",
-              body: JSON.stringify({
-                enabled,
-                originUrl,
-                protectAll,
-                pathPrefixes: prefixes,
-                queue: state.queue,
-              }),
-            })
-              .then(() => {
-                notifyOk("Origin saved");
-                return onSaved();
+        {probeResult ? (
+          <Alert color="gray" title="Upstream probe">
+            <Text size="sm">
+              <Code>{probeResult}</Code>
+            </Text>
+          </Alert>
+        ) : null}
+        <Group>
+          <Button
+            onClick={() => {
+              if (!window.confirm("Save origin proxy settings?")) return;
+              void api("/api/admin/origin", {
+                method: "PUT",
+                body: JSON.stringify({
+                  enabled,
+                  originUrl,
+                  protectAll,
+                  pathPrefixes: prefixes,
+                  queue: state.queue,
+                }),
               })
-              .catch(notifyError);
-          }}
-        >
-          Save origin proxy
-        </Button>
+                .then(() => {
+                  notifyOk("Origin saved");
+                  return onSaved();
+                })
+                .catch(notifyError);
+            }}
+          >
+            Save origin proxy
+          </Button>
+          <Button
+            variant="default"
+            loading={probeBusy}
+            onClick={() => {
+              setProbeBusy(true);
+              void api<{
+                ok: boolean;
+                status: number | null;
+                latencyMs: number;
+                error: string | null;
+                note: string;
+              }>("/api/admin/origin/probe", { method: "POST", body: "{}" })
+                .then((res) => {
+                  const line = res.ok
+                    ? `OK HTTP ${res.status} in ${res.latencyMs}ms — ${res.note}`
+                    : `Failed${res.status != null ? ` HTTP ${res.status}` : ""} in ${res.latencyMs}ms — ${res.error || "error"}`;
+                  setProbeResult(line);
+                  if (res.ok) notifyOk("Origin reachable");
+                  else notifyError(new Error(res.error || "Origin probe failed"));
+                })
+                .catch(notifyError)
+                .finally(() => setProbeBusy(false));
+            }}
+          >
+            Test upstream
+          </Button>
+        </Group>
       </Stack>
     </Panel>
   );
