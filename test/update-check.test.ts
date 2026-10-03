@@ -20,6 +20,8 @@ describe("version helpers", () => {
 describe("checkForUpdates", () => {
   it("reports update available from GitHub latest release", async () => {
     await env.CONFIG_KV.delete(UPDATE_CHECK_CACHE_KEY);
+    // Newer than whatever VERSION is pinned in src/version.ts.
+    const newer = "9.0.0";
 
     const result = await checkForUpdates(env, {
       force: true,
@@ -27,9 +29,9 @@ describe("checkForUpdates", () => {
       fetch: async () =>
         new Response(
           JSON.stringify({
-            tag_name: "v0.6.0",
-            html_url: "https://github.com/TideGuard/TideGuard/releases/tag/v0.6.0",
-            name: "0.6.0",
+            tag_name: `v${newer}`,
+            html_url: `https://github.com/TideGuard/TideGuard/releases/tag/v${newer}`,
+            name: newer,
             draft: false,
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -37,8 +39,8 @@ describe("checkForUpdates", () => {
     });
 
     expect(result.currentVersion).toBe(VERSION);
-    expect(result.latestVersion).toBe("0.6.0");
-    expect(result.latestTag).toBe("v0.6.0");
+    expect(result.latestVersion).toBe(newer);
+    expect(result.latestTag).toBe(`v${newer}`);
     expect(result.updateAvailable).toBe(true);
     expect(result.source).toBe("github");
     expect(result.message).toMatch(/Update available/);
