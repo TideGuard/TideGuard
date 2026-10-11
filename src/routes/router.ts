@@ -86,6 +86,7 @@ import {
   handlePause,
   handleStatus,
 } from "./queue";
+import { handleBrandAsset } from "./brand-assets";
 import { handleNotificationSound } from "./sounds";
 import { serveAdminAssets } from "./admin-assets";
 
@@ -430,6 +431,13 @@ async function handleTideGuardRoute(request: Request, env: Env, url: URL): Promi
     return handleNotificationSound();
   }
 
+  if (request.method === "GET" && url.pathname.startsWith("/brand/")) {
+    const brand = handleBrandAsset(url.pathname);
+    if (brand) {
+      return brand;
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/join") {
     return await handleJoin(request, env);
   }
@@ -476,6 +484,7 @@ function landingPage(): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TideGuard</title>
+    <link rel="icon" href="/brand/favicon.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -499,6 +508,15 @@ function landingPage(): string {
         padding: 2rem;
       }
       main { max-width: 36rem; }
+      .logo {
+        display: block;
+        max-width: 10rem;
+        max-height: 3rem;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        margin: 0 0 1rem;
+      }
       h1 {
         font-family: "Fraunces", Georgia, serif;
         font-weight: 650;
@@ -525,6 +543,7 @@ function landingPage(): string {
   </head>
   <body>
     <main>
+      <img class="logo" src="/brand/logo.png" alt="TideGuard" width="160" height="48" />
       <h1>TideGuard</h1>
       <p>
         Open-source waiting room for Cloudflare Workers. Protect traffic spikes

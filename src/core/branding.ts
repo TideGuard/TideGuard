@@ -43,11 +43,23 @@ export interface WaitingRoomBranding {
    * snippet. Empty string disables analytics.
    */
   googleAnalyticsId: string;
-  /** Optional https logo URL shown above the waiting-room title. */
+  /**
+   * Optional https logo URL shown above the waiting-room title.
+   * Empty → built-in TideGuard logo at {@link BUILTIN_LOGO_PATH}.
+   */
   logoUrl: string;
-  /** Optional https favicon URL for the waiting room / geo-block pages. */
+  /**
+   * Optional https favicon URL for the waiting room / geo-block pages.
+   * Empty → built-in TideGuard favicon at {@link BUILTIN_FAVICON_PATH}.
+   */
   faviconUrl: string;
 }
+
+/** Same-origin path for the shipped TideGuard logo (overridable via branding). */
+export const BUILTIN_LOGO_PATH = "/brand/logo.png";
+
+/** Same-origin path for the shipped TideGuard favicon (overridable via branding). */
+export const BUILTIN_FAVICON_PATH = "/brand/favicon.png";
 
 export const DEFAULT_BRANDING: WaitingRoomBranding = {
   primaryColor: "#2bb0a6",
@@ -71,6 +83,16 @@ export const DEFAULT_BRANDING: WaitingRoomBranding = {
   logoUrl: "",
   faviconUrl: "",
 };
+
+/** Effective logo URL for render: custom https or built-in TideGuard asset. */
+export function resolveLogoUrl(branding: Pick<WaitingRoomBranding, "logoUrl">): string {
+  return branding.logoUrl.trim() || BUILTIN_LOGO_PATH;
+}
+
+/** Effective favicon URL for render: custom https or built-in TideGuard asset. */
+export function resolveFaviconUrl(branding: Pick<WaitingRoomBranding, "faviconUrl">): string {
+  return branding.faviconUrl.trim() || BUILTIN_FAVICON_PATH;
+}
 
 /** Public https image URL only; empty string clears. */
 export function sanitizeHttpsImageUrl(value: unknown, fallback = ""): string {

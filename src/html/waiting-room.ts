@@ -1,5 +1,5 @@
 import type { WaitingRoomBranding } from "../core/branding";
-import { mergeBranding } from "../core/branding";
+import { mergeBranding, resolveFaviconUrl, resolveLogoUrl } from "../core/branding";
 import { waitingRoomAnalyticsSnippet } from "./waiting-room-analytics";
 import { waitingRoomClientScript } from "./waiting-room-client";
 import { waitingRoomStyles } from "./waiting-room-styles";
@@ -102,12 +102,10 @@ export function renderWaitingRoom(options: WaitingRoomRenderOptions): string {
     statusConnectionIssue: copy.statusConnectionIssue,
   });
 
-  const faviconLink = branding.faviconUrl
-    ? `<link rel="icon" href="${escapeHtml(branding.faviconUrl)}" />`
-    : "";
-  const logoHtml = branding.logoUrl
-    ? `<img class="logo" src="${escapeHtml(branding.logoUrl)}" alt="" width="160" height="48" />`
-    : `<p class="brand">${escapeHtml(copy.brand)}</p>`;
+  const faviconHref = resolveFaviconUrl(branding);
+  const logoHref = resolveLogoUrl(branding);
+  const faviconLink = `<link rel="icon" href="${escapeHtml(faviconHref)}" type="image/png" />`;
+  const logoHtml = `<img class="logo" src="${escapeHtml(logoHref)}" alt="${escapeHtml(copy.brand)}" width="160" height="48" />`;
 
   return `<!DOCTYPE html>
 <html lang="${escapeHtml(locale)}" class="${embed ? "is-embed" : ""}">

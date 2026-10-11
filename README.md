@@ -45,7 +45,7 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 | **Staff access**        | IP allowlist and a temporary Pass so your team can skip the line and smoke-test.                |
 | **Country gate**        | Temporarily block countries for the event window.                                               |
 | **Traffic history**     | 24h inflow/outflow chart and CSV export.                                                        |
-| **Branding**            | Colors, copy, logo/favicon, optional place-in-line, optional Google Analytics on `/wait`.       |
+| **Branding**            | Colors, copy, logo/favicon (TideGuard defaults or your https URLs), optional place-in-line, optional Google Analytics on `/wait`. |
 | **Webhooks**            | HTTPS callbacks (pause, health, depth, schedule, capacity) + test ping / lastDelivery.          |
 | **Cost estimate**       | Ballpark Cloudflare spend on `/cost` before you launch.                                         |
 
@@ -179,7 +179,7 @@ test/               Vitest + Workers pool tests
 
 ## Releases
 
-Current version: **0.6.0** (`package.json` / `src/version.ts` / `GET /health`).
+Current version: **0.6.1** (`package.json` / `src/version.ts` / `GET /health`).
 
 Shipped work lives in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/TideGuard/TideGuard/releases). Planned work lives in [ROADMAP.md](ROADMAP.md) — do not treat the changelog as a roadmap.
 

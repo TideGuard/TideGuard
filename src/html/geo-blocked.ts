@@ -2,7 +2,12 @@
  * Soft deny page when a visitor's CF-IPCountry is on the temporary block list.
  */
 
-import { mergeBranding, type WaitingRoomBranding } from "../core/branding";
+import {
+  mergeBranding,
+  resolveFaviconUrl,
+  resolveLogoUrl,
+  type WaitingRoomBranding,
+} from "../core/branding";
 
 function escapeHtml(value: string): string {
   return value
@@ -24,12 +29,8 @@ export function renderGeoBlockedPage(options: {
   const country = options.country ? escapeHtml(options.country) : "your region";
   const embed = options.embed === true;
   const branding = mergeBranding(options.branding);
-  const faviconLink = branding.faviconUrl
-    ? `<link rel="icon" href="${escapeHtml(branding.faviconUrl)}" />`
-    : "";
-  const logoHtml = branding.logoUrl
-    ? `<img class="logo" src="${escapeHtml(branding.logoUrl)}" alt="" width="160" height="48" />`
-    : `<p class="brand">TideGuard</p>`;
+  const faviconLink = `<link rel="icon" href="${escapeHtml(resolveFaviconUrl(branding))}" type="image/png" />`;
+  const logoHtml = `<img class="logo" src="${escapeHtml(resolveLogoUrl(branding))}" alt="TideGuard" width="160" height="48" />`;
   return `<!DOCTYPE html>
 <html lang="en" class="${embed ? "is-embed" : ""}">
 <head>

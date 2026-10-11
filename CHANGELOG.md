@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-11
+
+### Added
+
+- **Built-in TideGuard branding** — shipped logo and favicon (`/brand/logo.png`, `/brand/favicon.png`) used as defaults on `/wait`, geo-block, landing, demo, cost, and admin; operators still override via Branding https URLs
+
 ## [0.6.0] - 2026-10-03
 
 ### Added

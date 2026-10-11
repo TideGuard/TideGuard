@@ -32,7 +32,11 @@ export {
 } from "./eta";
 export {
   DEFAULT_BRANDING,
+  BUILTIN_LOGO_PATH,
+  BUILTIN_FAVICON_PATH,
   mergeBranding,
+  resolveLogoUrl,
+  resolveFaviconUrl,
   sanitizeGoogleAnalyticsId,
   sanitizeRedirectUrl,
 } from "./branding";

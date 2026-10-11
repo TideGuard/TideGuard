@@ -43,6 +43,8 @@ describe("origin proxy config", () => {
     expect(isTideGuardPath("/admin/assets/index.js", true)).toBe(true);
     expect(isTideGuardPath("/api/admin/state", true)).toBe(true);
     expect(isTideGuardPath("/sounds/notification.mp3", true)).toBe(true);
+    expect(isTideGuardPath("/brand/logo.png", true)).toBe(true);
+    expect(isTideGuardPath("/brand/favicon.png", true)).toBe(true);
     expect(isTideGuardPath("/", true)).toBe(false);
     expect(isTideGuardPath("/checkout", true)).toBe(false);
     expect(isTideGuardPath("/", false)).toBe(true);
@@ -59,6 +61,7 @@ describe("origin proxy config", () => {
     expect(shouldRequireAdmission("/checkout", all)).toBe(true);
     expect(shouldRequireAdmission("/wait", all)).toBe(false);
     expect(shouldRequireAdmission("/sounds/notification.mp3", all)).toBe(false);
+    expect(shouldRequireAdmission("/brand/logo.png", all)).toBe(false);
 
     const prefixes: OriginProxyConfig = {
       ...all,

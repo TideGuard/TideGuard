@@ -45,13 +45,15 @@ export const RESERVED_EXACT = new Set([
   "/demo",
   "/api/cost-estimate",
   "/sounds/notification.mp3",
+  "/brand/logo.png",
+  "/brand/favicon.png",
 ]);
 
-const RESERVED_PREFIXES = ["/api/admin"];
+const RESERVED_PREFIXES = ["/api/admin", "/brand"];
 
 /**
  * Paths that never need origin proxy config (skip KV / cache lookup).
- * Same catalog as {@link RESERVED_EXACT}, plus `/admin/*` and `/api/admin/*`.
+ * Same catalog as {@link RESERVED_EXACT}, plus `/admin/*`, `/api/admin/*`, and `/brand/*`.
  */
 export function isStaticTideGuardPath(pathname: string): boolean {
   if (RESERVED_EXACT.has(pathname)) {

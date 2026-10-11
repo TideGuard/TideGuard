@@ -191,13 +191,14 @@ export function BrandingPanel({
           />
           <TextInput
             label="Logo URL (https)"
-            description="Optional image above the title on /wait and geo-block pages."
+            description="Optional. Leave blank to use the TideGuard logo on /wait and geo-block pages."
             value={logoUrl}
             onChange={(e) => setLogoUrl(e.currentTarget.value)}
             placeholder="https://cdn.example.com/logo.svg"
           />
           <TextInput
             label="Favicon URL (https)"
+            description="Optional. Leave blank to use the TideGuard favicon."
             value={faviconUrl}
             onChange={(e) => setFaviconUrl(e.currentTarget.value)}
             placeholder="https://cdn.example.com/favicon.ico"

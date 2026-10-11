@@ -30,7 +30,7 @@ Checked on protected origin paths, `/wait`, `/demo`, and `POST /join` — before
 6. **Live queue** shows **Geo blocks** total + per-country hits (refreshes every 5s)
 7. **Disable now** clears the active gate (keeps the code list in the form)
 
-The blocked page uses waiting-room branding CSS variables and optional logo/favicon URLs when set under Branding.
+The blocked page uses waiting-room branding CSS variables. Logo and favicon follow Branding settings (custom https URLs, or TideGuard’s built-in `/brand/*` assets when those fields are empty).
 
 Hit stats live in KV (`admin:geo-block-stats`) separately from the block list so saves keep history until you enable a new window. Totals appear in the admin Live metrics strip and Access tab (see [analytics.md](analytics.md)).
 
