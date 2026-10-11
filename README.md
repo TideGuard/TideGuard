@@ -36,18 +36,18 @@ Visitors land on `/wait`. Operators live in `/admin`. Costs are estimated on `/c
 
 ## Running the event
 
-| Feature                 | What you get                                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------------------------- |
-| **Control room**        | Pause, change admit rate, force-admit, watch live metrics — from `/admin`, without redeploying. |
-| **Schedule and health** | Open at a set time, pause the room, throttle if origin health drops.                            |
-| **Team**                | Invite co-operators so more than one person can run the room.                                   |
-| **Activity log**        | Who changed pause, rate, proxy, and other controls; JSON + CSV export.                          |
-| **Staff access**        | IP allowlist and a temporary Pass so your team can skip the line and smoke-test.                |
-| **Country gate**        | Temporarily block countries for the event window.                                               |
-| **Traffic history**     | 24h inflow/outflow chart and CSV export.                                                        |
+| Feature                 | What you get                                                                                                                      |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Control room**        | Pause, change admit rate, force-admit, watch live metrics — from `/admin`, without redeploying.                                   |
+| **Schedule and health** | Open at a set time, pause the room, throttle if origin health drops.                                                              |
+| **Team**                | Invite co-operators so more than one person can run the room.                                                                     |
+| **Activity log**        | Who changed pause, rate, proxy, and other controls; JSON + CSV export.                                                            |
+| **Staff access**        | IP allowlist and a temporary Pass so your team can skip the line and smoke-test.                                                  |
+| **Country gate**        | Temporarily block countries for the event window.                                                                                 |
+| **Traffic history**     | 24h inflow/outflow chart and CSV export.                                                                                          |
 | **Branding**            | Colors, copy, logo/favicon (TideGuard defaults or your https URLs), optional place-in-line, optional Google Analytics on `/wait`. |
-| **Webhooks**            | HTTPS callbacks (pause, health, depth, schedule, capacity) + test ping / lastDelivery.          |
-| **Cost estimate**       | Ballpark Cloudflare spend on `/cost` before you launch.                                         |
+| **Webhooks**            | HTTPS callbacks (pause, health, depth, schedule, capacity) + test ping / lastDelivery.                                            |
+| **Cost estimate**       | Ballpark Cloudflare spend on `/cost` before you launch.                                                                           |
 
 ## Origin and Cloudflare
 
