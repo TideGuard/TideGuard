@@ -75,7 +75,9 @@ Build with `npm run build:admin` (also runs before `npm run dev` / `npm run depl
 
 ### Branding
 
-Colors, copy, admit UX, and optional **Google Analytics Measurement ID** (`G-…`) live under the Branding tab. Saving writes KV once; visitor join/status polls do not re-read branding.
+Colors, copy, admit UX, optional logo/favicon https URLs, and optional **Google Analytics Measurement ID** (`G-…`) live under the Branding tab. Saving writes KV once; visitor join/status polls do not re-read branding.
+
+When logo or favicon URLs are empty, TideGuard serves its built-in mark (`/brand/logo.png`, `/brand/favicon.png`) on `/wait`, geo-block, and related product pages. Set https URLs to replace them with your own assets.
 
 When a Measurement ID is set, `/wait` loads [Google’s official gtag.js snippet](https://support.google.com/analytics/answer/14171598). Invalid IDs are dropped on save. TideGuard does not provide a cookie banner — consent and privacy policy remain the operator’s responsibility.
 

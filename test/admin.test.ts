@@ -279,6 +279,17 @@ describe("admin setup wizard and dashboard", () => {
     expect(sound.headers.get("content-type")).toMatch(/audio\/mpeg|mpeg/);
     const bytes = await sound.arrayBuffer();
     expect(bytes.byteLength).toBeGreaterThan(1000);
+
+    const logo = await exports.default.fetch(new Request("https://example.com/brand/logo.png"));
+    expect(logo.status).toBe(200);
+    expect(logo.headers.get("content-type")).toBe("image/png");
+    expect((await logo.arrayBuffer()).byteLength).toBeGreaterThan(1000);
+
+    const favicon = await exports.default.fetch(
+      new Request("https://example.com/brand/favicon.png"),
+    );
+    expect(favicon.status).toBe(200);
+    expect(favicon.headers.get("content-type")).toBe("image/png");
   });
 
   it("rejects claim without TOKEN_SECRET bearer", async () => {

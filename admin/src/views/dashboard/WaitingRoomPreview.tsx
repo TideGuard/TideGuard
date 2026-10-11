@@ -1,6 +1,9 @@
 import { Text, Title } from "@mantine/core";
 import type { WaitingRoomBranding } from "../../lib/types";
 
+/** Admin preview uses the same built-in logo path as the Worker waiting room. */
+const BUILTIN_LOGO_PATH = "/brand/logo.png";
+
 /** Lightweight waiting-room mock for branding edits (no iframe required). */
 export function WaitingRoomPreview({
   branding,
@@ -33,6 +36,7 @@ export function WaitingRoomPreview({
       : branding.showWaitingCount
         ? `#${position} of ${waitingCount.toLocaleString()}`
         : `Position ${position}`;
+  const logoSrc = branding.logoUrl?.trim() || BUILTIN_LOGO_PATH;
 
   return (
     <div
@@ -51,13 +55,11 @@ export function WaitingRoomPreview({
           borderColor: `${branding.accentColor}44`,
         }}
       >
-        {branding.logoUrl ? (
-          <img
-            src={branding.logoUrl}
-            alt=""
-            style={{ maxWidth: "8rem", maxHeight: "2.5rem", objectFit: "contain", marginBottom: 8 }}
-          />
-        ) : null}
+        <img
+          src={logoSrc}
+          alt="TideGuard"
+          style={{ maxWidth: "8rem", maxHeight: "2.5rem", objectFit: "contain", marginBottom: 8 }}
+        />
         <Title order={4} style={{ color: branding.textColor, fontFamily: "inherit" }}>
           {branding.title || "You’re in line"}
         </Title>

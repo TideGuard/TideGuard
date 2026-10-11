@@ -23,6 +23,7 @@ export function renderCostCalculatorPage(): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Calculate cost · TideGuard</title>
+    <link rel="icon" href="/brand/favicon.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,550;9..144,650&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -60,13 +61,13 @@ export function renderCostCalculatorPage(): string {
         align-items: baseline;
         margin-bottom: 1.75rem;
       }
-      .brand {
-        margin: 0;
-        font-size: 0.85rem;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--accent);
+      .brand-logo {
+        display: block;
+        max-width: 7.5rem;
+        max-height: 2.25rem;
+        width: auto;
+        height: auto;
+        object-fit: contain;
       }
       h1 {
         margin: 0 0 0.6rem;
@@ -215,7 +216,7 @@ export function renderCostCalculatorPage(): string {
   <body>
     <div class="wrap">
       <div class="top">
-        <p class="brand">TideGuard</p>
+        <img class="brand-logo" src="/brand/logo.png" alt="TideGuard" width="160" height="48" />
         <a href="/">Home</a>
       </div>
       <h1>Calculate cost</h1>

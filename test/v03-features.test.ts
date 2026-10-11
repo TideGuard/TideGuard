@@ -335,6 +335,12 @@ describe("branding https image urls", () => {
     expect(branding.logoUrl).toContain("logo.svg");
     expect(branding.faviconUrl).toContain("favicon.ico");
   });
+
+  it("falls back to built-in TideGuard logo and favicon when unset", () => {
+    const html = renderWaitingRoom({ queue: "default" });
+    expect(html).toContain('src="/brand/logo.png"');
+    expect(html).toContain('href="/brand/favicon.png"');
+  });
 });
 
 describe("admin hash deep links", () => {
